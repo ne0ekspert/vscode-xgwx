@@ -1,6 +1,25 @@
 /* @ts-self-types="./libxgwx.d.ts" */
 
 /**
+ * Delete one module and return rewritten `.xgwx` bytes.
+ * @param {Uint8Array} bytes
+ * @param {number} base
+ * @param {number} slot
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_module(bytes, base, slot) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_module(ptr0, len0, base, slot);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Return category and description metadata for known ladder mnemonics.
  * @returns {any}
  */

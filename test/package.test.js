@@ -14,7 +14,7 @@ test("registers a default editable XGWX custom editor", () => {
 });
 
 test("ships the parser assets used by the webview", () => {
-  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/main.js", "media/main.css"]) {
+  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-selection.js", "media/module-option-groups.js", "media/main.js", "media/main.css"]) {
     const stat = fs.statSync(path.join(root, asset));
     assert.ok(stat.size > 0, `${asset} should not be empty`);
   }
@@ -46,6 +46,12 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
 
   assert.match(script, /const LD_COLUMN_COUNT = 10;/);
   assert.match(script, /function renderLadderDiagram\b/);
+  assert.match(script, /moveLadderPosition/);
+  assert.match(script, /ladderSelectionKeys/);
+  assert.match(script, /blankLadderCellText/);
+  assert.match(script, /event\.shiftKey/);
+  assert.match(script, /event\.key === "Delete"/);
+  assert.doesNotMatch(script, /Decoded cells/);
   assert.match(script, /ladder\.horizontalLines/);
   assert.match(script, /ladder\.verticalLines/);
   assert.match(script, /function ldWireStartX\b/);
@@ -54,6 +60,7 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
   assert.match(styles, /\.ld-board\b/);
   assert.match(styles, /\.ld-blank-cell\b/);
   assert.match(styles, /\.ld-cell\b/);
+  assert.match(styles, /\.ld-cell\.instruction\.selected/);
   assert.match(styles, /\.ld-glyph[^}]+background: var\(--vscode-editor-background, #000\)/s);
   assert.match(styles, /\.ld-value[^}]+background: transparent/s);
   assert.doesNotMatch(styles, /\.ld-cell:not\(\.instruction\) \.ld-glyph::before/);
@@ -66,11 +73,14 @@ test("provides catalog-backed module selection in base hardware inspectors", () 
 
   assert.match(script, /xgk_module_catalog/);
   assert.match(script, /select_xgwx_module/);
+  assert.match(script, /delete_xgwx_module/);
   assert.match(script, /set_xgwx_module_option/);
   assert.match(script, /xgwx_module_option_values/);
   assert.match(script, /Apply module selection/);
   assert.match(script, /Apply module options/);
   assert.match(script, /entry\.visibleOptions/);
+  assert.match(script, /groupModuleOptions/);
+  assert.match(script, /module-option-channel-group/);
   assert.match(script, /option\.scope === "fileData"/);
   assert.match(script, /formatModuleOptionDefault/);
   assert.match(script, /All captured options are shown/);
@@ -79,8 +89,18 @@ test("provides catalog-backed module selection in base hardware inspectors", () 
   assert.match(script, /"Slot width"/);
   assert.doesNotMatch(script, /entry\.name === module\.name/);
   assert.match(script, /Base, slot, and comment are preserved/);
+  assert.match(script, /event\.key === "ArrowUp"/);
+  assert.match(script, /event\.key === "ArrowDown"/);
+  assert.match(script, /event\.key === "Delete"/);
+  assert.match(script, /selectedSlotKey/);
+  assert.match(script, /data-module-key/);
+  assert.match(script, /hardwareSlotRows/);
+  assert.match(script, /"Empty slot"/);
+  assert.match(script, /module-slot-\$\{slotRow\.kind\}/);
+  assert.match(styles, /\.module-slot-empty/);
   assert.match(styles, /\.module-picker\b/);
   assert.match(styles, /\.module-options\b/);
+  assert.match(styles, /\.module-option-channel-group/);
   assert.match(styles, /data-view="hardware"/);
   assert.doesNotMatch(script, /treeItem\(`Modules \(\$\{modules\.length\}\)`/);
   assert.match(script, /let activeView = "overview";/);

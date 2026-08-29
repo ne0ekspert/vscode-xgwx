@@ -1,4 +1,5 @@
 import init, {
+  delete_xgwx_module,
   parse_xgwx,
   select_xgwx_module,
   set_xgwx_module_option,
@@ -8,6 +9,19 @@ import init, {
   xgk_module_catalog,
   xgwx_module_option_values,
 } from "./libxgwx.js";
+import {
+  baseSlotCount,
+  hardwareSlotRows,
+  moduleAtPhysicalSlot,
+  occupiedSlotCount,
+} from "./hardware-slots.js";
+import {
+  blankLadderCellText,
+  ladderPositionKey,
+  ladderSelectionKeys,
+  moveLadderPosition,
+} from "./ladder-selection.js";
+import { groupModuleOptions } from "./module-option-groups.js";
 
 const vscode = acquireVsCodeApi();
 const app = document.querySelector("#app");
@@ -24,9 +38,12 @@ let moduleCatalog = [];
 let activeView = "overview";
 let selectedBase = null;
 let selectedModule = null;
+let selectedHardwareSlot = null;
 let selectedProgramIndex = 0;
 let selectedCellOffset = null;
 let selectedBlankCell = null;
+let selectedLadderAnchor = null;
+let selectedLadderFocus = null;
 let selectedVariableIndex = 0;
 let dirty = false;
 
@@ -57,6 +74,7 @@ async function loadWorkspace(file) {
       if (selectedBase === null) activeView = "overview";
     }
     selectedModule = modules.find((module) => module.inputFilter) || modules[0] || null;
+    selectedHardwareSlot = selectedModule?.slot ?? null;
     renderWorkspace();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -133,6 +151,10 @@ function renderExplorer(file, summary) {
     const item = treeItem(`Base ${display(base.base)} (${count})`, "hardware", icon("rack"), activeView === "hardware" && selectedBase === base.base);
     item.dataset.base = String(base.base);
     item.addEventListener("click", () => {
+      if (selectedBase !== base.base) {
+        selectedModule = null;
+        selectedHardwareSlot = null;
+      }
       selectedBase = base.base;
       selectView("hardware");
     });
@@ -168,7 +190,7 @@ function buildProgramGroup(programs) {
     row.classList.toggle("selected", activeView === "programs" && selectedProgramIndex === index);
     row.addEventListener("click", () => {
       selectedProgramIndex = index;
-      selectedCellOffset = null;
+      resetLadderSelection();
       selectView("programs");
     });
     group.children.append(row);
@@ -235,7 +257,12 @@ function renderEditor(editor, summary, inspector) {
 function renderHardwareEditor(canvas, inspector, hardware) {
   const allModules = hardware.modules || [];
   const baseModules = allModules.filter((module) => module.base === selectedBase);
-  if (!baseModules.includes(selectedModule)) selectedModule = baseModules[0] || null;
+  const base = (hardware.bases || []).find((item) => item.base === selectedBase);
+  const slotCount = baseSlotCount(base, baseModules, moduleSlotSpan);
+  if (selectedHardwareSlot === null || selectedHardwareSlot < 0 || selectedHardwareSlot >= slotCount) {
+    selectedHardwareSlot = slotCount > 0 ? 0 : null;
+  }
+  selectedModule = moduleAtPhysicalSlot(baseModules, selectedHardwareSlot, moduleSlotSpan);
 
   const toolbar = element("div", "editor-toolbar");
   const searchWrap = element("label", "filter-control");
@@ -245,51 +272,108 @@ function renderHardwareEditor(canvas, inspector, hardware) {
   search.placeholder = "Filter modules…";
   search.setAttribute("aria-label", "Filter modules");
   searchWrap.append(search);
-  const scope = element("span", "toolbar-summary", `Base ${selectedBase} · ${baseModules.length} modules`);
+  const usedSlots = occupiedSlotCount(baseModules, slotCount, moduleSlotSpan);
+  const scope = element("span", "toolbar-summary", `Base ${selectedBase} · ${usedSlots}/${slotCount} slots · ${baseModules.length} modules`);
   toolbar.append(searchWrap, scope);
 
   const tableHost = element("div", "editor-table-host");
   const renderRows = () => {
     const query = search.value.trim().toLocaleLowerCase();
-    const modules = baseModules.filter((module) => moduleText(module).includes(query));
-    scope.textContent = `Base ${selectedBase} · ${modules.length} modules`;
-    tableHost.replaceChildren(renderModuleTable(modules, inspector));
+    const rows = hardwareSlotRows(selectedBase, slotCount, baseModules, moduleSlotSpan);
+    const visibleRows = query
+      ? rows.filter((row) => row.module && moduleText(row.module).includes(query))
+      : rows;
+    const matchingModules = new Set(visibleRows.filter((row) => row.module).map((row) => row.module));
+    scope.textContent = query
+      ? `Base ${selectedBase} · ${matchingModules.size} matches · ${slotCount} slots`
+      : `Base ${selectedBase} · ${usedSlots}/${slotCount} slots · ${baseModules.length} modules`;
+    tableHost.replaceChildren(renderModuleTable(visibleRows, inspector));
   };
   search.addEventListener("input", renderRows);
   canvas.append(toolbar, tableHost);
   renderRows();
-  renderModuleInspector(inspector, selectedModule);
+  renderModuleInspector(inspector, selectedModule, selectedHardwareSlot);
 }
 
-function renderModuleTable(modules, inspector) {
-  if (!modules.length) return emptyState("No modules match this filter.");
+function renderModuleTable(slotRows, inspector) {
+  if (!slotRows.length) return emptyState("No slots match this filter.");
   const wrap = element("div", "table-scroll");
   const table = createTable(["Base", "Slots", "Width", "ID", "Name", "Input filter", "Comment"]);
-  modules.sort(moduleOrder).forEach((module) => {
+  table.setAttribute("aria-label", "Hardware modules. Use Up and Down to navigate and Delete to remove a module.");
+  slotRows.forEach((slotRow, index) => {
+    const { module, slot } = slotRow;
     const row = table.tBodies[0].insertRow();
-    row.className = selectedModule === module ? "selected" : "";
+    row.className = [
+      selectedHardwareSlot === slot ? "selected" : "",
+      `module-slot-${slotRow.kind}`,
+    ].filter(Boolean).join(" ");
     row.tabIndex = 0;
-    row.dataset.moduleKey = `${module.base}:${module.slot}`;
-    appendCells(row, [module.base, moduleSlotRange(module), moduleSlotSpan(module), module.id, shortModuleName(module.name), module.inputFilter, module.comment]);
+    row.setAttribute("aria-selected", String(selectedHardwareSlot === slot));
+    row.dataset.moduleKey = `${slotRow.base}:${slot}`;
+    appendCells(row, moduleSlotCells(slotRow));
     const select = () => {
       selectedModule = module;
-      table.querySelectorAll("tbody tr").forEach((item) => item.classList.toggle("selected", item === row));
-      renderModuleInspector(inspector, module);
+      selectedHardwareSlot = slot;
+      table.querySelectorAll("tbody tr").forEach((item) => {
+        const selected = item === row;
+        item.classList.toggle("selected", selected);
+        item.setAttribute("aria-selected", String(selected));
+      });
+      renderModuleInspector(inspector, module, slot);
     };
     row.addEventListener("click", select);
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") select();
+    row.addEventListener("keydown", async (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        select();
+        return;
+      }
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        const offset = event.key === "ArrowUp" ? -1 : 1;
+        const targetIndex = Math.max(0, Math.min(slotRows.length - 1, index + offset));
+        const targetRow = table.tBodies[0].rows[targetIndex];
+        if (targetRow && targetRow !== row) {
+          targetRow.click();
+          targetRow.focus();
+        }
+        return;
+      }
+      if (event.key === "Delete" && !event.repeat) {
+        event.preventDefault();
+        if (!module) return;
+        const selectedSlotKey = `${slotRow.base}:${slot}`;
+        const previousSelection = selectedModule;
+        selectedModule = null;
+        const deleted = await applyEdit(
+          () => delete_xgwx_module(current.file.bytes, module.base, module.slot),
+          `Delete module at base ${module.base}, slot ${module.slot}`,
+        );
+        if (!deleted) {
+          selectedModule = previousSelection;
+        } else {
+          document.querySelector(`tr[data-module-key="${selectedSlotKey}"]`)?.focus();
+        }
+      }
     });
   });
   wrap.append(table);
   return wrap;
 }
 
-function renderModuleInspector(inspector, module) {
+function renderModuleInspector(inspector, module, physicalSlot = module?.slot ?? null) {
   inspector.replaceChildren();
   inspector.append(inspectorHeading("MODULE"));
   if (!module) {
-    inspector.append(emptyState("Select a module to inspect it."));
+    if (physicalSlot !== null) {
+      const form = element("div", "property-grid");
+      property(form, "Base", selectedBase, true);
+      property(form, "Slot", physicalSlot, true);
+      property(form, "State", "Empty", true);
+      inspector.append(form, emptyState("This physical slot has no configured module."));
+    } else {
+      inspector.append(emptyState("Select a module or empty slot to inspect it."));
+    }
     return;
   }
 
@@ -297,6 +381,7 @@ function renderModuleInspector(inspector, module) {
   const form = element("div", "property-grid");
   property(form, "Base", module.base, true);
   property(form, "Slots", moduleSlotRange(module), true);
+  if (physicalSlot !== module.slot) property(form, "Selected slot", physicalSlot, true);
   property(form, "Slot width", moduleSlotSpan(module), true);
   property(form, "ID", module.id, true);
   property(form, "Subtype", module.subType, true);
@@ -385,8 +470,6 @@ function renderModuleOptions(module, entry) {
   }
   const valueMap = new Map(currentValues.map((item) => [`${item.key}:${item.index}`, item.value]));
   const changes = new Map();
-  let activeSection = null;
-  let fields = section;
   const apply = button("Apply module options", "primary-button", async () => {
     await applyEdit(
       () => {
@@ -402,62 +485,87 @@ function renderModuleOptions(module, entry) {
   apply.textContent = "Apply options";
   apply.disabled = true;
 
-  entry.visibleOptions.forEach((visibleOption) => {
-    const option = entry.options?.find((item) => item.key === visibleOption.key) || null;
-    if (visibleOption.section !== activeSection) {
-      activeSection = visibleOption.section;
-      if (activeSection) {
-        const group = element("div", "module-option-group");
-        group.append(element("h4", "", capitalize(activeSection)));
-        fields = element("div", "module-option-fields");
-        group.append(fields);
-        section.append(group);
-      } else {
-        fields = element("div", "module-option-fields");
-        section.append(fields);
-      }
-    }
-    for (let index = 0; index < visibleOption.count; index += 1) {
-      const key = `${visibleOption.key}:${index}`;
-      const writable = option && index < option.count;
-      const original = valueMap.get(key);
-      const field = element("label", "property-field module-option-field");
-      const label = moduleOptionLabel(visibleOption, index);
-      field.append(element("span", "property-label", label));
-      if (writable) {
-        const select = document.createElement("select");
-        select.setAttribute("aria-label", label);
-        if (!option.values.some((item) => item.value === original)) {
-          const unknown = document.createElement("option");
-          unknown.value = String(original);
-          unknown.textContent = `Unknown (${original})`;
-          select.append(unknown);
-        }
-        option.values.forEach((item) => {
-          const choice = document.createElement("option");
-          choice.value = String(item.value);
-          choice.textContent = item.label;
-          select.append(choice);
-        });
-        select.value = String(original);
-        select.addEventListener("change", () => {
-          const value = Number(select.value);
-          if (value === original) changes.delete(key);
-          else changes.set(key, { option, index, value });
-          apply.disabled = changes.size === 0;
-        });
-        field.append(select);
-      } else {
-        field.classList.add("module-option-readonly");
-        field.title = "Visible in XG5000; Details encoding is not mapped for safe editing.";
-        field.append(readonlyModuleOptionControl(visibleOption, label, index));
-      }
-      fields.append(field);
-    }
+  groupModuleOptions(entry.visibleOptions).forEach((optionGroup) => {
+    const title = moduleOptionGroupTitle(optionGroup);
+    const group = element(
+      "div",
+      `module-option-group${optionGroup.channelIndex === null ? "" : " module-option-channel-group"}`,
+    );
+    if (title) group.append(element("h4", "", title));
+    const fields = element("div", "module-option-fields");
+    optionGroup.items.forEach(({ option: visibleOption, index, groupedByChannel }) => {
+      const option = entry.options?.find((item) => item.key === visibleOption.key) || null;
+      fields.append(renderModuleOptionField({
+        visibleOption,
+        option,
+        index,
+        groupedByChannel,
+        groupTitle: title,
+        valueMap,
+        changes,
+        apply,
+      }));
+    });
+    group.append(fields);
+    section.append(group);
   });
   section.append(element("p", "module-selection-note", "All captured options are shown. Read-only rows do not yet have a verified Details mapping."));
   if (entry.options?.length) section.append(apply);
   return section;
+}
+
+function moduleOptionGroupTitle(group) {
+  const section = group.section ? capitalize(group.section) : "";
+  if (group.channelIndex === null) return section;
+  return [section, `CH ${group.channelIndex}`].filter(Boolean).join(" · ");
+}
+
+function renderModuleOptionField({
+  visibleOption,
+  option,
+  index,
+  groupedByChannel,
+  groupTitle,
+  valueMap,
+  changes,
+  apply,
+}) {
+  const key = `${visibleOption.key}:${index}`;
+  const writable = option && index < option.count;
+  const original = valueMap.get(key);
+  const field = element("label", "property-field module-option-field");
+  const label = groupedByChannel ? visibleOption.label : moduleOptionLabel(visibleOption, index);
+  const accessibleLabel = groupTitle ? `${groupTitle} · ${label}` : label;
+  field.append(element("span", "property-label", label));
+  if (writable) {
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", accessibleLabel);
+    if (!option.values.some((item) => item.value === original)) {
+      const unknown = document.createElement("option");
+      unknown.value = String(original);
+      unknown.textContent = `Unknown (${original})`;
+      select.append(unknown);
+    }
+    option.values.forEach((item) => {
+      const choice = document.createElement("option");
+      choice.value = String(item.value);
+      choice.textContent = item.label;
+      select.append(choice);
+    });
+    select.value = String(original);
+    select.addEventListener("change", () => {
+      const value = Number(select.value);
+      if (value === original) changes.delete(key);
+      else changes.set(key, { option, index, value });
+      apply.disabled = changes.size === 0;
+    });
+    field.append(select);
+  } else {
+    field.classList.add("module-option-readonly");
+    field.title = "Visible in XG5000; Details encoding is not mapped for safe editing.";
+    field.append(readonlyModuleOptionControl(visibleOption, accessibleLabel, index));
+  }
+  return field;
 }
 
 function readonlyModuleOptionControl(option, label, index) {
@@ -522,8 +630,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
     appendCells(row, [program.name || `Program ${index + 1}`, program.task, program.kind, program.version, program.comment]);
     const select = () => {
       selectedProgramIndex = index;
-      selectedCellOffset = null;
-      selectedBlankCell = null;
+      resetLadderSelection();
       renderWorkspace();
     };
     row.addEventListener("click", select);
@@ -534,53 +641,107 @@ function renderProgramsEditor(canvas, inspector, programs) {
   canvas.append(tableContainer(table, programs.length));
 
   if (ladder) {
-    const selectCell = (cell) => {
-      selectedCellOffset = cell.offset;
-      selectedBlankCell = null;
-      renderProgramInspector(inspector, selected, ladder, cell, null);
-      canvas.querySelectorAll("[data-cell-offset]").forEach((item) => {
-        item.classList.toggle("selected", Number(item.dataset.cellOffset) === cell.offset);
-      });
-      canvas.querySelectorAll("[data-blank-key]").forEach((item) => item.classList.remove("selected"));
+    const rowValues = ladder.rungs.map((rung) => rung.rawY);
+    if (selectedLadderFocus && !rowValues.includes(selectedLadderFocus.rawY)) {
+      resetLadderSelection();
+    }
+    if (selectedLadderFocus) {
+      const focusedCell = ladderCellAtPosition(ladder, selectedLadderFocus);
+      selectedCellOffset = focusedCell?.offset ?? null;
+      selectedBlankCell = focusedCell ? null : selectedLadderFocus;
+    }
+    const selectPosition = (position, extend = false) => {
+      const rowIndex = rowValues.indexOf(position.rawY);
+      if (rowIndex < 0) return;
+      const normalized = { rawY: position.rawY, rowIndex, column: position.column };
+      if (!extend || !selectedLadderAnchor) selectedLadderAnchor = normalized;
+      selectedLadderFocus = normalized;
+      const cell = ladderCellAtPosition(ladder, normalized);
+      selectedCellOffset = cell?.offset ?? null;
+      selectedBlankCell = cell ? null : normalized;
+      const selection = currentLadderSelection(ladder);
+      renderProgramInspector(inspector, selected, ladder, cell, selectedBlankCell, selection);
+      syncLadderSelectionClasses(canvas, selection.keys, normalized);
     };
-    const selectBlankCell = (blank) => {
-      selectedCellOffset = null;
-      selectedBlankCell = blank;
-      renderProgramInspector(inspector, selected, ladder, null, blank);
-      canvas.querySelectorAll("[data-cell-offset]").forEach((item) => item.classList.remove("selected"));
-      canvas.querySelectorAll("[data-blank-key]").forEach((item) => {
-        item.classList.toggle("selected", item.dataset.blankKey === ldBlankKey(blank.rawY, blank.column));
-      });
+    const deleteSelection = async () => {
+      const selection = currentLadderSelection(ladder);
+      const editableCells = selection.decodedCells.filter((cell) => (
+        cell.sourceText !== null
+        && cell.sourceText !== undefined
+        && cell.sourceText.trim().length > 0
+      ));
+      if (!editableCells.length) return false;
+      const activeKey = selectedLadderFocus ? ladderPositionKey(selectedLadderFocus) : null;
+      const edited = await applyEdit(
+        () => editableCells.reduce((bytes, cell) => update_xgwx_ladder_cell(
+          bytes,
+          selectedProgramIndex,
+          cell.offset,
+          cell.sourceText,
+          blankLadderCellText(cell.sourceText),
+        ), current.file.bytes),
+        `Clear ${editableCells.length} ladder cell${editableCells.length === 1 ? "" : "s"}`,
+      );
+      if (edited && activeKey) {
+        requestAnimationFrame(() => document.querySelector(`[data-ladder-key="${activeKey}"]`)?.focus());
+      }
+      return edited;
     };
     canvas.append(editorHeader("Ladder diagram", `${ladder.rungs.length} rungs · ${LD_COLUMN_COUNT} columns`));
-    canvas.append(renderLadderDiagram(ladder, selectCell, selectBlankCell));
-    canvas.append(editorHeader("Decoded cells", `${ladder.cells.length} decoded cells · topology is preserved`));
-    const cells = createTable(["Rung", "Column", "Type", "Source text"]);
-    ladder.cells.forEach((cell) => {
-      const row = cells.tBodies[0].insertRow();
-      row.className = selectedCellOffset === cell.offset ? "selected" : "";
-      row.tabIndex = 0;
-      row.dataset.cellOffset = String(cell.offset);
-      appendCells(row, [cell.rawY / 4 + 1, cell.rawX, cell.contact || cell.coil || cell.kind, cell.sourceText || "(topology marker)"]);
-      const select = () => selectCell(cell);
-      row.addEventListener("click", select);
-      row.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") select();
-      });
-    });
-    canvas.append(tableContainer(cells, ladder.cells.length));
+    canvas.append(renderLadderDiagram(ladder, selectPosition, deleteSelection));
   } else {
     canvas.append(emptyState("This program has no decoded ladder body."));
   }
 
-  const selectedCell = ladder?.cells.find((cell) => cell.offset === selectedCellOffset) || null;
-  renderProgramInspector(inspector, selected, ladder, selectedCell, selectedBlankCell);
+  const selectedCell = ladder && selectedLadderFocus
+    ? ladderCellAtPosition(ladder, selectedLadderFocus)
+    : null;
+  const selection = ladder ? currentLadderSelection(ladder) : null;
+  renderProgramInspector(inspector, selected, ladder, selectedCell, selectedBlankCell, selection);
 }
 
-function renderLadderDiagram(ladder, selectCell, selectBlankCell) {
+function resetLadderSelection() {
+  selectedCellOffset = null;
+  selectedBlankCell = null;
+  selectedLadderAnchor = null;
+  selectedLadderFocus = null;
+}
+
+function ladderCellAtPosition(ladder, position) {
+  return ladder.cells.find((cell) => (
+    cell.rawY === position.rawY && ldCellColumn(cell.rawX) === position.column
+  )) || null;
+}
+
+function currentLadderSelection(ladder) {
+  const rowValues = ladder.rungs.map((rung) => rung.rawY);
+  const keys = ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus);
+  const decodedCells = ladder.cells.filter((cell) => keys.has(ladderPositionKey({
+    rawY: cell.rawY,
+    column: ldCellColumn(cell.rawX),
+  })));
+  const editableCount = decodedCells.filter((cell) => (
+    cell.sourceText !== null && cell.sourceText !== undefined
+  )).length;
+  return { keys, decodedCells, editableCount, total: keys.size };
+}
+
+function syncLadderSelectionClasses(canvas, keys, focus) {
+  const focusKey = focus ? ladderPositionKey(focus) : null;
+  canvas.querySelectorAll("[data-ladder-key]").forEach((item) => {
+    const selected = keys.has(item.dataset.ladderKey);
+    item.classList.toggle("selected", selected);
+    item.classList.toggle("active", item.dataset.ladderKey === focusKey);
+    item.setAttribute("aria-selected", String(selected));
+  });
+}
+
+function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
   const viewport = element("div", "ld-viewport");
   const board = element("div", "ld-board");
   const rowValues = ladder.rungs.map((rung) => rung.rawY);
+  const selectedKeys = ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus);
+  const activeKey = selectedLadderFocus ? ladderPositionKey(selectedLadderFocus) : null;
   const rungNumbers = new Map(rowValues.map((rawY, index) => [rawY, index]));
   const layoutRows = buildLdLayoutRows(rowValues, ladder.rungComments || []);
   const rowIndexes = new Map(layoutRows
@@ -589,6 +750,42 @@ function renderLadderDiagram(ladder, selectCell, selectBlankCell) {
   const height = LD_FIRST_ROW_Y + Math.max(layoutRows.length, 1) * LD_ROW_HEIGHT;
   board.style.width = `${LD_VIEW_WIDTH}px`;
   board.style.height = `${height}px`;
+
+  let dragSelecting = false;
+  const bindSelection = (node, position) => {
+    const key = ladderPositionKey(position);
+    node.dataset.ladderKey = key;
+    node.classList.toggle("selected", selectedKeys.has(key));
+    node.classList.toggle("active", activeKey === key);
+    node.setAttribute("aria-selected", String(selectedKeys.has(key)));
+    node.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      dragSelecting = true;
+      selectPosition(position, event.shiftKey);
+      document.addEventListener("pointerup", () => {
+        dragSelecting = false;
+      }, { once: true });
+    });
+    node.addEventListener("pointerenter", (event) => {
+      if (dragSelecting && (event.buttons & 1)) selectPosition(position, true);
+    });
+    node.addEventListener("focus", () => {
+      if (ladderPositionKey(selectedLadderFocus || {}) !== key) selectPosition(position, false);
+    });
+    node.addEventListener("keydown", async (event) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        event.preventDefault();
+        const next = moveLadderPosition(rowValues, position, event.key, LD_COLUMN_COUNT);
+        if (!next) return;
+        selectPosition(next, event.shiftKey);
+        board.querySelector(`[data-ladder-key="${ladderPositionKey(next)}"]`)?.focus();
+      }
+      if (event.key === "Delete" && !event.repeat) {
+        event.preventDefault();
+        await deleteSelection();
+      }
+    });
+  };
 
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.classList.add("ld-wires");
@@ -631,9 +828,9 @@ function renderLadderDiagram(ladder, selectCell, selectBlankCell) {
       const key = ldBlankKey(rawY, column);
       if (occupied.has(key)) continue;
       const blank = { rawY, rowIndex: rungIndex, column };
-      const node = button(`Blank cell, rung ${rungIndex + 1}, column ${column + 1}`, "ld-blank-cell", () => selectBlankCell(blank));
+      const node = button(`Blank cell, rung ${rungIndex + 1}, column ${column + 1}`, "ld-blank-cell", () => {});
       node.dataset.blankKey = key;
-      node.classList.toggle("selected", selectedBlankCell?.rawY === rawY && selectedBlankCell?.column === column);
+      bindSelection(node, blank);
       node.style.left = `${ldCellX(column)}px`;
       node.style.top = `${ldRowY(displayRowIndex)}px`;
       board.append(node);
@@ -662,9 +859,10 @@ function renderLadderDiagram(ladder, selectCell, selectBlankCell) {
   (ladder.cells || []).forEach((cell) => {
     const rowIndex = rowIndexes.get(cell.rawY);
     if (rowIndex === undefined) return;
-    const node = button(ldCellAriaLabel(cell, rungNumbers.get(cell.rawY)), `ld-cell ${ldCellClass(cell)}`, () => selectCell(cell));
+    const position = { rawY: cell.rawY, rowIndex: rungNumbers.get(cell.rawY), column: ldCellColumn(cell.rawX) };
+    const node = button(ldCellAriaLabel(cell, rungNumbers.get(cell.rawY)), `ld-cell ${ldCellClass(cell)}`, () => {});
     node.dataset.cellOffset = String(cell.offset);
-    node.classList.toggle("selected", selectedCellOffset === cell.offset);
+    bindSelection(node, position);
     node.style.left = `${ldCellX(ldCellColumn(cell.rawX))}px`;
     node.style.top = `${ldRowY(rowIndex)}px`;
     node.title = cell.sourceText || cell.value || cell.contact || cell.coil || cell.kind;
@@ -776,7 +974,7 @@ function ldBlankKey(rawY, column) {
   return `${rawY}:${column}`;
 }
 
-function renderProgramInspector(inspector, program, ladder, cell, blankCell = null) {
+function renderProgramInspector(inspector, program, ladder, cell, blankCell = null, selection = null) {
   inspector.replaceChildren(inspectorHeading("PROGRAM"));
   if (!program) {
     inspector.append(emptyState("Select a program to edit it."));
@@ -805,6 +1003,13 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
 
   const cellSection = element("section", "cell-editor");
   cellSection.append(element("h3", "", "Ladder cell"));
+  if (selection?.total > 1) {
+    cellSection.append(element(
+      "div",
+      "ladder-selection-summary",
+      `${selection.total} grid cells selected · ${selection.editableCount} decoded text cells · Delete clears their contents`,
+    ));
+  }
   if (blankCell) {
     cellSection.append(
       element("div", "blank-cell-position", `Rung ${blankCell.rowIndex + 1} · Column ${blankCell.column + 1}`),
@@ -855,9 +1060,11 @@ async function applyEdit(update, label) {
     dirty = true;
     vscode.postMessage({ type: "edit", label, bytes: Array.from(bytes) });
     renderWorkspace();
+    return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     vscode.postMessage({ type: "showError", message });
+    return false;
   }
 }
 
@@ -1168,9 +1375,13 @@ function moduleText(module) {
     .toLocaleLowerCase();
 }
 
-function moduleOrder(left, right) {
-  return (left.base ?? Number.MAX_SAFE_INTEGER) - (right.base ?? Number.MAX_SAFE_INTEGER)
-    || (left.slot ?? Number.MAX_SAFE_INTEGER) - (right.slot ?? Number.MAX_SAFE_INTEGER);
+function moduleSlotCells(slotRow) {
+  const { base, slot, module, kind } = slotRow;
+  if (!module) return [base, slot, 1, "—", "Empty slot", "—", ""];
+  if (kind === "continuation") {
+    return [base, slot, `↳ ${module.slot}`, "—", `${shortModuleName(module.name)} continuation`, "—", ""];
+  }
+  return [base, moduleSlotRange(module), moduleSlotSpan(module), module.id, shortModuleName(module.name), module.inputFilter, module.comment];
 }
 
 function shortModuleName(name) {

@@ -8,6 +8,9 @@ powered by the sibling `libxgwx` project during development.
 - Opens `*.xgwx` files directly as a VS Code custom editor.
 - Shows project counts and metadata.
 - Uses an editor-style explorer, dense module table, and contextual inspector.
+- Supports Up/Down row navigation and undoable Delete from the hardware module table.
+- Keeps one hardware-table row per physical base slot, including empty slots
+  and continuation rows for multi-slot modules.
 - Selects XGK modules from the embedded latest-stable catalog. Selection
   preserves base, slot, and comment while restoring the chosen model's ID,
   subtype, name, and default `Details`.

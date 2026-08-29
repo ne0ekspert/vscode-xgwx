@@ -5,6 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import init, {
+  delete_xgwx_module,
   parse_xgwx,
   select_xgwx_module,
   set_xgwx_module_option,
@@ -14,6 +15,8 @@ import init, {
   xgk_module_catalog,
   xgwx_module_option_values,
 } from "../media/libxgwx.js";
+import { hardwareSlotRows } from "../media/hardware-slots.js";
+import { groupModuleOptions } from "../media/module-option-groups.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const libraryRoot = process.env.LIBXGWX_DIR || path.resolve(root, "../libxgwx");
@@ -76,6 +79,28 @@ test("bundled WASM exposes and edits both DT4A output groups", async (context) =
   assert.equal(module.details, "00000C0000000000");
 });
 
+test("bundled AH6A options form separate input and output channel groups", async () => {
+  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
+  await init({ module_or_path: wasm });
+  const ah6a = xgk_module_catalog().find((entry) => entry.model === "XGF-AH6A");
+  const groups = groupModuleOptions(ah6a.visibleOptions);
+  const channelGroups = groups.filter((group) => group.channelIndex !== null);
+
+  assert.equal(channelGroups.filter((group) => group.section === "input").length, 4);
+  assert.equal(channelGroups.filter((group) => group.section === "output").length, 2);
+  assert.deepEqual(
+    channelGroups.find((group) => group.section === "input" && group.channelIndex === 0)
+      .items.map(({ option }) => option.key),
+    [
+      "input.channelOperation",
+      "input.inputRange",
+      "input.dataType",
+      "input.averageProcessing",
+      "input.averageValue",
+    ],
+  );
+});
+
 test("bundled catalog treats TC4UD as occupying two physical slots", async (context) => {
   const denseFixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
   const sparseFixture = path.join(libraryRoot, "fixtures/elements.xgwx");
@@ -92,6 +117,14 @@ test("bundled catalog treats TC4UD as occupying two physical slots", async (cont
   const sparse = new Uint8Array(fs.readFileSync(sparseFixture));
   const selected = parse_xgwx(select_xgwx_module(sparse, 0, 2, "XGF-TC4UD"));
   assert.match(selected.hardware.modules.find((module) => module.slot === 2).name, /XGF-TC4UD/);
+  const selectedBase = selected.hardware.bases.find((base) => base.base === 0);
+  const selectedModules = selected.hardware.modules.filter((module) => module.base === 0);
+  const rows = hardwareSlotRows(0, selectedBase.slotCount, selectedModules, (module) => {
+    return xgk_module_catalog().find((entry) => entry.id === module.id && entry.subType === module.subType)?.slotSpan || 1;
+  });
+  assert.equal(rows.length, selectedBase.slotCount);
+  assert.equal(rows[2].kind, "module");
+  assert.equal(rows[3].kind, "continuation");
 
   const dense = new Uint8Array(fs.readFileSync(denseFixture));
   assert.throws(
@@ -195,6 +228,37 @@ test("bundled WASM rewrites program metadata and a same-length ladder cell", asy
   assert.ok(after.ladder[0].cells.some((item) => item.sourceText === "M00042"));
 });
 
+test("bundled WASM clears multiple ladder cell contents without shifting topology", async (context) => {
+  const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
+  if (!fs.existsSync(fixture)) {
+    context.skip(`libxgwx fixture not found at ${fixture}`);
+    return;
+  }
+
+  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
+  await init({ module_or_path: wasm });
+  let bytes = new Uint8Array(fs.readFileSync(fixture));
+  const before = parse_xgwx(bytes);
+  const cells = before.ladder[0].cells.filter((cell) => cell.sourceText !== null).slice(0, 2);
+  for (const cell of cells) {
+    bytes = update_xgwx_ladder_cell(
+      bytes,
+      0,
+      cell.offset,
+      cell.sourceText,
+      " ".repeat(cell.sourceText.length),
+    );
+  }
+  const after = parse_xgwx(bytes);
+
+  assert.equal(after.ladder[0].cells.some((cell) => cell.sourceText === "M00000"), false);
+  assert.equal(after.ladder[0].cells.some((cell) => cell.sourceText === "M00001"), false);
+  assert.equal(
+    after.ladder[0].cells.find((cell) => cell.sourceText === "M00002")?.offset,
+    before.ladder[0].cells.find((cell) => cell.sourceText === "M00002")?.offset,
+  );
+});
+
 test("bundled WASM rewrites same-length variable fields and its numeric address", async (context) => {
   const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
   if (!fs.existsSync(fixture)) {
@@ -247,4 +311,26 @@ test("bundled WASM selects a module from the XG5000 catalog", async (context) =>
   assert.equal(selected.name, rd8a.name);
   assert.equal(selected.details, rd8a.details);
   assert.equal(selected.comment, original.comment);
+});
+
+test("bundled WASM deletes one hardware module", async (context) => {
+  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  if (!fs.existsSync(fixture)) {
+    context.skip(`libxgwx fixture not found at ${fixture}`);
+    return;
+  }
+
+  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
+  await init({ module_or_path: wasm });
+  const source = new Uint8Array(fs.readFileSync(fixture));
+  const before = parse_xgwx(source);
+  const after = parse_xgwx(delete_xgwx_module(source, 0, 2));
+
+  assert.equal(after.hardware.modules.length, before.hardware.modules.length - 1);
+  assert.equal(after.hardware.modules.some((module) => module.base === 0 && module.slot === 2), false);
+  const base = after.hardware.bases.find((item) => item.base === 0);
+  const rows = hardwareSlotRows(0, base.slotCount, after.hardware.modules.filter((module) => module.base === 0), () => 1);
+  assert.equal(rows.length, base.slotCount);
+  assert.equal(rows[2].kind, "empty");
+  assert.throws(() => delete_xgwx_module(source, 99, 99), /was not found/);
 });
