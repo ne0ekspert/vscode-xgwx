@@ -515,7 +515,8 @@ button.tree-row:hover,
 }
 
 .property-field input,
-.property-field textarea {
+.property-field textarea,
+.property-field select {
   min-width: 0;
   width: 100%;
   padding: 4px 6px;
@@ -528,9 +529,88 @@ button.tree-row:hover,
   resize: vertical;
 }
 
+.property-field select {
+  height: 28px;
+}
+
 .property-field input[readonly],
 .property-field textarea[readonly] {
   cursor: default;
+}
+
+.module-picker {
+  display: grid;
+  gap: 9px;
+  padding: 11px 10px 14px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.module-picker h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.module-selection-field {
+  grid-template-columns: 52px minmax(0, 1fr);
+}
+
+.module-selection-note {
+  margin: 0;
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.module-picker .primary-button {
+  justify-self: start;
+}
+
+.module-options {
+  display: grid;
+  gap: 9px;
+  padding: 11px 10px 14px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.module-options h3,
+.module-options h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.module-options h4 {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+}
+
+.module-option-group,
+.module-option-fields {
+  display: grid;
+  gap: 7px;
+}
+
+.module-option-field {
+  grid-template-columns: minmax(90px, 1fr) minmax(96px, 0.9fr);
+}
+
+.module-option-field .property-label {
+  overflow-wrap: anywhere;
+}
+
+.module-option-readonly .property-label {
+  color: var(--vscode-descriptionForeground);
+}
+
+.module-option-readonly select:disabled {
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  background: var(--vscode-input-background);
+  opacity: 1;
+}
+
+.module-options .primary-button {
+  justify-self: start;
 }
 
 .ld-viewport {
@@ -962,11 +1042,11 @@ button.tree-row:hover,
   .command-bar { grid-template-columns: var(--explorer-width) minmax(0, 1fr) auto; }
   .workbench { grid-template-columns: var(--explorer-width) minmax(360px, 1fr); }
   .inspector-pane { display: none; }
-  .editor-shell:is([data-view="programs"], [data-view="variables"]) .workbench {
+  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"]) .workbench {
     grid-template-rows: minmax(360px, 1fr) minmax(220px, 38vh);
   }
-  .editor-shell:is([data-view="programs"], [data-view="variables"]) .explorer-pane { grid-row: 1 / span 2; }
-  .editor-shell:is([data-view="programs"], [data-view="variables"]) .inspector-pane {
+  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"]) .explorer-pane { grid-row: 1 / span 2; }
+  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"]) .inspector-pane {
     display: block;
     grid-column: 2;
     grid-row: 2;
@@ -983,18 +1063,18 @@ button.tree-row:hover,
   .explorer-pane { border-right: 0; border-bottom: 1px solid var(--vscode-panel-border); }
   .overview-properties { grid-template-columns: 1fr; }
   .edit-state { display: none; }
-  .editor-shell:is([data-view="programs"], [data-view="variables"]) .workbench {
+  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"]) .workbench {
     grid-template-rows: 170px minmax(360px, 1fr) minmax(240px, auto);
   }
-  .editor-shell:is([data-view="programs"], [data-view="variables"]) .explorer-pane {
+  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"]) .explorer-pane {
     grid-column: 1;
     grid-row: 1;
   }
-  .editor-shell:is([data-view="programs"], [data-view="variables"]) .editor-pane {
+  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"]) .editor-pane {
     grid-column: 1;
     grid-row: 2;
   }
-  .editor-shell:is([data-view="programs"], [data-view="variables"]) .inspector-pane {
+  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"]) .inspector-pane {
     grid-column: 1;
     grid-row: 3;
   }

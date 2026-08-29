@@ -59,3 +59,29 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
   assert.doesNotMatch(styles, /\.ld-cell:not\(\.instruction\) \.ld-glyph::before/);
   assert.doesNotMatch(script, /─\|/);
 });
+
+test("provides catalog-backed module selection in base hardware inspectors", () => {
+  const script = fs.readFileSync(path.join(root, "media/main.js"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "media/main.css"), "utf8");
+
+  assert.match(script, /xgk_module_catalog/);
+  assert.match(script, /select_xgwx_module/);
+  assert.match(script, /set_xgwx_module_option/);
+  assert.match(script, /xgwx_module_option_values/);
+  assert.match(script, /Apply module selection/);
+  assert.match(script, /Apply module options/);
+  assert.match(script, /entry\.visibleOptions/);
+  assert.match(script, /option\.scope === "fileData"/);
+  assert.match(script, /formatModuleOptionDefault/);
+  assert.match(script, /All captured options are shown/);
+  assert.match(script, /module-option-readonly/);
+  assert.match(script, /function moduleSlotRange/);
+  assert.match(script, /"Slot width"/);
+  assert.doesNotMatch(script, /entry\.name === module\.name/);
+  assert.match(script, /Base, slot, and comment are preserved/);
+  assert.match(styles, /\.module-picker\b/);
+  assert.match(styles, /\.module-options\b/);
+  assert.match(styles, /data-view="hardware"/);
+  assert.doesNotMatch(script, /treeItem\(`Modules \(\$\{modules\.length\}\)`/);
+  assert.match(script, /let activeView = "overview";/);
+});

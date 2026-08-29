@@ -28,6 +28,28 @@ export function parse_xgwx(bytes) {
 }
 
 /**
+ * Select a catalog module and return rewritten `.xgwx` bytes.
+ * @param {Uint8Array} bytes
+ * @param {number} base
+ * @param {number} slot
+ * @param {string} model
+ * @returns {Uint8Array}
+ */
+export function select_xgwx_module(bytes, base, slot, model) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(model, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.select_xgwx_module(ptr0, len0, base, slot, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Update an XGI-D24A/B input filter and return rewritten `.xgwx` bytes.
  * @param {Uint8Array} bytes
  * @param {number} base
@@ -45,6 +67,30 @@ export function set_xgwx_module_input_filter(bytes, base, slot, raw_filter) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Set one verified module option and return rewritten `.xgwx` bytes.
+ * @param {Uint8Array} bytes
+ * @param {number} base
+ * @param {number} slot
+ * @param {string} key
+ * @param {number} index
+ * @param {number} value
+ * @returns {Uint8Array}
+ */
+export function set_xgwx_module_option(bytes, base, slot, key, index, value) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.set_xgwx_module_option(ptr0, len0, base, slot, ptr1, len1, index, value);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
 }
 
 /**
@@ -128,6 +174,35 @@ export function update_xgwx_variable(bytes, variable_index, patch) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Return the embedded latest-stable XGK module selection catalog.
+ * @returns {any}
+ */
+export function xgk_module_catalog() {
+    const ret = wasm.xgk_module_catalog();
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Return the current values of all verified options for one module.
+ * @param {Uint8Array} bytes
+ * @param {number} base
+ * @param {number} slot
+ * @returns {any}
+ */
+export function xgwx_module_option_values(bytes, base, slot) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.xgwx_module_option_values(ptr0, len0, base, slot);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 function __wbg_get_imports() {
     const import0 = {

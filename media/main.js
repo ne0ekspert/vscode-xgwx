@@ -1,8 +1,12 @@
 import init, {
   parse_xgwx,
+  select_xgwx_module,
+  set_xgwx_module_option,
   update_xgwx_ladder_cell,
   update_xgwx_program,
   update_xgwx_variable,
+  xgk_module_catalog,
+  xgwx_module_option_values,
 } from "./libxgwx.js";
 
 const vscode = acquireVsCodeApi();
@@ -16,7 +20,8 @@ const LD_ROW_HEIGHT = 76;
 const LD_FIRST_ROW_Y = 58;
 
 let current = null;
-let activeView = "hardware";
+let moduleCatalog = [];
+let activeView = "overview";
 let selectedBase = null;
 let selectedModule = null;
 let selectedProgramIndex = 0;
@@ -41,10 +46,16 @@ async function loadWorkspace(file) {
   renderLoading(`Parsing ${file.fileName}…`);
   try {
     await wasmReady;
+    if (!moduleCatalog.length) moduleCatalog = xgk_module_catalog();
     const summary = parse_xgwx(new Uint8Array(file.bytes));
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
     dirty = Boolean(file.dirty);
     const modules = summary.hardware?.modules || [];
+    const bases = summary.hardware?.bases || [];
+    if (activeView === "hardware" && !bases.some((base) => base.base === selectedBase)) {
+      selectedBase = bases[0]?.base ?? null;
+      if (selectedBase === null) activeView = "overview";
+    }
     selectedModule = modules.find((module) => module.inputFilter) || modules[0] || null;
     renderWorkspace();
   } catch (error) {
@@ -117,9 +128,6 @@ function renderExplorer(file, summary) {
   const hardwareGroup = treeGroup("Hardware", icon("hardware"), true);
   const bases = summary.hardware?.bases || [];
   const modules = summary.hardware?.modules || [];
-  hardwareGroup.children.append(
-    treeItem(`Modules (${modules.length})`, "hardware", icon("module"), activeView === "hardware" && selectedBase === null),
-  );
   bases.forEach((base) => {
     const count = modules.filter((module) => module.base === base.base).length;
     const item = treeItem(`Base ${display(base.base)} (${count})`, "hardware", icon("rack"), activeView === "hardware" && selectedBase === base.base);
@@ -189,7 +197,6 @@ function treeItem(label, view, glyph, selected) {
   row.type = "button";
   row.append(element("span", "tree-spacer"), glyph, element("span", "tree-label", label));
   row.addEventListener("click", () => {
-    if (view === "hardware" && !row.dataset.base) selectedBase = null;
     selectView(view);
   });
   return row;
@@ -227,7 +234,7 @@ function renderEditor(editor, summary, inspector) {
 
 function renderHardwareEditor(canvas, inspector, hardware) {
   const allModules = hardware.modules || [];
-  const baseModules = selectedBase === null ? allModules : allModules.filter((module) => module.base === selectedBase);
+  const baseModules = allModules.filter((module) => module.base === selectedBase);
   if (!baseModules.includes(selectedModule)) selectedModule = baseModules[0] || null;
 
   const toolbar = element("div", "editor-toolbar");
@@ -238,14 +245,14 @@ function renderHardwareEditor(canvas, inspector, hardware) {
   search.placeholder = "Filter modules…";
   search.setAttribute("aria-label", "Filter modules");
   searchWrap.append(search);
-  const scope = element("span", "toolbar-summary", selectedBase === null ? `${allModules.length} modules` : `Base ${selectedBase} · ${baseModules.length} modules`);
+  const scope = element("span", "toolbar-summary", `Base ${selectedBase} · ${baseModules.length} modules`);
   toolbar.append(searchWrap, scope);
 
   const tableHost = element("div", "editor-table-host");
   const renderRows = () => {
     const query = search.value.trim().toLocaleLowerCase();
     const modules = baseModules.filter((module) => moduleText(module).includes(query));
-    scope.textContent = selectedBase === null ? `${modules.length} of ${allModules.length} modules` : `Base ${selectedBase} · ${modules.length} modules`;
+    scope.textContent = `Base ${selectedBase} · ${modules.length} modules`;
     tableHost.replaceChildren(renderModuleTable(modules, inspector));
   };
   search.addEventListener("input", renderRows);
@@ -257,13 +264,13 @@ function renderHardwareEditor(canvas, inspector, hardware) {
 function renderModuleTable(modules, inspector) {
   if (!modules.length) return emptyState("No modules match this filter.");
   const wrap = element("div", "table-scroll");
-  const table = createTable(["Base", "Slot", "ID", "Name", "Input filter", "Comment"]);
+  const table = createTable(["Base", "Slots", "Width", "ID", "Name", "Input filter", "Comment"]);
   modules.sort(moduleOrder).forEach((module) => {
     const row = table.tBodies[0].insertRow();
     row.className = selectedModule === module ? "selected" : "";
     row.tabIndex = 0;
     row.dataset.moduleKey = `${module.base}:${module.slot}`;
-    appendCells(row, [module.base, module.slot, module.id, shortModuleName(module.name), module.inputFilter, module.comment]);
+    appendCells(row, [module.base, moduleSlotRange(module), moduleSlotSpan(module), module.id, shortModuleName(module.name), module.inputFilter, module.comment]);
     const select = () => {
       selectedModule = module;
       table.querySelectorAll("tbody tr").forEach((item) => item.classList.toggle("selected", item === row));
@@ -286,20 +293,219 @@ function renderModuleInspector(inspector, module) {
     return;
   }
 
+  const currentEntry = moduleCatalog.find((entry) => catalogEntryMatchesModule(entry, module));
   const form = element("div", "property-grid");
   property(form, "Base", module.base, true);
-  property(form, "Slot", module.slot, true);
+  property(form, "Slots", moduleSlotRange(module), true);
+  property(form, "Slot width", moduleSlotSpan(module), true);
   property(form, "ID", module.id, true);
   property(form, "Subtype", module.subType, true);
   property(form, "Name", module.name, true, true);
   property(form, "Input Filter", module.inputFilter || "Not decoded", true);
   property(form, "Comment", module.comment, true, true);
 
+  const picker = element("section", "module-picker");
+  picker.append(element("h3", "", "Module selection"));
+  const selection = element("label", "property-field module-selection-field");
+  selection.append(element("span", "property-label", "Model"));
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "Module model");
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = currentEntry ? "Choose replacement…" : "Choose module…";
+  select.append(placeholder);
+  const categories = new Map();
+  moduleCatalog.forEach((entry) => {
+    if (!categories.has(entry.category)) categories.set(entry.category, []);
+    categories.get(entry.category).push(entry);
+  });
+  categories.forEach((entries, category) => {
+    const group = document.createElement("optgroup");
+    group.label = category;
+    entries.forEach((entry) => {
+      const option = document.createElement("option");
+      option.value = entry.model;
+      option.textContent = `${entry.model} — ${catalogModuleDescription(entry)}`;
+      group.append(option);
+    });
+    select.append(group);
+  });
+  if (currentEntry) select.value = currentEntry.model;
+  selection.append(select);
+
+  const note = element(
+    "p",
+    "module-selection-note",
+    "Replaces ID, subtype, name, and Details with latest-stable defaults. Base, slot, and comment are preserved.",
+  );
+  const apply = button("Apply module selection", "primary-button", async () => {
+    const entry = moduleCatalog.find((item) => item.model === select.value);
+    if (!entry) return;
+    await applyEdit(
+      () => select_xgwx_module(current.file.bytes, module.base, module.slot, entry.model),
+      `Select ${entry.model} at base ${module.base}, slot ${module.slot}`,
+    );
+  });
+  apply.textContent = "Apply selection";
+  apply.disabled = true;
+  select.addEventListener("change", () => {
+    apply.disabled = !select.value || select.value === currentEntry?.model;
+  });
+  picker.append(selection, note, apply);
+
+  const options = renderModuleOptions(module, currentEntry);
+
   const raw = element("details", "raw-details");
   raw.open = true;
   raw.append(element("summary", "", "Raw Details"));
   raw.append(element("pre", "raw-value", formatRawDetails(module)));
-  inspector.append(form, raw);
+  inspector.append(form, picker, options, raw);
+}
+
+function renderModuleOptions(module, entry) {
+  const section = element("section", "module-options");
+  section.append(element("h3", "", "Module options"));
+  if (!entry) {
+    section.append(element("p", "module-selection-note", "This module does not uniquely match the embedded XG5000 catalog."));
+    return section;
+  }
+  if (!entry.visibleOptions?.length) {
+    section.append(element("p", "module-selection-note", "No module options were captured for this module."));
+    return section;
+  }
+
+  let currentValues = [];
+  if (entry.options?.length) {
+    try {
+      currentValues = xgwx_module_option_values(current.file.bytes, module.base, module.slot);
+    } catch (error) {
+      section.append(element("p", "validation-summary invalid", String(error)));
+      return section;
+    }
+  }
+  const valueMap = new Map(currentValues.map((item) => [`${item.key}:${item.index}`, item.value]));
+  const changes = new Map();
+  let activeSection = null;
+  let fields = section;
+  const apply = button("Apply module options", "primary-button", async () => {
+    await applyEdit(
+      () => {
+        let bytes = current.file.bytes;
+        changes.forEach(({ option, index, value }) => {
+          bytes = set_xgwx_module_option(bytes, module.base, module.slot, option.key, index, value);
+        });
+        return bytes;
+      },
+      `Edit module options at base ${module.base}, slot ${module.slot}`,
+    );
+  });
+  apply.textContent = "Apply options";
+  apply.disabled = true;
+
+  entry.visibleOptions.forEach((visibleOption) => {
+    const option = entry.options?.find((item) => item.key === visibleOption.key) || null;
+    if (visibleOption.section !== activeSection) {
+      activeSection = visibleOption.section;
+      if (activeSection) {
+        const group = element("div", "module-option-group");
+        group.append(element("h4", "", capitalize(activeSection)));
+        fields = element("div", "module-option-fields");
+        group.append(fields);
+        section.append(group);
+      } else {
+        fields = element("div", "module-option-fields");
+        section.append(fields);
+      }
+    }
+    for (let index = 0; index < visibleOption.count; index += 1) {
+      const key = `${visibleOption.key}:${index}`;
+      const writable = option && index < option.count;
+      const original = valueMap.get(key);
+      const field = element("label", "property-field module-option-field");
+      const label = moduleOptionLabel(visibleOption, index);
+      field.append(element("span", "property-label", label));
+      if (writable) {
+        const select = document.createElement("select");
+        select.setAttribute("aria-label", label);
+        if (!option.values.some((item) => item.value === original)) {
+          const unknown = document.createElement("option");
+          unknown.value = String(original);
+          unknown.textContent = `Unknown (${original})`;
+          select.append(unknown);
+        }
+        option.values.forEach((item) => {
+          const choice = document.createElement("option");
+          choice.value = String(item.value);
+          choice.textContent = item.label;
+          select.append(choice);
+        });
+        select.value = String(original);
+        select.addEventListener("change", () => {
+          const value = Number(select.value);
+          if (value === original) changes.delete(key);
+          else changes.set(key, { option, index, value });
+          apply.disabled = changes.size === 0;
+        });
+        field.append(select);
+      } else {
+        field.classList.add("module-option-readonly");
+        field.title = "Visible in XG5000; Details encoding is not mapped for safe editing.";
+        field.append(readonlyModuleOptionControl(visibleOption, label, index));
+      }
+      fields.append(field);
+    }
+  });
+  section.append(element("p", "module-selection-note", "All captured options are shown. Read-only rows do not yet have a verified Details mapping."));
+  if (entry.options?.length) section.append(apply);
+  return section;
+}
+
+function readonlyModuleOptionControl(option, label, index) {
+  if (option.choices?.length) {
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", `${label} (read only)`);
+    select.disabled = true;
+    option.choices.forEach((value) => {
+      const choice = document.createElement("option");
+      choice.value = value;
+      choice.textContent = value;
+      select.append(choice);
+    });
+    const numericDefault = Number(option.defaultValue);
+    if (option.choices.includes(option.defaultValue)) select.value = option.defaultValue;
+    else if (Number.isInteger(numericDefault) && option.choices[numericDefault] !== undefined) {
+      select.value = option.choices[numericDefault];
+    }
+    return select;
+  }
+  const input = document.createElement("input");
+  input.setAttribute("aria-label", `${label} (read only)`);
+  input.readOnly = true;
+  input.value = formatModuleOptionDefault(option.defaultValue, index) || "Not decoded";
+  return input;
+}
+
+function moduleOptionLabel(option, index) {
+  if (option.scope === "channel") return `${option.label} · CH ${index}`;
+  if (option.scope === "group") return `${option.label} · Group ${index + 1}`;
+  if (option.scope === "file") return `${option.label} · File ${index}`;
+  if (option.scope === "fileData" && option.itemsPerParent > 0) {
+    const file = Math.floor(index / option.itemsPerParent);
+    const data = index % option.itemsPerParent;
+    return `${option.label} · File ${file} · Data ${data}`;
+  }
+  return option.label;
+}
+
+function formatModuleOptionDefault(value, index) {
+  return String(value || "")
+    .replaceAll("{slot}", String(index))
+    .replaceAll("{slot:03d}", String(index).padStart(3, "0"))
+    .replaceAll("{slot:04d}", String(index).padStart(4, "0"));
+}
+
+function capitalize(value) {
+  return value ? `${value[0].toLocaleUpperCase()}${value.slice(1)}` : value;
 }
 
 function renderProgramsEditor(canvas, inspector, programs) {
@@ -635,9 +841,17 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
 
 async function applyEdit(update, label) {
   try {
+    const selectedModuleKey = selectedModule
+      ? { base: selectedModule.base, slot: selectedModule.slot }
+      : null;
     const bytes = update();
     const summary = parse_xgwx(bytes);
     current = { file: { ...current.file, byteLength: bytes.byteLength, bytes }, summary };
+    if (selectedModuleKey) {
+      selectedModule = (summary.hardware?.modules || []).find(
+        (module) => module.base === selectedModuleKey.base && module.slot === selectedModuleKey.slot,
+      ) || null;
+    }
     dirty = true;
     vscode.postMessage({ type: "edit", label, bytes: Array.from(bytes) });
     renderWorkspace();
@@ -963,6 +1177,26 @@ function shortModuleName(name) {
   const value = display(name, "Unknown module");
   const match = value.match(/XG[A-Z0-9-]+(?:\/B)?/i);
   return match?.[0] || value;
+}
+
+function catalogEntryMatchesModule(entry, module) {
+  return entry.id === module.id
+    && entry.subType === module.subType;
+}
+
+function moduleSlotSpan(module) {
+  return moduleCatalog.find((entry) => catalogEntryMatchesModule(entry, module))?.slotSpan || 1;
+}
+
+function moduleSlotRange(module) {
+  if (module.slot === null || module.slot === undefined) return "—";
+  const span = moduleSlotSpan(module);
+  return span === 1 ? String(module.slot) : `${module.slot}–${module.slot + span - 1}`;
+}
+
+function catalogModuleDescription(entry) {
+  const separator = entry.name.indexOf(":");
+  return separator >= 0 ? entry.name.slice(separator + 1) : entry.name;
 }
 
 function formatRawDetails(module) {

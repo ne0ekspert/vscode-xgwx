@@ -8,6 +8,9 @@ powered by the sibling `libxgwx` project during development.
 - Opens `*.xgwx` files directly as a VS Code custom editor.
 - Shows project counts and metadata.
 - Uses an editor-style explorer, dense module table, and contextual inspector.
+- Selects XGK modules from the embedded latest-stable catalog. Selection
+  preserves base, slot, and comment while restoring the chosen model's ID,
+  subtype, name, and default `Details`.
 - Decodes known XGI-D24A/B input-filter values from module `Details`.
 - Provides searchable module and variable tables.
 - Edits program name, task, and comment metadata.
@@ -15,6 +18,12 @@ powered by the sibling `libxgwx` project during development.
   contacts, coils, function blocks, rails, and decoded branch wiring. Empty
   rung/column positions are selectable for coordinate-aware editing workflows.
 - Edits decoded ladder cell text when the UTF-16 encoded length is unchanged.
+- Edits catalog-backed module dropdown options per module, channel, or group
+  when their XG5000 `Details` byte mappings have been verified.
+- Shows captured but unmapped module options as read-only rows instead of
+  hiding them.
+- Displays each module's physical slot range and rejects overlapping multi-slot
+  selections such as XGF-TC4UD.
 - Edits variable name, address area/number, data type, and description. Variable
   string fields retain their UTF-16 length to preserve opaque symbol records.
 - Participates in VS Code Save, Save As, Revert, Undo/Redo, and hot-exit backup.
@@ -22,7 +31,8 @@ powered by the sibling `libxgwx` project during development.
 - Provides an explicit refresh action for the current editor document.
 - Adapts to narrow editor groups by collapsing the inspector below 980 px.
 
-Program editing is intentionally fail-closed. Ladder edits keep the original
+Editing is intentionally fail-closed. Module selection accepts only catalog
+models, module option controls are limited to verified mappings and values, and ladder edits keep the original
 UTF-16 length so proprietary record offsets and undecoded topology bytes remain
 stable. Unsupported layouts or length-changing edits are rejected. Keep a
 backup and validate edited workspaces in the target XG5000 version.
