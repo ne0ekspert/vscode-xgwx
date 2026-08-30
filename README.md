@@ -9,6 +9,7 @@ powered by the sibling `libxgwx` project during development.
 - Shows project counts and metadata.
 - Uses an editor-style explorer, dense module table, and contextual inspector.
 - Supports Up/Down row navigation and undoable Delete from the hardware module table.
+- Inserts a catalog module into an empty physical slot from the module inspector.
 - Keeps one hardware-table row per physical base slot, including empty slots
   and continuation rows for multi-slot modules.
 - Selects XGK modules from the embedded latest-stable catalog. Selection

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import init, {
   delete_xgwx_module,
+  insert_xgwx_module,
   parse_xgwx,
   select_xgwx_module,
   set_xgwx_module_option,
@@ -324,7 +325,8 @@ test("bundled WASM deletes one hardware module", async (context) => {
   await init({ module_or_path: wasm });
   const source = new Uint8Array(fs.readFileSync(fixture));
   const before = parse_xgwx(source);
-  const after = parse_xgwx(delete_xgwx_module(source, 0, 2));
+  const deleted = delete_xgwx_module(source, 0, 2);
+  const after = parse_xgwx(deleted);
 
   assert.equal(after.hardware.modules.length, before.hardware.modules.length - 1);
   assert.equal(after.hardware.modules.some((module) => module.base === 0 && module.slot === 2), false);
@@ -332,5 +334,13 @@ test("bundled WASM deletes one hardware module", async (context) => {
   const rows = hardwareSlotRows(0, base.slotCount, after.hardware.modules.filter((module) => module.base === 0), () => 1);
   assert.equal(rows.length, base.slotCount);
   assert.equal(rows[2].kind, "empty");
+  const reinserted = parse_xgwx(insert_xgwx_module(deleted, 0, 2, "XGF-RD8A"));
+  const rd8a = xgk_module_catalog().find((entry) => entry.model === "XGF-RD8A");
+  assert.equal(reinserted.hardware.modules.length, before.hardware.modules.length);
+  assert.equal(
+    reinserted.hardware.modules.find((module) => module.base === 0 && module.slot === 2)?.id,
+    rd8a.id,
+  );
+  assert.throws(() => insert_xgwx_module(source, 0, 2, "XGF-RD8A"), /overlaps/);
   assert.throws(() => delete_xgwx_module(source, 99, 99), /was not found/);
 });

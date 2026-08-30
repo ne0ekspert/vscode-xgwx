@@ -1,5 +1,6 @@
 import init, {
   delete_xgwx_module,
+  insert_xgwx_module,
   parse_xgwx,
   select_xgwx_module,
   set_xgwx_module_option,
@@ -364,30 +365,31 @@ function renderModuleTable(slotRows, inspector) {
 function renderModuleInspector(inspector, module, physicalSlot = module?.slot ?? null) {
   inspector.replaceChildren();
   inspector.append(inspectorHeading("MODULE"));
-  if (!module) {
-    if (physicalSlot !== null) {
-      const form = element("div", "property-grid");
-      property(form, "Base", selectedBase, true);
-      property(form, "Slot", physicalSlot, true);
-      property(form, "State", "Empty", true);
-      inspector.append(form, emptyState("This physical slot has no configured module."));
-    } else {
-      inspector.append(emptyState("Select a module or empty slot to inspect it."));
-    }
+  if (!module && physicalSlot === null) {
+    inspector.append(emptyState("Select a module or empty slot to inspect it."));
     return;
   }
 
-  const currentEntry = moduleCatalog.find((entry) => catalogEntryMatchesModule(entry, module));
+  const targetBase = module?.base ?? selectedBase;
+  const targetSlot = module?.slot ?? physicalSlot;
+  const currentEntry = module
+    ? moduleCatalog.find((entry) => catalogEntryMatchesModule(entry, module))
+    : null;
   const form = element("div", "property-grid");
-  property(form, "Base", module.base, true);
-  property(form, "Slots", moduleSlotRange(module), true);
-  if (physicalSlot !== module.slot) property(form, "Selected slot", physicalSlot, true);
-  property(form, "Slot width", moduleSlotSpan(module), true);
-  property(form, "ID", module.id, true);
-  property(form, "Subtype", module.subType, true);
-  property(form, "Name", module.name, true, true);
-  property(form, "Input Filter", module.inputFilter || "Not decoded", true);
-  property(form, "Comment", module.comment, true, true);
+  property(form, "Base", targetBase, true);
+  if (module) {
+    property(form, "Slots", moduleSlotRange(module), true);
+    if (physicalSlot !== module.slot) property(form, "Selected slot", physicalSlot, true);
+    property(form, "Slot width", moduleSlotSpan(module), true);
+    property(form, "ID", module.id, true);
+    property(form, "Subtype", module.subType, true);
+    property(form, "Name", module.name, true, true);
+    property(form, "Input Filter", module.inputFilter || "Not decoded", true);
+    property(form, "Comment", module.comment, true, true);
+  } else {
+    property(form, "Slot", physicalSlot, true);
+    property(form, "State", "Empty", true);
+  }
 
   const picker = element("section", "module-picker");
   picker.append(element("h3", "", "Module selection"));
@@ -421,14 +423,18 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
   const note = element(
     "p",
     "module-selection-note",
-    "Replaces ID, subtype, name, and Details with latest-stable defaults. Base, slot, and comment are preserved.",
+    module
+      ? "Replaces ID, subtype, name, and Details with latest-stable defaults. Base, slot, and comment are preserved."
+      : "Adds the selected module with latest-stable defaults at this empty base slot.",
   );
   const apply = button("Apply module selection", "primary-button", async () => {
     const entry = moduleCatalog.find((item) => item.model === select.value);
     if (!entry) return;
     await applyEdit(
-      () => select_xgwx_module(current.file.bytes, module.base, module.slot, entry.model),
-      `Select ${entry.model} at base ${module.base}, slot ${module.slot}`,
+      () => module
+        ? select_xgwx_module(current.file.bytes, targetBase, targetSlot, entry.model)
+        : insert_xgwx_module(current.file.bytes, targetBase, targetSlot, entry.model),
+      `${module ? "Select" : "Insert"} ${entry.model} at base ${targetBase}, slot ${targetSlot}`,
     );
   });
   apply.textContent = "Apply selection";
@@ -437,6 +443,11 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
     apply.disabled = !select.value || select.value === currentEntry?.model;
   });
   picker.append(selection, note, apply);
+
+  if (!module) {
+    inspector.append(form, picker);
+    return;
+  }
 
   const options = renderModuleOptions(module, currentEntry);
 

@@ -20,6 +20,28 @@ export function delete_xgwx_module(bytes, base, slot) {
 }
 
 /**
+ * Insert a catalog module into an empty slot and return rewritten `.xgwx` bytes.
+ * @param {Uint8Array} bytes
+ * @param {number} base
+ * @param {number} slot
+ * @param {string} model
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_module(bytes, base, slot, model) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(model, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_module(ptr0, len0, base, slot, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Return category and description metadata for known ladder mnemonics.
  * @returns {any}
  */

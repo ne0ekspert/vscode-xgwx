@@ -73,6 +73,7 @@ test("provides catalog-backed module selection in base hardware inspectors", () 
 
   assert.match(script, /xgk_module_catalog/);
   assert.match(script, /select_xgwx_module/);
+  assert.match(script, /insert_xgwx_module/);
   assert.match(script, /delete_xgwx_module/);
   assert.match(script, /set_xgwx_module_option/);
   assert.match(script, /xgwx_module_option_values/);
@@ -96,6 +97,7 @@ test("provides catalog-backed module selection in base hardware inspectors", () 
   assert.match(script, /data-module-key/);
   assert.match(script, /hardwareSlotRows/);
   assert.match(script, /"Empty slot"/);
+  assert.match(script, /Adds the selected module/);
   assert.match(script, /module-slot-\$\{slotRow\.kind\}/);
   assert.match(styles, /\.module-slot-empty/);
   assert.match(styles, /\.module-picker\b/);
