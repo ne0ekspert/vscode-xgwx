@@ -5,6 +5,8 @@ import init, {
   select_xgwx_module,
   set_xgwx_module_option,
   update_xgwx_ladder_cell,
+  update_xgwx_network,
+  update_xgwx_network_module,
   update_xgwx_program,
   update_xgwx_variable,
   xgk_module_catalog,
@@ -46,6 +48,8 @@ let selectedBlankCell = null;
 let selectedLadderAnchor = null;
 let selectedLadderFocus = null;
 let selectedVariableIndex = 0;
+let selectedNetworkIndex = 0;
+let selectedNetworkModuleKey = null;
 let dirty = false;
 
 window.addEventListener("message", async ({ data }) => {
@@ -164,7 +168,7 @@ function renderExplorer(file, summary) {
   tree.append(hardwareGroup.container);
 
   tree.append(buildProgramGroup(summary.programs || []));
-  tree.append(buildDataGroup("Networks", "networks", summary.networks || [], "network", (item, index) => item.name || `Network ${index + 1}`));
+  tree.append(buildNetworkGroup(summary.networks || []));
   tree.append(treeItem(`Variables (${display(summary.counts?.variables, "0")})`, "variables", icon("symbol"), activeView === "variables"));
   tree.append(treeItem(`Parameters (${summary.parameters?.length || 0})`, "parameters", icon("sliders"), activeView === "parameters"));
 
@@ -195,6 +199,46 @@ function buildProgramGroup(programs) {
       selectView("programs");
     });
     group.children.append(row);
+  });
+  return group.container;
+}
+
+function networkModuleKey(module) {
+  return `${module.base}:${module.slot}:${module.id}`;
+}
+
+function networkModuleLabel(module) {
+  const name = module.name?.replace(/@0x[0-9a-f]+$/i, "") || `Module ${module.slot}`;
+  return `${name} (Base ${module.base}, Slot ${module.slot})`;
+}
+
+function buildNetworkGroup(networks) {
+  const group = treeGroup(`Networks (${networks.length})`, icon("network"), true);
+  group.header.addEventListener("click", () => selectView("networks"));
+  networks.slice(0, 30).forEach((network, index) => {
+    const networkRow = treeRow(network.name || `Network ${index + 1}`, "network", true, false);
+    networkRow.classList.toggle("selected", activeView === "networks" && selectedNetworkIndex === index && !selectedNetworkModuleKey);
+    networkRow.addEventListener("click", () => {
+      selectedNetworkIndex = index;
+      selectedNetworkModuleKey = null;
+      selectView("networks");
+    });
+    group.children.append(networkRow);
+
+    (network.modules || []).slice(0, 30).forEach((module) => {
+      const moduleRow = treeRow(networkModuleLabel(module), "network", true, false);
+      moduleRow.classList.add("network-module-row");
+      moduleRow.classList.toggle(
+        "selected",
+        activeView === "networks" && selectedNetworkIndex === index && selectedNetworkModuleKey === networkModuleKey(module),
+      );
+      moduleRow.addEventListener("click", () => {
+        selectedNetworkIndex = index;
+        selectedNetworkModuleKey = networkModuleKey(module);
+        selectView("networks");
+      });
+      group.children.append(moduleRow);
+    });
   });
   return group.container;
 }
@@ -247,7 +291,7 @@ function renderEditor(editor, summary, inspector) {
   const canvas = element("section", "editor-canvas");
   if (activeView === "hardware") renderHardwareEditor(canvas, inspector, summary.hardware || {});
   if (activeView === "programs") renderProgramsEditor(canvas, inspector, summary.programs || []);
-  if (activeView === "networks") renderNetworksEditor(canvas, inspector, summary.networks || []);
+  if (activeView === "networks") renderNetworksEditor(canvas, inspector, summary);
   if (activeView === "variables") renderVariablesEditor(canvas, inspector, summary.variables || []);
   if (activeView === "parameters") renderParametersEditor(canvas, inspector, summary.parameters || []);
   if (activeView === "overview") renderOverviewEditor(canvas, inspector, summary, current.file);
@@ -1079,12 +1123,179 @@ async function applyEdit(update, label) {
   }
 }
 
-function renderNetworksEditor(canvas, inspector, networks) {
+function renderNetworksEditor(canvas, inspector, summary) {
+  const networks = summary.networks || [];
   canvas.append(editorHeader("Networks", `${networks.length} configured networks`));
   const table = createTable(["Name", "Type", "Network type", "Modules", "Description"]);
-  networks.forEach((network, index) => appendCells(table.tBodies[0].insertRow(), [network.name || `Network ${index + 1}`, network.typeName, network.networkType, network.modules?.length, network.description]));
+  networks.forEach((network, index) => {
+    const row = table.tBodies[0].insertRow();
+    row.classList.toggle("selected", index === selectedNetworkIndex && !selectedNetworkModuleKey);
+    row.tabIndex = 0;
+    appendCells(row, [network.name || `Network ${index + 1}`, network.typeName, network.networkType, network.modules?.length, network.description]);
+    const select = () => {
+      selectedNetworkIndex = index;
+      selectedNetworkModuleKey = null;
+      renderWorkspace();
+    };
+    row.addEventListener("click", select);
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") select();
+    });
+  });
   canvas.append(tableContainer(table, networks.length));
-  renderCollectionInspector(inspector, "NETWORKS", [["Count", networks.length], ["State", "Read only"]]);
+  renderNetworkInspector(inspector, networks, summary);
+}
+
+function renderNetworkInspector(inspector, networks, summary) {
+  const network = networks[selectedNetworkIndex] || null;
+  const module = selectedNetworkModuleKey
+    ? network?.modules?.find((item) => networkModuleKey(item) === selectedNetworkModuleKey)
+    : null;
+  if (selectedNetworkModuleKey && !module) selectedNetworkModuleKey = null;
+
+  inspector.replaceChildren(inspectorHeading(module ? "NETWORK MODULE" : "NETWORK"));
+  if (!network) {
+    inspector.append(emptyState("No network is configured."));
+    return;
+  }
+
+  const form = element("div", "property-grid");
+  if (module) {
+    property(form, "Module", module.name, true);
+    property(form, "Base", module.base, true);
+    property(form, "Slot", module.slot, true);
+    property(form, "ID", module.id, true);
+    const configName = property(form, "Config name", module.configName, false);
+    const alias = property(form, "Alias", module.alias, false);
+    const description = property(form, "Description", module.description, false, true);
+    const apply = button("Apply network module properties", "primary-button", async () => {
+      await applyEdit(
+        () => update_xgwx_network_module(current.file.bytes, module.base, module.slot, {
+          configName: configName.value,
+          alias: alias.value,
+          description: description.value,
+        }),
+        `Edit network module at Base ${module.base}, Slot ${module.slot}`,
+      );
+    });
+    apply.textContent = "Apply module properties";
+    const controls = [configName, alias, description];
+    const validate = () => {
+      const changed = configName.value !== (module.configName || "")
+        || alias.value !== (module.alias || "")
+        || description.value !== (module.description || "");
+      apply.disabled = !changed;
+    };
+    controls.forEach((control) => control.addEventListener("input", validate));
+    validate();
+    form.append(apply);
+    appendNetworkConfigurationFields(form, module, summary);
+  } else {
+    const name = property(form, "Name", network.name, false);
+    const typeName = property(form, "Type", network.typeName, false);
+    const networkType = property(form, "Network type", network.networkType, false);
+    property(form, "Configured modules", network.modules?.length || 0, true);
+    const apply = button("Apply network properties", "primary-button", async () => {
+      await applyEdit(
+        () => update_xgwx_network(current.file.bytes, selectedNetworkIndex, {
+          name: name.value,
+          typeName: typeName.value,
+          networkType: networkType.value,
+        }),
+        `Edit network ${display(network.name, selectedNetworkIndex + 1)}`,
+      );
+    });
+    apply.textContent = "Apply network properties";
+    const controls = [name, typeName, networkType];
+    const validate = () => {
+      const changed = name.value !== (network.name || "")
+        || typeName.value !== (network.typeName || "")
+        || networkType.value !== (network.networkType || "");
+      apply.disabled = !changed;
+    };
+    controls.forEach((control) => control.addEventListener("input", validate));
+    validate();
+    form.append(apply);
+  }
+  inspector.append(form);
+}
+
+function appendNetworkConfigurationFields(form, module, summary) {
+  // XG5000 can renumber bases and slots, so configuration records are joined
+  // using the stable NetworkModule Id / XGPD Type relationship.
+  const fenet = findNetworkConfiguration(summary.fenet, module);
+  const hardwareModule = (summary.hardware?.modules || []).find((item) => (
+    item.base === module.base && item.slot === module.slot
+  ));
+  const catalogEntry = hardwareModule && moduleCatalog.find((entry) => (
+    entry.id === module.id && entry.subType === hardwareModule.subType
+  ));
+
+  if (!fenet && catalogEntry?.visibleOptions?.length) {
+    form.append(element("div", "network-config-heading", "Network device settings"));
+    catalogEntry.visibleOptions.forEach((option, index) => {
+      property(form, moduleOptionLabel(option, index), formatModuleOptionDefault(option.defaultValue, index), true);
+    });
+    form.append(element("p", "module-selection-note", "Captured defaults: this module's live network record has not yet been decoded."));
+  }
+  const xgpd = findNetworkConfiguration(summary.xgpd, module);
+  if (xgpd) {
+    const protocol = xgpd.kind.replace("XGPD_CONFIG_INFO_", "");
+    form.append(element("div", "network-config-heading", `${protocol} configuration`));
+    (xgpd.attributes || []).forEach((attribute) => {
+      property(form, formatNetworkAttributeLabel(attribute.name), attribute.value, true);
+    });
+  }
+  if (fenet) {
+    form.append(element("div", "network-config-heading", "FEnet configuration"));
+    [
+      ["Station", fenet.stationNo],
+      ["IP address", fenet.ipAddress],
+      ["Subnet mask", fenet.subnet],
+      ["Gateway", fenet.gateway],
+      ["DNS", fenet.dns],
+      ["IP address 2", fenet.ipAddress2],
+      ["Subnet mask 2", fenet.subnet2],
+      ["Gateway 2", fenet.gateway2],
+      ["DNS 2", fenet.dns2],
+      ["DHCP", fenet.dhcp],
+      ["Driver type", fenet.driverType],
+      ["Receive wait", fenet.rcvWaitTime],
+      ["Client wait", fenet.clientWaitTime],
+      ["Glofa sockets", fenet.glofaSocketCount],
+    ].forEach(([label, value]) => property(form, label, value, true));
+  }
+
+  const cnet = findNetworkConfiguration(summary.cnet, module);
+  if (cnet) {
+    form.append(element("div", "network-config-heading", "Cnet configuration"));
+    property(form, "Station", cnet.stationNo, true);
+    (cnet.ports || []).forEach((port, index) => {
+      form.append(element("div", "network-config-heading", `Port ${index + 1}`));
+      [
+        ["Station", port.stationNo],
+        ["Mode", port.mode],
+        ["Baud rate", port.baudRate],
+        ["Data bits", port.dataBits],
+        ["Stop bits", port.stopBits],
+        ["Parity", port.parity],
+        ["RX timeout", port.rxTimeout],
+      ].forEach(([label, value]) => property(form, label, value, true));
+    });
+  }
+}
+
+function findNetworkConfiguration(configurations, module) {
+  const candidates = configurations || [];
+  return candidates.find((config) => (
+    config.typeCode === module.id && config.base === module.base && config.slot === module.slot
+  )) || candidates.find((config) => config.typeCode === module.id) || null;
+}
+
+function formatNetworkAttributeLabel(name) {
+  return name
+    .replaceAll(/([a-z])([A-Z])/g, "$1 $2")
+    .replaceAll(/_/g, " ");
 }
 
 function renderVariablesEditor(canvas, inspector, variables) {

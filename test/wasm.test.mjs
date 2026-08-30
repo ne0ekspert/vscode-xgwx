@@ -11,6 +11,8 @@ import init, {
   select_xgwx_module,
   set_xgwx_module_option,
   update_xgwx_ladder_cell,
+  update_xgwx_network,
+  update_xgwx_network_module,
   update_xgwx_program,
   update_xgwx_variable,
   xgk_module_catalog,
@@ -343,4 +345,86 @@ test("bundled WASM deletes one hardware module", async (context) => {
   );
   assert.throws(() => insert_xgwx_module(source, 0, 2, "XGF-RD8A"), /overlaps/);
   assert.throws(() => delete_xgwx_module(source, 99, 99), /was not found/);
+});
+
+test("bundled WASM synchronizes captured network-module configurations", async (context) => {
+  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  if (!fs.existsSync(fixture)) {
+    context.skip(`libxgwx fixture not found at ${fixture}`);
+    return;
+  }
+
+  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
+  await init({ module_or_path: wasm });
+  const source = new Uint8Array(fs.readFileSync(fixture));
+  const networked = parse_xgwx(select_xgwx_module(source, 0, 2, "XGL-EDMF"));
+  assert.ok(networked.networks.some((network) => network.modules.some((module) => (
+    module.base === 0 && module.slot === 2 && module.id === 23072
+  ))));
+  const fdenet = networked.xgpd.find((config) => (
+    config.typeCode === 23072 && config.base === 0 && config.slot === 2
+  ));
+  assert.equal(fdenet?.kind, "XGPD_CONFIG_INFO_FDENET");
+  assert.equal(fdenet?.attributes.find((attribute) => attribute.name === "Media")?.value, "6");
+  assert.equal(fdenet?.attributes.find((attribute) => attribute.name === "Master")?.value, "0");
+
+  for (const [model, id, kind] of [
+    ["XGL-EDMT", 23072, "XGPD_CONFIG_INFO_FDENET"],
+    ["XGL-DMEA/B", 23056, "XGPD_CONFIG_INFO_DNET"],
+    ["XGL-RMEA/B", 23088, "XGPD_CONFIG_INFO_RNET"],
+  ]) {
+    const selected = parse_xgwx(select_xgwx_module(source, 0, 2, model));
+    assert.equal(selected.xgpd.find((config) => config.typeCode === id)?.kind, kind);
+  }
+
+  for (const [model, id] of [["XGL-EFMT(B)", 23041], ["XGL-EIPT", 23064], ["XGL-BIPT", 23152]]) {
+    const selected = parse_xgwx(select_xgwx_module(source, 0, 2, model));
+    assert.ok(selected.networks.some((network) => network.modules.some((module) => (
+      module.base === 0 && module.slot === 2 && module.id === id
+    ))), `${model} should create a network module`);
+    if (model === "XGL-EFMT(B)") {
+      const fenet = selected.fenet.find((config) => config.typeCode === id);
+      assert.equal(fenet?.ipAddress, "192.168.0.100");
+      assert.equal(fenet?.gateway, "192.168.0.1");
+    }
+  }
+
+  const cleared = parse_xgwx(select_xgwx_module(
+    select_xgwx_module(source, 0, 2, "XGL-EDMF"),
+    0,
+    2,
+    "XGF-AD8A",
+  ));
+  assert.equal(cleared.networks.some((network) => network.modules.some((module) => (
+    module.base === 0 && module.slot === 2
+  ))), false);
+});
+
+test("bundled WASM edits network and network-module metadata", async (context) => {
+  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  if (!fs.existsSync(fixture)) {
+    context.skip(`libxgwx fixture not found at ${fixture}`);
+    return;
+  }
+
+  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
+  await init({ module_or_path: wasm });
+  let edited = select_xgwx_module(new Uint8Array(fs.readFileSync(fixture)), 0, 2, "XGL-EDMF");
+  edited = update_xgwx_network(edited, 0, {
+    name: "Field network",
+    typeName: "Ethernet",
+    networkType: "FEnet",
+  });
+  edited = update_xgwx_network_module(edited, 0, 2, {
+    configName: "PLC-1",
+    alias: "Uplink",
+    description: "Plant Ethernet",
+  });
+
+  const network = parse_xgwx(edited).networks[0];
+  const module = network.modules.find((item) => item.base === 0 && item.slot === 2);
+  assert.equal(network.name, "Field network");
+  assert.equal(module.configName, "PLC-1");
+  assert.equal(module.alias, "Uplink");
+  assert.equal(module.description, "Plant Ethernet");
 });

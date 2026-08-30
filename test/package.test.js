@@ -20,6 +20,14 @@ test("ships the parser assets used by the webview", () => {
   }
 });
 
+test("optimizes the production WASM bundle when wasm-opt is available", () => {
+  const buildScript = fs.readFileSync(path.join(root, "scripts/build-wasm.sh"), "utf8");
+  assert.match(buildScript, /wasm_opt/);
+  assert.match(buildScript, /-Oz/);
+  assert.match(buildScript, /wasm_bindgen/);
+  assert.match(buildScript, /wasm32-unknown-unknown/);
+});
+
 test("uses editable custom-document save support", () => {
   const commands = manifest.contributes.commands.map((command) => command.command);
   assert.deepEqual(commands, ["xgwx.refreshViewer"]);
@@ -106,4 +114,24 @@ test("provides catalog-backed module selection in base hardware inspectors", () 
   assert.match(styles, /data-view="hardware"/);
   assert.doesNotMatch(script, /treeItem\(`Modules \(\$\{modules\.length\}\)`/);
   assert.match(script, /let activeView = "overview";/);
+});
+
+test("shows configured network modules in the explorer", () => {
+  const script = fs.readFileSync(path.join(root, "media/main.js"), "utf8");
+  const styles = fs.readFileSync(path.join(root, "media/main.css"), "utf8");
+
+  assert.match(script, /function buildNetworkGroup\b/);
+  assert.match(script, /network\.modules \|\| \[\]/);
+  assert.match(script, /function networkModuleLabel\b/);
+  assert.match(script, /function renderNetworkInspector\b/);
+  assert.match(script, /appendNetworkConfigurationFields/);
+  assert.match(script, /Network device settings/);
+  assert.match(script, /catalogEntry\?\.visibleOptions/);
+  assert.match(script, /formatNetworkAttributeLabel/);
+  assert.match(script, /summary\.xgpd/);
+  assert.match(script, /findNetworkConfiguration/);
+  assert.match(script, /IP address/);
+  assert.match(script, /update_xgwx_network_module/);
+  assert.match(script, /Apply network properties/);
+  assert.match(styles, /\.network-module-row\b/);
 });

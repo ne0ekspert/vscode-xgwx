@@ -73,7 +73,7 @@ class XgwxEditorProvider {
       } else if (message?.type === "refresh") {
         await load();
       } else if (message?.type === "edit") {
-        this.updateDocument(document, message.bytes, message.label);
+        this.updateDocument(document, message.bytes, message.label, editor);
       } else if (message?.type === "save") {
         await vscode.commands.executeCommand("workbench.action.files.save");
       } else if (message?.type === "showError") {
@@ -87,7 +87,7 @@ class XgwxEditorProvider {
     });
   }
 
-  updateDocument(document, bytes, label) {
+  updateDocument(document, bytes, label, sourceEditor = null) {
     const previous = Uint8Array.from(document.bytes);
     const next = Uint8Array.from(bytes || []);
     const apply = async (value) => {
@@ -104,7 +104,10 @@ class XgwxEditorProvider {
       undo: () => apply(previous),
       redo: () => apply(next),
     });
-    void this.broadcast(document);
+    // The source webview already applied and parsed these bytes. Keep sibling
+    // editors synchronized without serializing the entire workspace back to
+    // the source and making it parse the same edit a second time.
+    void this.broadcast(document, "load", sourceEditor);
   }
 
   async saveCustomDocument(document) {
@@ -137,8 +140,10 @@ class XgwxEditorProvider {
     };
   }
 
-  async broadcast(document, type = "load") {
-    const targets = [...this.editors].filter((editor) => editor.document === document);
+  async broadcast(document, type = "load", excludedEditor = null) {
+    const targets = [...this.editors].filter((editor) => (
+      editor.document === document && editor !== excludedEditor
+    ));
     await Promise.all(targets.map(async (editor) => {
       if (type === "load") {
         await editor.panel.webview.postMessage({

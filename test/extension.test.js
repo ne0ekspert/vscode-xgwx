@@ -91,3 +91,29 @@ test("opening a hot-exit backup restores its dirty state against disk", async ()
   assert.deepEqual(Array.from(document.bytes), [4, 8, 6]);
   assert.deepEqual(Array.from(document.savedBytes), [4, 5, 6]);
 });
+
+test("an edit updates sibling editors without echoing bytes to its source", async () => {
+  const target = uri("/workspace/shared.xgwx");
+  const document = new XgwxDocument(target, [1, 2, 3]);
+  const provider = new XgwxEditorProvider({});
+  const sourceMessages = [];
+  const siblingMessages = [];
+  const source = {
+    document,
+    panel: { webview: { postMessage: async (message) => sourceMessages.push(message) } },
+  };
+  const sibling = {
+    document,
+    panel: { webview: { postMessage: async (message) => siblingMessages.push(message) } },
+  };
+  provider.editors.add(source);
+  provider.editors.add(sibling);
+
+  provider.updateDocument(document, [1, 9, 3], "Edit once", source);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(sourceMessages.length, 0);
+  assert.equal(siblingMessages.length, 1);
+  assert.equal(siblingMessages[0].type, "load");
+  assert.deepEqual(siblingMessages[0].bytes, [1, 9, 3]);
+});

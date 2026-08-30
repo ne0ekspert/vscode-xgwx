@@ -180,6 +180,45 @@ export function update_xgwx_module(bytes, base, slot, patch) {
 }
 
 /**
+ * Apply supported changes to one network and return rewritten bytes.
+ * @param {Uint8Array} bytes
+ * @param {number} network_index
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_network(bytes, network_index, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_network(ptr0, len0, network_index, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Apply supported changes to one network-module metadata record.
+ * @param {Uint8Array} bytes
+ * @param {number} base
+ * @param {number} slot
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_network_module(bytes, base, slot, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_network_module(ptr0, len0, base, slot, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Apply supported program metadata changes and return rewritten `.xgwx` bytes.
  * @param {Uint8Array} bytes
  * @param {number} program_index
