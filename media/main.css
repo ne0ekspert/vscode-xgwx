@@ -949,6 +949,16 @@ button.tree-row:hover,
   padding: 14px;
 }
 
+.overview-cpu-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.overview-cpu-actions p { margin: 0; }
+
 .diagnostics {
   display: grid;
   gap: 1px;

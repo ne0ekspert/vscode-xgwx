@@ -1,7 +1,9 @@
 import init, {
+  cpu_catalog,
   delete_xgwx_module,
   insert_xgwx_module,
   parse_xgwx,
+  select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
   update_xgwx_ladder_cell,
@@ -38,6 +40,7 @@ const LD_FIRST_ROW_Y = 58;
 
 let current = null;
 let moduleCatalog = [];
+let cpuCatalog = [];
 let activeView = "overview";
 let selectedBase = null;
 let selectedModule = null;
@@ -69,6 +72,7 @@ async function loadWorkspace(file) {
   try {
     await wasmReady;
     if (!moduleCatalog.length) moduleCatalog = xgk_module_catalog();
+    if (!cpuCatalog.length) cpuCatalog = cpu_catalog();
     const summary = parse_xgwx(new Uint8Array(file.bytes));
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
     dirty = Boolean(file.dirty);
@@ -1421,6 +1425,59 @@ function renderParametersEditor(canvas, inspector, parameters) {
 function renderOverviewEditor(canvas, inspector, summary, file) {
   canvas.append(editorHeader("Workspace Overview", file.fileName));
   const form = element("div", "overview-properties");
+
+  const cpuField = element("label", "property-field");
+  cpuField.append(element("span", "property-label", "CPU"));
+  const cpuSelect = document.createElement("select");
+  cpuSelect.setAttribute("aria-label", "CPU");
+  const currentCpu = summary.cpu || null;
+  if (!currentCpu?.model) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = currentCpu?.typeCode === undefined || currentCpu?.typeCode === null
+      ? "No CPU configuration"
+      : `Unknown CPU type ${currentCpu.typeCode}`;
+    cpuSelect.append(option);
+  }
+  const families = new Map();
+  cpuCatalog.forEach((entry) => {
+    if (!families.has(entry.family)) families.set(entry.family, []);
+    families.get(entry.family).push(entry);
+  });
+  families.forEach((entries, family) => {
+    const group = document.createElement("optgroup");
+    group.label = family;
+    entries.forEach((entry) => {
+      const option = document.createElement("option");
+      option.value = entry.model;
+      option.textContent = entry.model;
+      group.append(option);
+    });
+    cpuSelect.append(group);
+  });
+  cpuSelect.value = currentCpu?.model || "";
+  cpuSelect.disabled = !currentCpu;
+  cpuField.append(cpuSelect);
+  form.append(cpuField);
+
+  const cpuActions = element("div", "overview-cpu-actions");
+  const cpuNote = element("p", "module-selection-note", "Changing CPU preserves existing parameters and hardware. Review compatibility in XG5000 when switching CPU families.");
+  const applyCpu = button("Apply CPU selection", "primary-button", async () => {
+    const entry = cpuCatalog.find((item) => item.model === cpuSelect.value);
+    if (!entry) return;
+    await applyEdit(
+      () => select_xgwx_cpu(current.file.bytes, entry.model),
+      `Select CPU ${entry.model}`,
+    );
+  });
+  applyCpu.textContent = "Apply CPU";
+  applyCpu.disabled = true;
+  cpuSelect.addEventListener("change", () => {
+    applyCpu.disabled = !cpuSelect.value || cpuSelect.value === currentCpu?.model;
+  });
+  cpuActions.append(cpuNote, applyCpu);
+  form.append(cpuActions);
+
   [
     ["Project name", summary.project?.name], ["File version", summary.project?.fileVersion],
     ["Last write time", summary.project?.fileLastWriteTime], ["GUID", summary.project?.guid],
@@ -1434,7 +1491,7 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
   if (!warnings.length) diagnostics.append(element("div", "diagnostic success", "Parser completed without warnings."));
   warnings.forEach((warning) => diagnostics.append(element("div", "diagnostic warning", warning)));
   canvas.append(diagnostics);
-  renderCollectionInspector(inspector, "WORKSPACE", [["Format", "XGWX"], ["Mode", "Read only"], ["Parser", warnings.length ? "Warnings" : "Ready"]]);
+  renderCollectionInspector(inspector, "WORKSPACE", [["Format", "XGWX"], ["Mode", "CPU editable"], ["Parser", warnings.length ? "Warnings" : "Ready"]]);
 }
 
 function renderCollectionInspector(inspector, title, rows) {

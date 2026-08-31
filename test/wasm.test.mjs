@@ -5,9 +5,11 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import init, {
+  cpu_catalog,
   delete_xgwx_module,
   insert_xgwx_module,
   parse_xgwx,
+  select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
   update_xgwx_ladder_cell,
@@ -39,6 +41,29 @@ test("bundled WASM parses hardware modules from a real fixture", async (context)
   assert.equal(summary.counts.modules, 3);
   assert.equal(summary.hardware.modules[0].inputFilter, "Default");
   assert.match(summary.hardware.modules[0].name, /XGI-D24A\/B/);
+});
+
+test("bundled WASM exposes and edits real XGK and XGB CPU models", async (context) => {
+  const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
+  if (!fs.existsSync(fixture)) {
+    context.skip(`libxgwx fixture not found at ${fixture}`);
+    return;
+  }
+
+  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
+  await init({ module_or_path: wasm });
+  const catalog = cpu_catalog();
+  assert.equal(catalog.find((entry) => entry.model === "XGK-CPUSN")?.typeCode, 17);
+  assert.equal(catalog.find((entry) => entry.model === "XGB-XBMS")?.typeCode, 2);
+
+  const source = new Uint8Array(fs.readFileSync(fixture));
+  const before = parse_xgwx(source);
+  assert.equal(before.cpu.model, "XGK-CPUSN");
+  assert.equal(before.cpu.typeCode, 17);
+
+  const edited = parse_xgwx(select_xgwx_cpu(source, "XGB-XBMS"));
+  assert.equal(edited.cpu.model, "XGB-XBMS");
+  assert.equal(edited.cpu.typeCode, 2);
 });
 
 test("bundled WASM edits catalog-backed module dropdown options", async (context) => {

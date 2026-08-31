@@ -1,6 +1,18 @@
 /* @ts-self-types="./libxgwx.d.ts" */
 
 /**
+ * Return the XGK and XGB CPU models available to project configurations.
+ * @returns {any}
+ */
+export function cpu_catalog() {
+    const ret = wasm.cpu_catalog();
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
+}
+
+/**
  * Delete one module and return rewritten `.xgwx` bytes.
  * @param {Uint8Array} bytes
  * @param {number} base
@@ -66,6 +78,26 @@ export function parse_xgwx(bytes) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Select the primary project configuration's CPU and return rewritten bytes.
+ * @param {Uint8Array} bytes
+ * @param {string} model
+ * @returns {Uint8Array}
+ */
+export function select_xgwx_cpu(bytes, model) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(model, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.select_xgwx_cpu(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
 }
 
 /**
