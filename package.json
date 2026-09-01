@@ -4,7 +4,12 @@
   "description": "Inspect and safely edit supported LS XG5000 .xgwx program data.",
   "version": "0.1.0",
   "publisher": "ne0ekspert",
-  "license": "Apache-2.0",
+  "license": "GPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ne0ekspert/vscode-xgwx.git"
+  },
+  "homepage": "https://github.com/ne0ekspert/vscode-xgwx#readme",
   "engines": {
     "vscode": "^1.95.0"
   },

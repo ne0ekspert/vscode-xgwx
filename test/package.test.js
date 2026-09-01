@@ -6,6 +6,22 @@ const test = require("node:test");
 const root = path.resolve(__dirname, "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 
+test("declares GPLv3-or-later while retaining the bundled library license", () => {
+  assert.equal(manifest.license, "GPL-3.0-or-later");
+  assert.equal(manifest.repository.url, "https://github.com/ne0ekspert/vscode-xgwx.git");
+
+  const projectLicense = fs.readFileSync(path.join(root, "LICENSE"), "utf8");
+  const apacheLicense = fs.readFileSync(path.join(root, "LICENSES", "Apache-2.0.txt"), "utf8");
+  const thirdPartyNotices = fs.readFileSync(path.join(root, "THIRD_PARTY_NOTICES.md"), "utf8");
+
+  assert.match(projectLicense, /GNU GENERAL PUBLIC LICENSE/);
+  assert.match(projectLicense, /Version 3, 29 June 2007/);
+  assert.match(apacheLicense, /Apache License/);
+  assert.match(apacheLicense, /Version 2\.0, January 2004/);
+  assert.match(thirdPartyNotices, /libxgwx/);
+  assert.match(thirdPartyNotices, /c6414f441e577e728011e66aae75e2fa2242da5b/);
+});
+
 test("registers a default editable XGWX custom editor", () => {
   const editor = manifest.contributes.customEditors[0];
   assert.equal(editor.viewType, "xgwx.workspaceViewer");

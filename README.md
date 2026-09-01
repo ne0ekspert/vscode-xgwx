@@ -75,3 +75,18 @@ Install dependencies and create a VSIX:
 npm install
 npm run package
 ```
+
+The corresponding source for a published VSIX is available from the matching
+release or tag in the [project repository](https://github.com/ne0ekspert/vscode-xgwx).
+The exact `libxgwx` source revision used by the bundled WebAssembly artifacts is
+recorded in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+## License
+
+XGWX Workspace Editor is licensed under the GNU General Public License, version
+3 or (at your option) any later version (`GPL-3.0-or-later`). See
+[`LICENSE`](LICENSE).
+
+The bundled `libxgwx` JavaScript and WebAssembly artifacts remain licensed
+under Apache-2.0. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
+[`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt).
