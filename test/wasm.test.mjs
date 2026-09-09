@@ -15,6 +15,7 @@ import init, {
   select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
+  set_xgwx_base_slot_count,
   update_xgwx_ladder_cell,
   update_xgwx_module,
   update_xgwx_network,
@@ -504,7 +505,7 @@ test("instruction text edits accept different lengths and preserve following ins
 
 
 test("instruction replacement uses catalog opcodes and resizes operand records", () => {
-  const source = new Uint8Array(fs.readFileSync(new URL("../../libxgwx/fixtures/elements.xgwx", import.meta.url)));
+  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx")));
   let bytes = source;
   for (const text of ["ADD,1,2,D000000", "TON,T0000,100", "SUB,9,3,D1", "MOV,0,D000000"]) {
     const summary = parse_xgwx(bytes);
@@ -515,4 +516,18 @@ test("instruction replacement uses catalog opcodes and resizes operand records",
     assert.ok(updated);
     assert.deepEqual(updated.operands, text.split(",").slice(1));
   }
+});
+
+
+test("base slot counts persist independently and protect occupied slots", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  let edited = set_xgwx_base_slot_count(source, 0, 8);
+  edited = set_xgwx_base_slot_count(edited, 1, 6);
+  assert.deepEqual(parse_xgwx(edited).hardware.bases.map(b => b.slotCount), [8,6,12,12]);
+  assert.deepEqual(parse_xgwx(edited).hardware.modules, parse_xgwx(source).hardware.modules);
+  edited = insert_xgwx_module(edited, 1, 3, "XGF-TC4UD");
+  assert.throws(() => set_xgwx_base_slot_count(edited, 1, 4), /occupies 2 slots/);
+  assert.throws(() => set_xgwx_base_slot_count(edited, 0, 5), /choose 4, 6, 8, 10 or 12/);
+  assert.equal(parse_xgwx(edited).hardware.bases[1].slotCount, 6);
 });

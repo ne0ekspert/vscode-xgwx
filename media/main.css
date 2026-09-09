@@ -1161,3 +1161,26 @@ button.tree-row:hover,
   width: 100%;
   margin-top: 8px;
 }
+
+
+.hardware-toolbar {
+  height: auto;
+  min-height: 43px;
+  flex-wrap: wrap;
+}
+.hardware-toolbar > .filter-control:first-child {
+  flex: 1 1 180px;
+  width: auto;
+}
+.hardware-toolbar .base-slot-control {
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.base-slot-control select {
+  width: 60px;
+  border: 0;
+  color: inherit;
+  background: var(--vscode-input-background);
+}
+.hardware-toolbar button { white-space: nowrap; }

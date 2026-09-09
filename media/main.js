@@ -9,6 +9,7 @@ import init, {
   select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
+  set_xgwx_base_slot_count,
   update_xgwx_ladder_cell,
   update_xgwx_module,
   update_xgwx_network,
@@ -316,7 +317,7 @@ function renderHardwareEditor(canvas, inspector, hardware) {
   }
   selectedModule = moduleAtPhysicalSlot(baseModules, selectedHardwareSlot, moduleSlotSpan);
 
-  const toolbar = element("div", "editor-toolbar");
+  const toolbar = element("div", "editor-toolbar hardware-toolbar");
   const searchWrap = element("label", "filter-control");
   searchWrap.append(icon("search"));
   const search = document.createElement("input");
@@ -327,6 +328,44 @@ function renderHardwareEditor(canvas, inspector, hardware) {
   const usedSlots = occupiedSlotCount(baseModules, slotCount, moduleSlotSpan);
   const scope = element("span", "toolbar-summary", `Base ${selectedBase} · ${usedSlots}/${slotCount} slots · ${baseModules.length} modules`);
   toolbar.append(searchWrap, scope);
+  const baseError = element("p", "muted");
+  baseError.setAttribute("role", "status");
+  baseError.hidden = true;
+  if (base && supportsXgkHardware()) {
+    const targetBase = selectedBase;
+    const countField = element("label", "filter-control base-slot-control");
+    countField.append(element("span", "", "Slot count"));
+    const countSelect = document.createElement("select");
+    countSelect.setAttribute("aria-label", "Base slot count");
+    const choices = [4, 6, 8, 10, 12];
+    if (!choices.includes(base.slotCount)) choices.unshift(base.slotCount);
+    for (const count of choices) {
+      const option = element("option", "", String(count));
+      option.value = String(count);
+      countSelect.append(option);
+    }
+    countSelect.value = String(base.slotCount);
+    const applyCount = button("Apply slot count", "primary-button", async () => {
+      await applyEdit(
+        () => set_xgwx_base_slot_count(current.file.bytes, targetBase, Number(countSelect.value)),
+        `Set base ${targetBase} to ${countSelect.value} slots`,
+      );
+    });
+    applyCount.textContent = "Apply slot count";
+    const validateCount = () => {
+      let error = "";
+      try {
+        set_xgwx_base_slot_count(current.file.bytes, targetBase, Number(countSelect.value));
+      } catch (failure) { error = String(failure); }
+      baseError.textContent = error;
+      baseError.hidden = !error;
+      applyCount.disabled = Boolean(error) || Number(countSelect.value) === base.slotCount;
+    };
+    countSelect.addEventListener("change", validateCount);
+    countField.append(countSelect);
+    toolbar.append(countField, applyCount);
+    validateCount();
+  }
 
   const tableHost = element("div", "editor-table-host");
   const renderRows = () => {
@@ -342,7 +381,7 @@ function renderHardwareEditor(canvas, inspector, hardware) {
     tableHost.replaceChildren(renderModuleTable(visibleRows, inspector));
   };
   search.addEventListener("input", renderRows);
-  canvas.append(toolbar, tableHost);
+  canvas.append(toolbar, baseError, tableHost);
   renderRows();
   renderModuleInspector(inspector, selectedModule, selectedHardwareSlot);
 }

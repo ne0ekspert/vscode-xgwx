@@ -19,7 +19,7 @@ test("declares GPLv3-or-later while retaining the bundled library license", () =
   assert.match(apacheLicense, /Apache License/);
   assert.match(apacheLicense, /Version 2\.0, January 2004/);
   assert.match(thirdPartyNotices, /libxgwx/);
-  assert.match(thirdPartyNotices, /83efee3f349e73dfc5360a711a831a28d5bbfb5d/);
+  assert.match(thirdPartyNotices, /https:\/\/github\.com\/ne0ekspert\/libxgwx\/tree\/[0-9a-f]{40}/);
 });
 
 test("registers a default editable XGWX custom editor", () => {
