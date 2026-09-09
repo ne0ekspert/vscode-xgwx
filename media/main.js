@@ -1221,6 +1221,24 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   } else if (cell.value === "END" || cell.sourceText === null || cell.sourceText === undefined) {
     cellSection.append(element("p", "muted", "This instruction remains read only."));
   } else {
+    let instructionSelect;
+    if (cell.instructionTextEditing) {
+      const field = element("label", "property-field");
+      field.append(element("span", "property-label", "Instruction"));
+      instructionSelect = document.createElement("select");
+      instructionSelect.setAttribute("aria-label", "Instruction");
+      const choices = ladder.instructionChoices || [];
+      if (!choices.some(choice => choice.mnemonic === cell.value)) {
+        const option = element("option", "", cell.value);
+        option.value = cell.value; instructionSelect.append(option);
+      }
+      for (const choice of choices) {
+        const option = element("option", "", `${choice.mnemonic} (${choice.operandCount} operands)`);
+        option.value = choice.mnemonic; instructionSelect.append(option);
+      }
+      instructionSelect.value = cell.value;
+      field.append(instructionSelect); cellSection.append(field);
+    }
     const source = property(cellSection, "Source text", cell.sourceText, false, true);
     const requiredUnits = utf16Length(cell.sourceText);
     const counter = element("div", "length-counter");
@@ -1233,11 +1251,35 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     applyCell.textContent = "Apply cell";
     const validate = () => {
       const units = utf16Length(source.value);
-      const valid = units === requiredUnits && source.value !== cell.sourceText;
-      counter.textContent = `${units} / ${requiredUnits} UTF-16 units`;
-      counter.classList.toggle("invalid", units !== requiredUnits);
-      applyCell.disabled = !valid;
+      if (cell.instructionTextEditing) {
+        let error = "";
+        try {
+          update_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, cell.offset, cell.sourceText, source.value);
+        } catch (failure) {
+          error = String(failure);
+        }
+        counter.textContent = error || "Instruction and operands may change. Separate operands with commas; the block resizes when applied.";
+        counter.classList.toggle("invalid", Boolean(error));
+        applyCell.disabled = Boolean(error) || source.value === cell.sourceText;
+      } else {
+        const valid = units === requiredUnits && source.value !== cell.sourceText;
+        counter.textContent = `${units} / ${requiredUnits} UTF-16 units`;
+        counter.classList.toggle("invalid", units !== requiredUnits);
+        applyCell.disabled = !valid;
+      }
     };
+    if (instructionSelect) {
+      instructionSelect.addEventListener("change", () => {
+        const choice = ladder.instructionChoices.find(item => item.mnemonic === instructionSelect.value);
+        if (!choice) return;
+        const currentParts = source.value.split(",").slice(1).map(value => value.trim());
+        const operands = Array.from({ length: choice.operandCount }, (_, index) => currentParts[index] || "0");
+        if (currentParts.length && operands.length) operands[operands.length - 1] = currentParts[currentParts.length - 1];
+        source.value = [choice.mnemonic, ...operands].join(",");
+        validate();
+      });
+      source.addEventListener("input", () => { instructionSelect.value = source.value.split(",")[0].trim(); });
+    }
     source.addEventListener("input", validate);
     validate();
     cellSection.append(counter, applyCell);

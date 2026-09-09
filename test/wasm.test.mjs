@@ -480,3 +480,39 @@ test("bundled WASM edits branches and inserts sparse rows without phantom wires"
   assert.ok(ladder.cells.some(cell => cell.rawY === 8 && cell.sourceText === "M00002"));
   assert.ok(ladder.cells.some(cell => cell.rawY === 12 && cell.value === "END"));
 });
+
+
+test("instruction text edits accept different lengths and preserve following instruction offsets", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const before = parse_xgwx(source).ladder[0];
+  const mov = before.cells.find(cell => cell.value === "MOV");
+  const xdst = before.cells.find(cell => cell.value === "XDST");
+  assert.equal(mov.instructionTextEditing, true);
+  assert.equal(xdst.instructionTextEditing, true);
+  const edited = update_xgwx_ladder_cell(source, 0, mov.offset, mov.sourceText, "MOV,12345,D000042");
+  const after = parse_xgwx(edited).ladder[0];
+  assert.deepEqual(after.cells.find(cell => cell.value === "MOV").operands, ["12345", "D000042"]);
+  const movedXdst = after.cells.find(cell => cell.value === "XDST");
+  assert.ok(movedXdst.offset > xdst.offset);
+  assert.throws(() => update_xgwx_ladder_cell(edited, 0, xdst.offset, xdst.sourceText, "XDST,1,1,700,100,10,0,0"));
+  const both = update_xgwx_ladder_cell(edited, 0, movedXdst.offset, movedXdst.sourceText, "XDST,1,1,700,100,10,0,0");
+  assert.deepEqual(parse_xgwx(both).ladder[0].cells.find(cell => cell.value === "XDST").operands, ["1", "1", "700", "100", "10", "0", "0"]);
+  assert.throws(() => update_xgwx_ladder_cell(source, 0, mov.offset, mov.sourceText, "ADD,1,D1"), /operand count/);
+  assert.throws(() => update_xgwx_ladder_cell(source, 0, mov.offset, mov.sourceText, "MOV,1"), /operand count/);
+});
+
+
+test("instruction replacement uses catalog opcodes and resizes operand records", () => {
+  const source = new Uint8Array(fs.readFileSync(new URL("../../libxgwx/fixtures/elements.xgwx", import.meta.url)));
+  let bytes = source;
+  for (const text of ["ADD,1,2,D000000", "TON,T0000,100", "SUB,9,3,D1", "MOV,0,D000000"]) {
+    const summary = parse_xgwx(bytes);
+    assert.ok(summary.ladder[0].instructionChoices.length > 800);
+    const cell = summary.ladder[0].cells.find(c => c.rawY === 44 && c.sourceText?.includes(","));
+    bytes = update_xgwx_ladder_cell(bytes, 0, cell.offset, cell.sourceText, text);
+    const updated = parse_xgwx(bytes).ladder[0].cells.find(c => c.sourceText === text);
+    assert.ok(updated);
+    assert.deepEqual(updated.operands, text.split(",").slice(1));
+  }
+});
