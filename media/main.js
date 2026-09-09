@@ -1,12 +1,16 @@
 import init, {
   cpu_catalog,
   delete_xgwx_module,
+  edit_xgwx_ladder_cell,
+  edit_xgwx_ladder_branch,
+  insert_xgwx_ladder_row,
   insert_xgwx_module,
   parse_xgwx,
   select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
   update_xgwx_ladder_cell,
+  update_xgwx_module,
   update_xgwx_network,
   update_xgwx_network_module,
   update_xgwx_program,
@@ -21,7 +25,6 @@ import {
   occupiedSlotCount,
 } from "./hardware-slots.js";
 import {
-  blankLadderCellText,
   ladderPositionKey,
   ladderSelectionKeys,
   moveLadderPosition,
@@ -390,7 +393,7 @@ function renderModuleTable(slotRows, inspector) {
       }
       if (event.key === "Delete" && !event.repeat) {
         event.preventDefault();
-        if (!module) return;
+        if (!module || !supportsXgkHardware()) return;
         const selectedSlotKey = `${slotRow.base}:${slot}`;
         const previousSelection = selectedModule;
         selectedModule = null;
@@ -420,7 +423,10 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
 
   const targetBase = module?.base ?? selectedBase;
   const targetSlot = module?.slot ?? physicalSlot;
-  const currentEntry = module
+  const editableHardware = supportsXgkHardware();
+  const profile = current.summary.hardware?.cpuProfile;
+  const builtin = module && profile && module.base === profile.builtinIoBase && module.slot === profile.builtinIoSlot;
+  const currentEntry = module && editableHardware
     ? moduleCatalog.find((entry) => catalogEntryMatchesModule(entry, module))
     : null;
   const form = element("div", "property-grid");
@@ -433,7 +439,22 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
     property(form, "Subtype", module.subType, true);
     property(form, "Name", module.name, true, true);
     property(form, "Input Filter", module.inputFilter || "Not decoded", true);
-    property(form, "Comment", module.comment, true, true);
+    if (builtin) property(form, "Hardware", `${profile.variant} · Built-in I/O`, true, true);
+    const comment = document.createElement("textarea");
+    comment.value = module.comment || "";
+    comment.setAttribute("aria-label", "Module comment");
+    const commentField = element("label", "property-field");
+    commentField.append(element("span", "property-label", "Comment"), comment);
+    const saveComment = button("Apply module comment", "primary-button", async () => {
+      await applyEdit(
+        () => update_xgwx_module(current.file.bytes, targetBase, targetSlot, { comment: comment.value }),
+        `Edit module comment at base ${targetBase}, slot ${targetSlot}`,
+      );
+    });
+    saveComment.textContent = "Apply comment";
+    saveComment.disabled = true;
+    comment.addEventListener("input", () => { saveComment.disabled = comment.value === (module.comment || ""); });
+    form.append(commentField, saveComment);
   } else {
     property(form, "Slot", physicalSlot, true);
     property(form, "State", "Empty", true);
@@ -450,7 +471,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
   placeholder.textContent = currentEntry ? "Choose replacement…" : "Choose module…";
   select.append(placeholder);
   const categories = new Map();
-  moduleCatalog.forEach((entry) => {
+  (editableHardware ? moduleCatalog : []).forEach((entry) => {
     if (!categories.has(entry.category)) categories.set(entry.category, []);
     categories.get(entry.category).push(entry);
   });
@@ -465,6 +486,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
     });
     select.append(group);
   });
+  select.disabled = !editableHardware;
   if (currentEntry) select.value = currentEntry.model;
   selection.append(select);
 
@@ -477,7 +499,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
   );
   const apply = button("Apply module selection", "primary-button", async () => {
     const entry = moduleCatalog.find((item) => item.model === select.value);
-    if (!entry) return;
+    if (!entry || !supportsXgkHardware()) return;
     await applyEdit(
       () => module
         ? select_xgwx_module(current.file.bytes, targetBase, targetSlot, entry.model)
@@ -488,8 +510,13 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
   apply.textContent = "Apply selection";
   apply.disabled = true;
   select.addEventListener("change", () => {
-    apply.disabled = !select.value || select.value === currentEntry?.model;
+    apply.disabled = !editableHardware || !select.value || select.value === currentEntry?.model;
   });
+  if (!editableHardware) {
+    note.textContent = builtin
+      ? "Built-in I/O cannot be removed or replaced. Comments are editable; built-in settings are not yet supported."
+      : "Hardware selection, deletion, and settings are not supported for this CPU. Existing module comments remain editable.";
+  }
   picker.append(selection, note, apply);
 
   if (!module) {
@@ -509,6 +536,10 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
 function renderModuleOptions(module, entry) {
   const section = element("section", "module-options");
   section.append(element("h3", "", "Module options"));
+  if (!supportsXgkHardware()) {
+    section.append(element("p", "module-selection-note", "Settings for this CPU are not yet supported."));
+    return section;
+  }
   if (!entry) {
     section.append(element("p", "module-selection-note", "This module does not uniquely match the embedded XG5000 catalog."));
     return section;
@@ -699,6 +730,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
   });
   canvas.append(tableContainer(table, programs.length));
 
+  if (ladder?.structuralEditing && !ladder.rungs.length) ladder.rungs = [{ rawY: 0 }];
   if (ladder) {
     const rowValues = ladder.rungs.map((rung) => rung.rawY);
     if (selectedLadderFocus && !rowValues.includes(selectedLadderFocus.rawY)) {
@@ -724,22 +756,18 @@ function renderProgramsEditor(canvas, inspector, programs) {
     };
     const deleteSelection = async () => {
       const selection = currentLadderSelection(ladder);
-      const editableCells = selection.decodedCells.filter((cell) => (
-        cell.sourceText !== null
-        && cell.sourceText !== undefined
-        && cell.sourceText.trim().length > 0
-      ));
-      if (!editableCells.length) return false;
+      if (!ladder.structuralEditing || !selection.decodedCells.length
+        || selection.decodedCells.some((cell) => !structuralElement(cell))) return false;
+      const editableCells = selection.decodedCells;
       const activeKey = selectedLadderFocus ? ladderPositionKey(selectedLadderFocus) : null;
       const edited = await applyEdit(
-        () => editableCells.reduce((bytes, cell) => update_xgwx_ladder_cell(
-          bytes,
-          selectedProgramIndex,
-          cell.offset,
-          cell.sourceText,
-          blankLadderCellText(cell.sourceText),
+        () => editableCells.reduce((bytes, cell) => edit_xgwx_ladder_cell(
+          bytes, selectedProgramIndex, {
+            rawY: cell.rawY, column: ldCellColumn(cell.rawX),
+            expected: structuralElement(cell), replacement: null,
+          },
         ), current.file.bytes),
-        `Clear ${editableCells.length} ladder cell${editableCells.length === 1 ? "" : "s"}`,
+        `Delete ${editableCells.length} ladder element${editableCells.length === 1 ? "" : "s"}`,
       );
       if (edited && activeKey) {
         requestAnimationFrame(() => document.querySelector(`[data-ladder-key="${activeKey}"]`)?.focus());
@@ -832,6 +860,11 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
       if (ladderPositionKey(selectedLadderFocus || {}) !== key) selectPosition(position, false);
     });
     node.addEventListener("keydown", async (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l" && ladder.structuralEditing) {
+        event.preventDefault(); event.stopPropagation();
+        await insertLadderRow(position.rawY);
+        return;
+      }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
         event.preventDefault();
         const next = moveLadderPosition(rowValues, position, event.key, LD_COLUMN_COUNT);
@@ -859,6 +892,15 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
     const rowIndex = rowIndexes.get(line.rawY);
     if (rowIndex === undefined) return;
     svg.append(svgLine(ldWireStartX(line.rawXStart), ldRowY(rowIndex), ldWireEndX(line.rawXEnd), ldRowY(rowIndex), "wire"));
+  });
+  // An element's leads belong to its own cell, not to a full-row wire.
+  (ladder.cells || []).forEach((cell) => {
+    const rowIndex = rowIndexes.get(cell.rawY);
+    if (rowIndex === undefined) return;
+    const column = ldCellColumn(cell.rawX);
+    const width = (LD_RIGHT_RAIL - LD_LEFT_RAIL) / LD_COLUMN_COUNT;
+    svg.append(svgLine(LD_LEFT_RAIL + column * width, ldRowY(rowIndex),
+      LD_LEFT_RAIL + (column + 1) * width, ldRowY(rowIndex), "wire"));
   });
   (ladder.verticalLines || []).forEach((line) => {
     const start = rowIndexes.get(line.rawYStart);
@@ -1033,6 +1075,102 @@ function ldBlankKey(rawY, column) {
   return `${rawY}:${column}`;
 }
 
+function structuralElement(cell) {
+  if (!cell) return null;
+  const kind = ({ NO: "NormallyOpen", NC: "NormallyClosed" })[cell.contact]
+    || ({ Output: "Output", Set: "Set", Reset: "Reset" })[cell.coil];
+  return kind && cell.sourceText ? { kind, operand: cell.sourceText } : null;
+}
+
+function renderStructuralCell(section, cell, position) {
+  section.classList.add("structural-cell-editor");
+  const expected = structuralElement(cell);
+  const kind = document.createElement("select");
+  kind.id = "ladder-element-kind";
+  kind.className = "structural-element-kind";
+  const label = element("label", "", "Element");
+  label.htmlFor = kind.id;
+  const choices = position.column === 9
+    ? [["Output", "Output coil"], ["Set", "Set coil"], ["Reset", "Reset coil"]]
+    : [["NormallyOpen", "Normally open contact"], ["NormallyClosed", "Normally closed contact"]];
+  for (const [value, text] of choices) {
+    const option = document.createElement("option");
+    option.value = value; option.textContent = text; kind.append(option);
+  }
+  if (expected) kind.value = expected.kind;
+  section.append(label, kind);
+  const operand = property(section, "Device address", expected?.operand || "M00000", false);
+  const apply = button(cell ? "Apply element" : "Insert element", "primary-button", async () => {
+    await applyEdit(() => edit_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, {
+      rawY: position.rawY, column: position.column, expected,
+      replacement: { kind: kind.value, operand: operand.value.trim().toUpperCase() },
+    }), cell ? "Edit ladder element" : "Insert ladder element");
+  });
+  apply.textContent = cell ? "Apply element" : "Insert element";
+  const validate = () => {
+    const value = operand.value.trim().toUpperCase();
+    apply.disabled = !/^[PMKFLTC][0-9]{1,31}$/.test(value)
+      || (expected?.kind === kind.value && expected?.operand === value);
+  };
+  kind.addEventListener("change", validate); operand.addEventListener("input", validate);
+  validate(); section.append(apply);
+  if (cell) {
+    const remove = button("Delete element", "primary-button", async () => {
+    await applyEdit(() => edit_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, {
+      rawY: position.rawY, column: position.column, expected, replacement: null,
+    }), "Delete ladder element");
+    });
+    remove.textContent = "Delete element";
+    section.append(remove);
+  }
+  section.append(element("p", "muted", "Deleting an element leaves a wiring gap. Check the program in XG5000 before use."));
+}
+
+async function insertLadderRow(rawY) {
+  return applyEdit(() => insert_xgwx_ladder_row(current.file.bytes, selectedProgramIndex, rawY), "Insert ladder row");
+}
+
+function renderBranchControls(section, ladder, position) {
+  const controls = element("section", "cell-editor structural-cell-editor");
+  controls.append(element("h3", "", "Rows and branches"));
+  const insert = button("Insert row before", "primary-button", async () => insertLadderRow(position.rawY));
+  insert.textContent = "Insert row before (Ctrl+L)";
+  controls.append(insert);
+  const boundary = document.createElement("select");
+  boundary.id = "branch-boundary";
+  boundary.className = "structural-element-kind";
+  const label = element("label", "", "Connection after column");
+  label.htmlFor = boundary.id;
+  for (let index = 1; index <= 9; index += 1) {
+    const option = document.createElement("option");
+    option.value = String(index); option.textContent = String(index); boundary.append(option);
+  }
+  boundary.value = String(Math.min(9, position.column + 1));
+  const status = element("p", "muted");
+  let edit;
+  const toggle = button("Add connection below", "primary-button", async () => {
+    await applyEdit(() => edit_xgwx_ladder_branch(current.file.bytes, selectedProgramIndex, edit),
+      edit.present ? "Add branch connection" : "Remove branch connection");
+  });
+  const update = () => {
+    const value = Number(boundary.value);
+    const expected = (ladder.branchConnections || []).some(line => line.rawX === value * 3
+      && line.rawYStart === position.rawY && line.rawYEnd === position.rawY + 4);
+    edit = { rawY: position.rawY, boundary: value, expected, present: !expected };
+    const text = expected ? "Remove connection below" : "Add connection below";
+    toggle.textContent = text; toggle.setAttribute("aria-label", text); toggle.title = text;
+    try {
+      edit_xgwx_ladder_branch(current.file.bytes, selectedProgramIndex, edit);
+      toggle.disabled = false;
+      status.textContent = "Connects this row to the row directly below it.";
+    } catch (error) {
+      toggle.disabled = true; status.textContent = String(error); toggle.title = String(error);
+    }
+  };
+  boundary.addEventListener("change", update); update();
+  controls.append(label, boundary, toggle, status); section.append(controls);
+}
+
 function renderProgramInspector(inspector, program, ladder, cell, blankCell = null, selection = null) {
   inspector.replaceChildren(inspectorHeading("PROGRAM"));
   if (!program) {
@@ -1066,18 +1204,22 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     cellSection.append(element(
       "div",
       "ladder-selection-summary",
-      `${selection.total} grid cells selected · ${selection.editableCount} decoded text cells · Delete clears their contents`,
+      `${selection.total} grid cells selected · ${selection.decodedCells.length} elements`,
     ));
   }
-  if (blankCell) {
+  if (ladder?.structuralEditing && (blankCell || structuralElement(cell))) {
+    renderStructuralCell(cellSection, cell, blankCell || {
+      rawY: cell.rawY, column: ldCellColumn(cell.rawX),
+    });
+  } else if (blankCell) {
     cellSection.append(
       element("div", "blank-cell-position", `Rung ${blankCell.rowIndex + 1} · Column ${blankCell.column + 1}`),
-      element("p", "muted", "Blank cell selected. Element insertion is not supported yet."),
+      element("p", "muted", "Structural editing is unavailable for this program layout."),
     );
   } else if (!cell) {
     cellSection.append(element("p", "muted", ladder ? "Select a ladder cell to edit its source text." : "No decoded ladder cells."));
-  } else if (cell.sourceText === null || cell.sourceText === undefined) {
-    cellSection.append(element("p", "muted", "This marker has no text payload and remains read only."));
+  } else if (cell.value === "END" || cell.sourceText === null || cell.sourceText === undefined) {
+    cellSection.append(element("p", "muted", "This instruction remains read only."));
   } else {
     const source = property(cellSection, "Source text", cell.sourceText, false, true);
     const requiredUnits = utf16Length(cell.sourceText);
@@ -1101,6 +1243,8 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     cellSection.append(counter, applyCell);
   }
   inspector.append(cellSection);
+  const position = blankCell || (cell ? { rawY: cell.rawY, column: ldCellColumn(cell.rawX) } : null);
+  if (ladder?.structuralEditing && position) renderBranchControls(inspector, ladder, position);
 }
 
 async function applyEdit(update, label) {
@@ -1231,7 +1375,7 @@ function appendNetworkConfigurationFields(form, module, summary) {
   const hardwareModule = (summary.hardware?.modules || []).find((item) => (
     item.base === module.base && item.slot === module.slot
   ));
-  const catalogEntry = hardwareModule && moduleCatalog.find((entry) => (
+  const catalogEntry = supportsXgkHardware() && hardwareModule && moduleCatalog.find((entry) => (
     entry.id === module.id && entry.subType === hardwareModule.subType
   ));
 
@@ -1451,20 +1595,28 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
       const option = document.createElement("option");
       option.value = entry.model;
       option.textContent = entry.model;
+      try {
+        select_xgwx_cpu(current.file.bytes, entry.model);
+      } catch (error) {
+        option.disabled = true;
+        option.title = String(error);
+      }
       group.append(option);
     });
     cpuSelect.append(group);
   });
   cpuSelect.value = currentCpu?.model || "";
-  cpuSelect.disabled = !currentCpu;
+  cpuSelect.disabled = !Array.from(cpuSelect.options).some((option) => !option.disabled && option.value && option.value !== currentCpu?.model);
   cpuField.append(cpuSelect);
   form.append(cpuField);
 
   const cpuActions = element("div", "overview-cpu-actions");
-  const cpuNote = element("p", "module-selection-note", "Changing CPU preserves existing parameters and hardware. Review compatibility in XG5000 when switching CPU families.");
+  const cpuNote = element("p", "module-selection-note", currentCpu?.family === "XGK"
+    ? "Available CPU changes preserve hardware within the target CPU limits. Check program compatibility in XG5000 after changing CPU."
+    : "CPU conversion is not supported for this workspace. Existing hardware is preserved.");
   const applyCpu = button("Apply CPU selection", "primary-button", async () => {
     const entry = cpuCatalog.find((item) => item.model === cpuSelect.value);
-    if (!entry) return;
+    if (!entry || cpuSelect.selectedOptions[0]?.disabled) return;
     await applyEdit(
       () => select_xgwx_cpu(current.file.bytes, entry.model),
       `Select CPU ${entry.model}`,
@@ -1473,7 +1625,7 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
   applyCpu.textContent = "Apply CPU";
   applyCpu.disabled = true;
   cpuSelect.addEventListener("change", () => {
-    applyCpu.disabled = !cpuSelect.value || cpuSelect.value === currentCpu?.model;
+    applyCpu.disabled = cpuSelect.disabled || cpuSelect.selectedOptions[0]?.disabled || !cpuSelect.value || cpuSelect.value === currentCpu?.model;
   });
   cpuActions.append(cpuNote, applyCpu);
   form.append(cpuActions);
@@ -1491,7 +1643,7 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
   if (!warnings.length) diagnostics.append(element("div", "diagnostic success", "Parser completed without warnings."));
   warnings.forEach((warning) => diagnostics.append(element("div", "diagnostic warning", warning)));
   canvas.append(diagnostics);
-  renderCollectionInspector(inspector, "WORKSPACE", [["Format", "XGWX"], ["Mode", "CPU editable"], ["Parser", warnings.length ? "Warnings" : "Ready"]]);
+  renderCollectionInspector(inspector, "WORKSPACE", [["Format", "XGWX"], ["Mode", cpuSelect.disabled ? "CPU unchanged" : "CPU editable"], ["Parser", warnings.length ? "Warnings" : "Ready"]]);
 }
 
 function renderCollectionInspector(inspector, title, rows) {
@@ -1669,8 +1821,12 @@ function shortModuleName(name) {
   return match?.[0] || value;
 }
 
+function supportsXgkHardware() {
+  return current?.summary.cpu?.family === "XGK" && current.summary.counts?.configurations === 1;
+}
+
 function catalogEntryMatchesModule(entry, module) {
-  return entry.id === module.id
+  return supportsXgkHardware() && entry.id === module.id
     && entry.subType === module.subType;
 }
 

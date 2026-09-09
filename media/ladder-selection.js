@@ -33,7 +33,3 @@ export function ladderSelectionKeys(rowValues, anchor, focus) {
   }
   return keys;
 }
-
-export function blankLadderCellText(sourceText) {
-  return " ".repeat(String(sourceText).length);
-}

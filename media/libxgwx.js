@@ -32,6 +32,63 @@ export function delete_xgwx_module(bytes, base, slot) {
 }
 
 /**
+ * Add or remove a supported vertical branch connection.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {any} edit
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_ladder_branch(bytes, program_index, edit) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_ladder_branch(ptr0, len0, program_index, edit);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Structurally edit a supported LD contact or coil at a physical cell.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {any} edit
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_ladder_cell(bytes, program_index, edit) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_ladder_cell(ptr0, len0, program_index, edit);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Insert a physical blank row before the selected row.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} raw_y
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_ladder_row(bytes, program_index, raw_y) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_ladder_row(ptr0, len0, program_index, raw_y);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Insert a catalog module into an empty slot and return rewritten `.xgwx` bytes.
  * @param {Uint8Array} bytes
  * @param {number} base

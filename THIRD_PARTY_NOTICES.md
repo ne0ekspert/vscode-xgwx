@@ -8,7 +8,7 @@ under the Apache License, Version 2.0:
 - `media/libxgwx.js`
 - `media/libxgwx_bg.wasm`
 
-Source: <https://github.com/ne0ekspert/libxgwx/tree/c6414f441e577e728011e66aae75e2fa2242da5b>
+Source: <https://github.com/ne0ekspert/libxgwx/tree/83efee3f349e73dfc5360a711a831a28d5bbfb5d>
 
 License text: [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt)
 

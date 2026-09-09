@@ -1143,3 +1143,21 @@ button.tree-row:hover,
     grid-row: 3;
   }
 }
+
+.structural-cell-editor > label,
+.structural-cell-editor > select {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+}
+.structural-element-kind {
+  padding: 5px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+}
+.structural-cell-editor > .primary-button {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}

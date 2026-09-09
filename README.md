@@ -7,8 +7,13 @@ powered by the sibling `libxgwx` project during development.
 
 - Opens `*.xgwx` files directly as a VS Code custom editor.
 - Shows project counts and metadata.
+- Enables CPU choices only when the bundled writer accepts the retained hardware.
+  Cross-family and compact-model conversions are disabled.
+- Identifies the captured XBM-DR16S built-in I/O and disables unsupported compact
+  module selection, deletion, and settings. Module comments remain editable.
+- Edits module comments through the normal Save and Undo/Redo document flow.
 - Uses an editor-style explorer, dense module table, and contextual inspector.
-- Supports Up/Down row navigation and undoable Delete from the hardware module table.
+- Supports Up/Down row navigation and undoable Delete for supported XGK hardware.
 - Inserts a catalog module into an empty physical slot from the module inspector.
 - Keeps captured FDEnet, Dnet, and Rnet network records synchronized when those
   modules are inserted, replaced, or deleted.
@@ -90,3 +95,5 @@ XGWX Workspace Editor is licensed under the GNU General Public License, version
 The bundled `libxgwx` JavaScript and WebAssembly artifacts remain licensed
 under Apache-2.0. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt).
+
+Verified linear and branched LD layouts support inserting, replacing and deleting normally open/closed contacts and output/set/reset coils. Select a cell and use the Element and Device address controls; Delete removes selected supported elements and leaves wiring gaps. Ctrl+L inserts a row before the cursor and stretches crossing branch connections. The Rows and branches inspector adds or removes vertical connections after columns 1–9 to the row below. Recognized comments and application instructions are preserved but cannot be structurally edited. Row deletion and horizontal-wire editing are not supported yet. Check edited programs in XG5000; disconnected branches can produce program errors.

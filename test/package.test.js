@@ -19,7 +19,7 @@ test("declares GPLv3-or-later while retaining the bundled library license", () =
   assert.match(apacheLicense, /Apache License/);
   assert.match(apacheLicense, /Version 2\.0, January 2004/);
   assert.match(thirdPartyNotices, /libxgwx/);
-  assert.match(thirdPartyNotices, /c6414f441e577e728011e66aae75e2fa2242da5b/);
+  assert.match(thirdPartyNotices, /83efee3f349e73dfc5360a711a831a28d5bbfb5d/);
 });
 
 test("registers a default editable XGWX custom editor", () => {
@@ -72,7 +72,7 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
   assert.match(script, /function renderLadderDiagram\b/);
   assert.match(script, /moveLadderPosition/);
   assert.match(script, /ladderSelectionKeys/);
-  assert.match(script, /blankLadderCellText/);
+  assert.match(script, /edit_xgwx_ladder_cell/);
   assert.match(script, /event\.shiftKey/);
   assert.match(script, /event\.key === "Delete"/);
   assert.doesNotMatch(script, /Decoded cells/);

@@ -7,12 +7,16 @@ import { fileURLToPath } from "node:url";
 import init, {
   cpu_catalog,
   delete_xgwx_module,
+  edit_xgwx_ladder_cell,
+  edit_xgwx_ladder_branch,
+  insert_xgwx_ladder_row,
   insert_xgwx_module,
   parse_xgwx,
   select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
   update_xgwx_ladder_cell,
+  update_xgwx_module,
   update_xgwx_network,
   update_xgwx_network_module,
   update_xgwx_program,
@@ -43,7 +47,7 @@ test("bundled WASM parses hardware modules from a real fixture", async (context)
   assert.match(summary.hardware.modules[0].name, /XGI-D24A\/B/);
 });
 
-test("bundled WASM exposes and edits real XGK and XGB CPU models", async (context) => {
+test("bundled WASM allows XGK CPU changes and rejects cross-family conversion", async (context) => {
   const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
@@ -61,9 +65,10 @@ test("bundled WASM exposes and edits real XGK and XGB CPU models", async (contex
   assert.equal(before.cpu.model, "XGK-CPUSN");
   assert.equal(before.cpu.typeCode, 17);
 
-  const edited = parse_xgwx(select_xgwx_cpu(source, "XGB-XBMS"));
-  assert.equal(edited.cpu.model, "XGB-XBMS");
-  assert.equal(edited.cpu.typeCode, 2);
+  const edited = parse_xgwx(select_xgwx_cpu(source, "XGK-CPUHN"));
+  assert.equal(edited.cpu.model, "XGK-CPUHN");
+  assert.equal(edited.cpu.typeCode, 16);
+  assert.throws(() => select_xgwx_cpu(source, "XGB-XBMS"), /migration/);
 });
 
 test("bundled WASM edits catalog-backed module dropdown options", async (context) => {
@@ -256,35 +261,20 @@ test("bundled WASM rewrites program metadata and a same-length ladder cell", asy
   assert.ok(after.ladder[0].cells.some((item) => item.sourceText === "M00042"));
 });
 
-test("bundled WASM clears multiple ladder cell contents without shifting topology", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
-  if (!fs.existsSync(fixture)) {
-    context.skip(`libxgwx fixture not found at ${fixture}`);
-    return;
-  }
-
-  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
-  await init({ module_or_path: wasm });
-  let bytes = new Uint8Array(fs.readFileSync(fixture));
-  const before = parse_xgwx(bytes);
-  const cells = before.ladder[0].cells.filter((cell) => cell.sourceText !== null).slice(0, 2);
-  for (const cell of cells) {
-    bytes = update_xgwx_ladder_cell(
-      bytes,
-      0,
-      cell.offset,
-      cell.sourceText,
-      " ".repeat(cell.sourceText.length),
-    );
-  }
-  const after = parse_xgwx(bytes);
-
-  assert.equal(after.ladder[0].cells.some((cell) => cell.sourceText === "M00000"), false);
-  assert.equal(after.ladder[0].cells.some((cell) => cell.sourceText === "M00001"), false);
-  assert.equal(
-    after.ladder[0].cells.find((cell) => cell.sourceText === "M00002")?.offset,
-    before.ladder[0].cells.find((cell) => cell.sourceText === "M00002")?.offset,
-  );
+test("bundled WASM inserts, replaces and removes actual linear ladder records", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  let bytes = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/linear.xgwx")));
+  assert.equal(parse_xgwx(bytes).ladder[0].structuralEditing, true);
+  const element = { kind: "NormallyClosed", operand: "M42" };
+  bytes = edit_xgwx_ladder_cell(bytes, 0, { rawY: 0, column: 2, expected: null, replacement: element });
+  assert.ok(parse_xgwx(bytes).ladder[0].cells.some(cell => cell.sourceText === "M42" && cell.contact === "NC"));
+  assert.throws(() => edit_xgwx_ladder_cell(bytes, 0, { rawY: 0, column: 2, expected: null, replacement: element }), /changed/);
+  bytes = edit_xgwx_ladder_cell(bytes, 0, { rawY: 0, column: 2, expected: element, replacement: null });
+  assert.equal(parse_xgwx(bytes).ladder[0].cells.some(cell => cell.rawX === 7 && cell.rawY === 0), false);
+  assert.throws(() => edit_xgwx_ladder_cell(bytes, 0, { rawY: 4, column: 9, expected: null, replacement: element }), /column|instruction/);
+  const complex = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx")));
+  assert.equal(parse_xgwx(complex).ladder[0].structuralEditing, true);
+  assert.throws(() => edit_xgwx_ladder_cell(complex, 0, { rawY: 0, column: 2, expected: null, replacement: element }), /comment/);
 });
 
 test("bundled WASM rewrites same-length variable fields and its numeric address", async (context) => {
@@ -452,4 +442,41 @@ test("bundled WASM edits network and network-module metadata", async (context) =
   assert.equal(module.configName, "PLC-1");
   assert.equal(module.alias, "Uplink");
   assert.equal(module.description, "Plant Ethernet");
+});
+
+test("bundled WASM protects compact hardware while preserving comment edits", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/XGB_Enet01.xgwx")));
+  const before = parse_xgwx(source);
+  assert.equal(before.hardware.cpuProfile.variant, "XBM-DR16S");
+  assert.throws(() => delete_xgwx_module(source, 0, 0), /built-in/);
+  assert.throws(() => insert_xgwx_module(source, 0, 2, "XGI-D24A/B"), /not verified/);
+  assert.throws(() => select_xgwx_module(source, 0, 0, "XGI-D24A/B"), /not verified/);
+  assert.throws(() => xgwx_module_option_values(source, 0, 0), /not verified/);
+  const edited = parse_xgwx(update_xgwx_module(source, 0, 0, { comment: "Built-in comment" }));
+  assert.equal(edited.hardware.modules[0].comment, "Built-in comment");
+  assert.deepEqual(edited.hardware.cpuProfile, before.hardware.cpuProfile);
+  assert.deepEqual(edited.networks, before.networks);
+});
+
+
+test("bundled WASM edits branches and inserts sparse rows without phantom wires", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  let bytes = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/linear.xgwx")));
+  bytes = insert_xgwx_ladder_row(bytes, 0, 4);
+  assert.deepEqual(parse_xgwx(bytes).ladder[0].rungs.map(r => r.rawY), [0, 4, 8]);
+  const branch = { rawY: 0, boundary: 1, expected: false, present: true };
+  bytes = edit_xgwx_ladder_branch(bytes, 0, branch);
+  assert.throws(() => edit_xgwx_ladder_branch(bytes, 0, branch), /changed/);
+  bytes = edit_xgwx_ladder_cell(bytes, 0, { rawY: 4, column: 0, expected: null, replacement: { kind: "NormallyOpen", operand: "M00002" } });
+  let ladder = parse_xgwx(bytes).ladder[0];
+  assert.deepEqual(ladder.verticalLines, [{rawX: 3, rawYStart: 0, rawYEnd: 4}]);
+  assert.equal(ladder.horizontalLines.some(line => line.rawY === 4), false);
+  const removed = parse_xgwx(edit_xgwx_ladder_branch(bytes, 0, {...branch, expected: true, present: false})).ladder[0];
+  assert.equal(removed.verticalLines.length, 0);
+  bytes = insert_xgwx_ladder_row(bytes, 0, 4);
+  ladder = parse_xgwx(bytes).ladder[0];
+  assert.deepEqual(ladder.verticalLines, [{rawX: 3, rawYStart: 0, rawYEnd: 8}]);
+  assert.ok(ladder.cells.some(cell => cell.rawY === 8 && cell.sourceText === "M00002"));
+  assert.ok(ladder.cells.some(cell => cell.rawY === 12 && cell.value === "END"));
 });
