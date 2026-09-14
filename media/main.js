@@ -31,6 +31,12 @@ import {
   moveLadderPosition,
 } from "./ladder-selection.js";
 import { groupModuleOptions } from "./module-option-groups.js";
+import {
+  COIL_ELEMENT_CHOICES,
+  CONTACT_ELEMENT_CHOICES,
+  elementKindHasOperand,
+  structuralElementFromCell,
+} from "./ladder-elements.js";
 
 const vscode = acquireVsCodeApi();
 const app = document.querySelector("#app");
@@ -1115,10 +1121,7 @@ function ldBlankKey(rawY, column) {
 }
 
 function structuralElement(cell) {
-  if (!cell) return null;
-  const kind = ({ NO: "NormallyOpen", NC: "NormallyClosed" })[cell.contact]
-    || ({ Output: "Output", Set: "Set", Reset: "Reset" })[cell.coil];
-  return kind && cell.sourceText ? { kind, operand: cell.sourceText } : null;
+  return structuralElementFromCell(cell);
 }
 
 function renderStructuralCell(section, cell, position) {
@@ -1129,9 +1132,7 @@ function renderStructuralCell(section, cell, position) {
   kind.className = "structural-element-kind";
   const label = element("label", "", "Element");
   label.htmlFor = kind.id;
-  const choices = position.column === 9
-    ? [["Output", "Output coil"], ["Set", "Set coil"], ["Reset", "Reset coil"]]
-    : [["NormallyOpen", "Normally open contact"], ["NormallyClosed", "Normally closed contact"]];
+  const choices = position.column === 9 ? COIL_ELEMENT_CHOICES : CONTACT_ELEMENT_CHOICES;
   for (const [value, text] of choices) {
     const option = document.createElement("option");
     option.value = value; option.textContent = text; kind.append(option);
@@ -1140,16 +1141,22 @@ function renderStructuralCell(section, cell, position) {
   section.append(label, kind);
   const operand = property(section, "Device address", expected?.operand || "M00000", false);
   const apply = button(cell ? "Apply element" : "Insert element", "primary-button", async () => {
+    const hasOperand = elementKindHasOperand(kind.value);
     await applyEdit(() => edit_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, {
       rawY: position.rawY, column: position.column, expected,
-      replacement: { kind: kind.value, operand: operand.value.trim().toUpperCase() },
+      replacement: {
+        kind: kind.value,
+        operand: hasOperand ? operand.value.trim().toUpperCase() : "",
+      },
     }), cell ? "Edit ladder element" : "Insert ladder element");
   });
   apply.textContent = cell ? "Apply element" : "Insert element";
   const validate = () => {
     const value = operand.value.trim().toUpperCase();
-    apply.disabled = !/^[PMKFLTC][0-9]{1,31}$/.test(value)
-      || (expected?.kind === kind.value && expected?.operand === value);
+    const hasOperand = elementKindHasOperand(kind.value);
+    operand.closest(".property-field").hidden = !hasOperand;
+    apply.disabled = (hasOperand && !/^[PMKFLTC][0-9]{1,31}$/.test(value))
+      || (expected?.kind === kind.value && expected?.operand === (hasOperand ? value : ""));
   };
   kind.addEventListener("change", validate); operand.addEventListener("input", validate);
   validate(); section.append(apply);

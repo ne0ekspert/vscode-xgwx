@@ -1150,6 +1150,9 @@ button.tree-row:hover,
   width: 100%;
   margin: 8px 0;
 }
+.structural-cell-editor > .property-field[hidden] {
+  display: none;
+}
 .structural-element-kind {
   padding: 5px;
   color: var(--vscode-input-foreground);

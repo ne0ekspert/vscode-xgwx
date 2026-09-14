@@ -278,6 +278,36 @@ test("bundled WASM inserts, replaces and removes actual linear ladder records", 
   assert.throws(() => edit_xgwx_ladder_cell(complex, 0, { rawY: 0, column: 2, expected: null, replacement: element }), /comment/);
 });
 
+test("bundled WASM inserts every additional program-inspector element kind", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/empty.xgwx")));
+  const cases = [
+    ["AddressedRisingPulse", "M1", 2, "contact", "P_CONTACT"],
+    ["AddressedRisingPulseNot", "M1", 2, "contact", "P_NOT_CONTACT"],
+    ["AddressedFallingPulse", "M1", 2, "contact", "N_CONTACT"],
+    ["AddressedFallingPulseNot", "M1", 2, "contact", "N_NOT_CONTACT"],
+    ["Inverse", "", 2, "contact", "INV"],
+    ["RisingPulse", "", 2, "contact", "PUP"],
+    ["FallingPulse", "", 2, "contact", "PDN"],
+    ["InverseOutput", "M2", 9, "coil", "Inverse"],
+    ["RisingPulseOutput", "M2", 9, "coil", "P_COIL"],
+    ["FallingPulseOutput", "M2", 9, "coil", "N_COIL"],
+  ];
+
+  for (const [kind, operand, column, field, decodedKind] of cases) {
+    const bytes = edit_xgwx_ladder_cell(source, 0, {
+      rawY: 0,
+      column,
+      expected: null,
+      replacement: { kind, operand },
+    });
+    const cell = parse_xgwx(bytes).ladder[0].cells.find((item) => (
+      item.rawY === 0 && item.rawX === (column === 9 ? 94 : 1 + column * 3)
+    ));
+    assert.equal(cell?.[field], decodedKind, kind);
+  }
+});
+
 test("bundled WASM rewrites same-length variable fields and its numeric address", async (context) => {
   const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
   if (!fs.existsSync(fixture)) {
