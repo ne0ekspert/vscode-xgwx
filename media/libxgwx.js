@@ -70,6 +70,25 @@ export function edit_xgwx_ladder_cell(bytes, program_index, edit) {
 }
 
 /**
+ * Create or edit a supported native rung/output comment.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {any} edit
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_ladder_comment(bytes, program_index, edit) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_ladder_comment(ptr0, len0, program_index, edit);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Insert a physical blank row before the selected row.
  * @param {Uint8Array} bytes
  * @param {number} program_index

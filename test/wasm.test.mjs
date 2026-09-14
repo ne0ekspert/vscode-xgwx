@@ -9,6 +9,7 @@ import init, {
   delete_xgwx_module,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
+  edit_xgwx_ladder_comment,
   insert_xgwx_ladder_row,
   insert_xgwx_module,
   parse_xgwx,
@@ -306,6 +307,39 @@ test("bundled WASM inserts every additional program-inspector element kind", asy
     ));
     assert.equal(cell?.[field], decodedKind, kind);
   }
+});
+
+test("bundled WASM edits and creates rung and output comments", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx")));
+  let bytes = edit_xgwx_ladder_comment(source, 0, {
+    kind: "Rung",
+    rawY: 0,
+    expected: "렁 설명문 1",
+    replacement: "Edited rung comment",
+  });
+  bytes = edit_xgwx_ladder_comment(bytes, 0, {
+    kind: "Output",
+    rawY: 4,
+    expected: "출력 설명문 1",
+    replacement: "Edited output comment",
+  });
+  const edited = parse_xgwx(bytes).ladder[0];
+  assert.equal(edited.rungComments[0].text, "Edited rung comment");
+  assert.equal(edited.outputComments[0].text, "Edited output comment");
+  assert.throws(() => edit_xgwx_ladder_comment(bytes, 0, {
+    kind: "Output", rawY: 4, expected: "stale", replacement: "Rejected",
+  }), /changed/);
+
+  const empty = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/empty.xgwx")));
+  const rung = parse_xgwx(edit_xgwx_ladder_comment(empty, 0, {
+    kind: "Rung", rawY: 0, expected: null, replacement: "Created rung comment",
+  })).ladder[0];
+  assert.equal(rung.rungComments[0].text, "Created rung comment");
+  const output = parse_xgwx(edit_xgwx_ladder_comment(empty, 0, {
+    kind: "Output", rawY: 0, expected: null, replacement: "Created output comment",
+  })).ladder[0];
+  assert.equal(output.outputComments[0].text, "Created output comment");
 });
 
 test("bundled WASM rewrites same-length variable fields and its numeric address", async (context) => {

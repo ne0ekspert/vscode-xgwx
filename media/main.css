@@ -691,7 +691,6 @@ button.tree-row:hover,
   color: var(--vscode-descriptionForeground);
   font-family: var(--vscode-font-family);
   font-size: 10px;
-  pointer-events: none;
 }
 
 .ld-column-label {
@@ -722,6 +721,7 @@ button.tree-row:hover,
   background: color-mix(in srgb, var(--vscode-comments-foreground, var(--vscode-descriptionForeground)) 6%, var(--vscode-editor-background));
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
 }
 
 .ld-output-comment {
@@ -734,6 +734,70 @@ button.tree-row:hover,
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+  cursor: text;
+}
+
+.ladder-context-menu,
+.ladder-comment-editor {
+  position: fixed;
+  z-index: 20;
+  min-width: 210px;
+  padding: 5px;
+  border: 1px solid var(--vscode-menu-border, var(--vscode-panel-border));
+  color: var(--vscode-menu-foreground, var(--vscode-foreground));
+  background: var(--vscode-menu-background, var(--vscode-sideBar-background));
+  box-shadow: 0 4px 14px rgb(0 0 0 / 35%);
+  font-family: var(--vscode-font-family);
+  font-size: 12px;
+}
+
+.ladder-context-item {
+  display: block;
+  width: 100%;
+  padding: 6px 22px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.ladder-context-item:hover:not(:disabled),
+.ladder-context-item:focus-visible {
+  outline: none;
+  color: var(--vscode-menu-selectionForeground, var(--vscode-list-activeSelectionForeground));
+  background: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+}
+
+.ladder-context-item:disabled {
+  color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+}
+
+.ladder-comment-editor {
+  display: grid;
+  width: min(340px, calc(100vw - 16px));
+  gap: 7px;
+  padding: 10px;
+}
+
+.ladder-comment-label {
+  font-weight: 600;
+}
+
+.ladder-comment-editor textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 6px;
+  resize: vertical;
+  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  font: inherit;
+}
+
+.ladder-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .ld-blank-cell {

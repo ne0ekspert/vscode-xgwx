@@ -3,6 +3,7 @@ import init, {
   delete_xgwx_module,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
+  edit_xgwx_ladder_comment,
   insert_xgwx_ladder_row,
   insert_xgwx_module,
   parse_xgwx,
@@ -64,6 +65,7 @@ let selectedVariableIndex = 0;
 let selectedNetworkIndex = 0;
 let selectedNetworkModuleKey = null;
 let dirty = false;
+let dismissLadderOverlay = null;
 
 window.addEventListener("message", async ({ data }) => {
   if (data?.type === "load") await loadWorkspace(data);
@@ -103,6 +105,7 @@ async function loadWorkspace(file) {
 }
 
 function renderWorkspace() {
+  closeLadderOverlay();
   const { file, summary } = current;
   app.replaceChildren();
 
@@ -904,6 +907,11 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
     node.addEventListener("focus", () => {
       if (ladderPositionKey(selectedLadderFocus || {}) !== key) selectPosition(position, false);
     });
+    node.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      selectPosition(position, false);
+      showLadderContextMenu(event.clientX, event.clientY, ladder, position);
+    });
     node.addEventListener("keydown", async (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l" && ladder.structuralEditing) {
         event.preventDefault(); event.stopPropagation();
@@ -989,6 +997,16 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
     note.style.left = `${LD_LEFT_RAIL + 1}px`;
     note.style.width = `${LD_RIGHT_RAIL - LD_LEFT_RAIL - 2}px`;
     note.style.top = `${ldRowY(layoutIndex)}px`;
+    note.title = "Double-click to edit rung comment";
+    note.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      showLadderCommentEditor(event.clientX, event.clientY, {
+        kind: "Rung",
+        rawY: row.comment.rawY,
+        expected: row.comment.text,
+        text: row.comment.text,
+      });
+    });
     board.append(note);
   });
 
@@ -999,6 +1017,16 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
     note.style.left = `${LD_RIGHT_RAIL + 12}px`;
     note.style.width = `${LD_VIEW_WIDTH - LD_RIGHT_RAIL - 20}px`;
     note.style.top = `${ldRowY(rowIndex)}px`;
+    note.title = "Double-click to edit output comment";
+    note.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      showLadderCommentEditor(event.clientX, event.clientY, {
+        kind: "Output",
+        rawY: comment.rawY,
+        expected: comment.text,
+        text: comment.text,
+      });
+    });
     board.append(note);
   });
 
@@ -1022,6 +1050,115 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
 
   viewport.append(board);
   return viewport;
+}
+
+function closeLadderOverlay() {
+  if (dismissLadderOverlay) dismissLadderOverlay();
+}
+
+function positionLadderOverlay(overlay, clientX, clientY) {
+  document.body.append(overlay);
+  const bounds = overlay.getBoundingClientRect();
+  overlay.style.left = `${Math.max(8, Math.min(clientX, window.innerWidth - bounds.width - 8))}px`;
+  overlay.style.top = `${Math.max(8, Math.min(clientY, window.innerHeight - bounds.height - 8))}px`;
+}
+
+function installLadderOverlayDismissal(overlay) {
+  const close = () => {
+    document.removeEventListener("pointerdown", outside, true);
+    document.removeEventListener("keydown", escape);
+    overlay.remove();
+    if (dismissLadderOverlay === close) dismissLadderOverlay = null;
+  };
+  const outside = (event) => {
+    if (!overlay.contains(event.target)) close();
+  };
+  const escape = (event) => {
+    if (event.key === "Escape") close();
+  };
+  document.addEventListener("pointerdown", outside, true);
+  document.addEventListener("keydown", escape);
+  dismissLadderOverlay = close;
+  return close;
+}
+
+function showLadderContextMenu(clientX, clientY, ladder, position) {
+  closeLadderOverlay();
+  const menu = element("div", "ladder-context-menu");
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "Ladder comments");
+  const close = installLadderOverlayDismissal(menu);
+  const addComment = (kind, label) => {
+    const item = button(label, "ladder-context-item", () => {
+      close();
+      showLadderCommentEditor(clientX, clientY, {
+        kind,
+        rawY: position.rawY,
+        expected: null,
+        text: "",
+      });
+    });
+    item.setAttribute("role", "menuitem");
+    item.textContent = label;
+    return item;
+  };
+  const rung = addComment("Rung", "Add rung comment above");
+  const crossesBranch = (ladder.branchConnections || []).some((connection) => (
+    connection.rawYStart < position.rawY && connection.rawYEnd >= position.rawY
+  ));
+  rung.disabled = !ladder.structuralEditing || crossesBranch;
+  if (crossesBranch) rung.title = "Cannot insert a rung comment inside a branch span";
+  const output = addComment("Output", "Add output comment");
+  output.disabled = !ladder.structuralEditing
+    || (ladder.outputComments || []).some((comment) => comment.rawY === position.rawY);
+  menu.append(rung, output);
+  positionLadderOverlay(menu, clientX, clientY);
+  menu.querySelector(":not(:disabled)")?.focus();
+}
+
+function showLadderCommentEditor(clientX, clientY, comment) {
+  closeLadderOverlay();
+  const editor = element("div", "ladder-comment-editor");
+  editor.setAttribute("role", "dialog");
+  editor.setAttribute("aria-label", comment.expected === null ? "Create ladder comment" : "Edit ladder comment");
+  editor.append(element("label", "ladder-comment-label", comment.kind === "Rung" ? "Rung comment" : "Output comment"));
+  const textarea = document.createElement("textarea");
+  textarea.value = comment.text;
+  textarea.rows = 4;
+  textarea.maxLength = 255;
+  textarea.setAttribute("aria-label", "Comment text");
+  const actions = element("div", "ladder-comment-actions");
+  const close = installLadderOverlayDismissal(editor);
+  const save = button(comment.expected === null ? "Create comment" : "Save comment", "primary-button", async () => {
+    const replacement = textarea.value;
+    const edited = await applyEdit(() => edit_xgwx_ladder_comment(current.file.bytes, selectedProgramIndex, {
+      kind: comment.kind,
+      rawY: comment.rawY,
+      expected: comment.expected,
+      replacement,
+    }), comment.expected === null ? `Create ${comment.kind.toLowerCase()} comment` : `Edit ${comment.kind.toLowerCase()} comment`);
+    if (edited) close();
+  });
+  const cancel = button("Cancel", "secondary-button", close);
+  save.textContent = comment.expected === null ? "Create" : "Save";
+  cancel.textContent = "Cancel";
+  const validate = () => {
+    const units = utf16Length(textarea.value);
+    save.disabled = !textarea.value.trim() || units > 255 || textarea.value === comment.expected;
+  };
+  textarea.addEventListener("input", validate);
+  textarea.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !save.disabled) {
+      event.preventDefault();
+      save.click();
+    }
+  });
+  actions.append(save, cancel);
+  editor.append(textarea, actions);
+  validate();
+  positionLadderOverlay(editor, clientX, clientY);
+  textarea.focus();
+  textarea.select();
 }
 
 function buildLdLayoutRows(rowValues, comments) {
