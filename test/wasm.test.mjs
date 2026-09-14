@@ -93,6 +93,56 @@ test("bundled WASM edits catalog-backed module dropdown options", async (context
   assert.ok(catalog.find((entry) => entry.model === "XGF-AD8A")?.options.length > 0);
 });
 
+test("bundled WASM exposes and edits XGF high-speed-counter options", async (context) => {
+  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  if (!fs.existsSync(fixture)) {
+    context.skip(`libxgwx fixture not found at ${fixture}`);
+    return;
+  }
+
+  const wasm = fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"));
+  await init({ module_or_path: wasm });
+  const catalog = xgk_module_catalog();
+  assert.deepEqual(
+    catalog
+      .find((entry) => entry.model === "XGF-HO2A")
+      .options.map((option) => option.key),
+    [
+      "counterMode",
+      "pulseInputMode",
+      "compareOutput0Mode",
+      "compareOutput1Mode",
+      "outputStateSetting",
+      "auxiliaryFunctionMode",
+    ],
+  );
+  assert.equal(
+    catalog
+      .find((entry) => entry.model === "XGF-HD2A")
+      .options.find((option) => option.key === "pulseInputMode").count,
+    2,
+  );
+  assert.equal(
+    catalog
+      .find((entry) => entry.model === "XGF-HO8A")
+      .options.find((option) => option.key === "pulseInputLevel").count,
+    8,
+  );
+
+  let edited = new Uint8Array(fs.readFileSync(fixture));
+  edited = set_xgwx_module_option(edited, 1, 8, "auxiliaryFunctionMode", 1, 6);
+  edited = set_xgwx_module_option(edited, 1, 9, "pulseInputMode", 1, 5);
+  edited = set_xgwx_module_option(edited, 1, 10, "inputFilter", 2, 3);
+  edited = set_xgwx_module_option(edited, 1, 10, "pulseInputLevel", 7, 1);
+
+  const modules = parse_xgwx(edited).hardware.modules;
+  const details = (slot) => modules.find((module) => module.base === 1 && module.slot === slot).details;
+  assert.equal(details(8).slice(344, 352), "06000000");
+  assert.equal(details(9).slice(208, 216), "05000000");
+  assert.equal(details(10).slice(26, 28), "03");
+  assert.equal(details(10).slice(56, 58), "80");
+});
+
 test("bundled WASM exposes and edits both DT4A output groups", async (context) => {
   const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
