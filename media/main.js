@@ -31,6 +31,10 @@ import {
   ladderSelectionKeys,
   moveLadderPosition,
 } from "./ladder-selection.js";
+import {
+  captureLadderSelection,
+  planLadderPaste,
+} from "./ladder-clipboard.js";
 import { groupModuleOptions } from "./module-option-groups.js";
 import {
   COIL_ELEMENT_CHOICES,
@@ -66,6 +70,7 @@ let selectedNetworkIndex = 0;
 let selectedNetworkModuleKey = null;
 let dirty = false;
 let dismissLadderOverlay = null;
+let ladderClipboard = null;
 
 window.addEventListener("message", async ({ data }) => {
   if (data?.type === "load") await loadWorkspace(data);
@@ -802,7 +807,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
       renderProgramInspector(inspector, selected, ladder, cell, selectedBlankCell, selection);
       syncLadderSelectionClasses(canvas, selection.keys, normalized);
     };
-    const deleteSelection = async () => {
+    const deleteSelection = async (label = null) => {
       const selection = currentLadderSelection(ladder);
       if (!ladder.structuralEditing || !selection.decodedCells.length
         || selection.decodedCells.some((cell) => !structuralElement(cell))) return false;
@@ -815,7 +820,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
             expected: structuralElement(cell), replacement: null,
           },
         ), current.file.bytes),
-        `Delete ${editableCells.length} ladder element${editableCells.length === 1 ? "" : "s"}`,
+        label || `Delete ${editableCells.length} ladder element${editableCells.length === 1 ? "" : "s"}`,
       );
       if (edited && activeKey) {
         requestAnimationFrame(() => document.querySelector(`[data-ladder-key="${activeKey}"]`)?.focus());
@@ -889,11 +894,19 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
   let dragSelecting = false;
   const bindSelection = (node, position) => {
     const key = ladderPositionKey(position);
+    let preserveSelectionOnFocus = false;
     node.dataset.ladderKey = key;
     node.classList.toggle("selected", selectedKeys.has(key));
     node.classList.toggle("active", activeKey === key);
     node.setAttribute("aria-selected", String(selectedKeys.has(key)));
     node.addEventListener("pointerdown", (event) => {
+      if (event.button === 2) {
+        preserveSelectionOnFocus = ladderSelectionKeys(
+          rowValues, selectedLadderAnchor, selectedLadderFocus,
+        ).has(key);
+        setTimeout(() => { preserveSelectionOnFocus = false; }, 0);
+        return;
+      }
       if (event.button !== 0) return;
       dragSelecting = true;
       selectPosition(position, event.shiftKey);
@@ -905,12 +918,15 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
       if (dragSelecting && (event.buttons & 1)) selectPosition(position, true);
     });
     node.addEventListener("focus", () => {
+      if (preserveSelectionOnFocus) return;
       if (ladderPositionKey(selectedLadderFocus || {}) !== key) selectPosition(position, false);
     });
     node.addEventListener("contextmenu", (event) => {
       event.preventDefault();
-      selectPosition(position, false);
-      showLadderContextMenu(event.clientX, event.clientY, ladder, position);
+      if (!ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus).has(key)) {
+        selectPosition(position, false);
+      }
+      showLadderContextMenu(event.clientX, event.clientY, ladder, position, deleteSelection);
     });
     node.addEventListener("keydown", async (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l" && ladder.structuralEditing) {
@@ -1082,15 +1098,97 @@ function installLadderOverlayDismissal(overlay) {
   return close;
 }
 
-function showLadderContextMenu(clientX, clientY, ladder, position) {
+function normalizedLadderCells(ladder) {
+  return (ladder.cells || []).map((cell) => ({
+    rawY: cell.rawY,
+    column: ldCellColumn(cell.rawX),
+    element: structuralElement(cell),
+  }));
+}
+
+function selectedLadderClipboard(ladder) {
+  return captureLadderSelection(
+    ladder.rungs.map((rung) => rung.rawY),
+    selectedLadderAnchor,
+    selectedLadderFocus,
+    normalizedLadderCells(ladder),
+  );
+}
+
+function ladderPasteEdits(ladder, position) {
+  return planLadderPaste(
+    ladderClipboard,
+    ladder.rungs.map((rung) => rung.rawY),
+    position,
+    normalizedLadderCells(ladder),
+    LD_COLUMN_COUNT,
+  );
+}
+
+function showLadderContextMenu(clientX, clientY, ladder, position, deleteSelection) {
   closeLadderOverlay();
   const menu = element("div", "ladder-context-menu");
   menu.setAttribute("role", "menu");
-  menu.setAttribute("aria-label", "Ladder comments");
+  menu.setAttribute("aria-label", "Ladder cell actions");
   const close = installLadderOverlayDismissal(menu);
-  const addComment = (kind, label) => {
-    const item = button(label, "ladder-context-item", () => {
+  const addItem = (label, action) => {
+    const item = button(label, "ladder-context-item", async () => {
       close();
+      await action();
+    });
+    item.setAttribute("role", "menuitem");
+    item.textContent = label;
+    return item;
+  };
+
+  let copiedSelection = null;
+  let copyError = "Structural editing is unavailable for this program layout";
+  if (ladder.structuralEditing) {
+    try {
+      copiedSelection = selectedLadderClipboard(ladder);
+      copyError = "";
+    } catch (error) {
+      copyError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const copy = addItem("Copy", () => { ladderClipboard = copiedSelection; });
+  copy.disabled = !copiedSelection;
+  copy.title = copyError || `Copy ${copiedSelection.cells.length} ladder element${copiedSelection.cells.length === 1 ? "" : "s"}`;
+  const cut = addItem("Cut", async () => {
+    const edited = await deleteSelection(
+      `Cut ${copiedSelection.cells.length} ladder element${copiedSelection.cells.length === 1 ? "" : "s"}`,
+    );
+    if (edited) ladderClipboard = copiedSelection;
+  });
+  cut.disabled = !copiedSelection;
+  cut.title = copyError || `Cut ${copiedSelection.cells.length} ladder element${copiedSelection.cells.length === 1 ? "" : "s"}`;
+
+  let pasteEdits = null;
+  let pasteError = "Structural editing is unavailable for this program layout";
+  if (ladder.structuralEditing) {
+    try {
+      pasteEdits = ladderPasteEdits(ladder, position);
+      pasteEdits.reduce((bytes, edit) => (
+        edit_xgwx_ladder_cell(bytes, selectedProgramIndex, edit)
+      ), current.file.bytes);
+      pasteError = "";
+    } catch (error) {
+      pasteError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const paste = addItem("Paste", async () => {
+    await applyEdit(
+      () => pasteEdits.reduce((bytes, edit) => (
+        edit_xgwx_ladder_cell(bytes, selectedProgramIndex, edit)
+      ), current.file.bytes),
+      `Paste ${ladderClipboard.cells.length} ladder element${ladderClipboard.cells.length === 1 ? "" : "s"}`,
+    );
+  });
+  paste.disabled = !pasteEdits;
+  paste.title = pasteError || `Paste ${ladderClipboard.cells.length} ladder element${ladderClipboard.cells.length === 1 ? "" : "s"}`;
+
+  const addComment = (kind, label) => {
+    const item = addItem(label, () => {
       showLadderCommentEditor(clientX, clientY, {
         kind,
         rawY: position.rawY,
@@ -1098,8 +1196,6 @@ function showLadderContextMenu(clientX, clientY, ladder, position) {
         text: "",
       });
     });
-    item.setAttribute("role", "menuitem");
-    item.textContent = label;
     return item;
   };
   const rung = addComment("Rung", "Add rung comment above");
@@ -1111,7 +1207,9 @@ function showLadderContextMenu(clientX, clientY, ladder, position) {
   const output = addComment("Output", "Add output comment");
   output.disabled = !ladder.structuralEditing
     || (ladder.outputComments || []).some((comment) => comment.rawY === position.rawY);
-  menu.append(rung, output);
+  const separator = element("div", "ladder-context-separator");
+  separator.setAttribute("role", "separator");
+  menu.append(copy, cut, paste, separator, rung, output);
   positionLadderOverlay(menu, clientX, clientY);
   menu.querySelector(":not(:disabled)")?.focus();
 }

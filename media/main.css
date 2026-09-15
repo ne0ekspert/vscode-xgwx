@@ -772,6 +772,12 @@ button.tree-row:hover,
   color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
 }
 
+.ladder-context-separator {
+  height: 1px;
+  margin: 4px 5px;
+  background: var(--vscode-menu-separatorBackground, var(--vscode-panel-border));
+}
+
 .ladder-comment-editor {
   display: grid;
   width: min(340px, calc(100vw - 16px));

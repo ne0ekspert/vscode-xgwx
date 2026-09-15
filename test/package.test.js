@@ -30,7 +30,7 @@ test("registers a default editable XGWX custom editor", () => {
 });
 
 test("ships the parser assets used by the webview", () => {
-  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/module-option-groups.js", "media/main.js", "media/main.css"]) {
+  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/ladder-clipboard.js", "media/module-option-groups.js", "media/main.js", "media/main.css"]) {
     const stat = fs.statSync(path.join(root, asset));
     assert.ok(stat.size > 0, `${asset} should not be empty`);
   }
@@ -75,6 +75,10 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
   assert.match(script, /edit_xgwx_ladder_cell/);
   assert.match(script, /event\.shiftKey/);
   assert.match(script, /event\.key === "Delete"/);
+  assert.match(script, /Copy/);
+  assert.match(script, /Cut/);
+  assert.match(script, /Paste/);
+  assert.match(script, /ladderSelectionKeys\(rowValues, selectedLadderAnchor, selectedLadderFocus\)\.has\(key\)/);
   assert.doesNotMatch(script, /Decoded cells/);
   assert.match(script, /ladder\.horizontalLines/);
   assert.match(script, /ladder\.verticalLines/);
