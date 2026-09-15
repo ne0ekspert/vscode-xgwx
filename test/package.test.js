@@ -70,7 +70,7 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
 
   assert.match(script, /const LD_COLUMN_COUNT = 10;/);
   assert.match(script, /function renderLadderDiagram\b/);
-  assert.match(script, /moveLadderPosition/);
+  assert.match(script, /moveLadderCursor/);
   assert.match(script, /ladderSelectionKeys/);
   assert.match(script, /edit_xgwx_ladder_cell/);
   assert.match(script, /event\.shiftKey/);
@@ -78,6 +78,9 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
   assert.match(script, /Copy/);
   assert.match(script, /Cut/);
   assert.match(script, /Paste/);
+  assert.match(script, /Delete rung comment/);
+  assert.match(script, /event\.key === "Backspace"/);
+  assert.match(script, /data-ladder-comment-key/);
   assert.match(script, /ladderSelectionKeys\(rowValues, selectedLadderAnchor, selectedLadderFocus\)\.has\(key\)/);
   assert.doesNotMatch(script, /Decoded cells/);
   assert.match(script, /ladder\.horizontalLines/);

@@ -13,6 +13,28 @@ export function cpu_catalog() {
 }
 
 /**
+ * Delete a supported native rung comment.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} raw_y
+ * @param {string} expected
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_ladder_rung_comment(bytes, program_index, raw_y, expected) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_ladder_rung_comment(ptr0, len0, program_index, raw_y, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Delete one module and return rewritten `.xgwx` bytes.
  * @param {Uint8Array} bytes
  * @param {number} base

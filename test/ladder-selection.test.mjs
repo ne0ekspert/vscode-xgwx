@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   ladderSelectionKeys,
+  moveLadderCursor,
   moveLadderPosition,
 } from "../media/ladder-selection.js";
 
@@ -28,4 +29,18 @@ test("range selection includes every grid position in its rectangle", () => {
     { rawY: 4, column: 4 },
   );
   assert.deepEqual([...keys], ["0:2", "0:3", "0:4", "4:2", "4:3", "4:4"]);
+});
+
+test("arrow movement lands on rung comments and returns to the ladder column", () => {
+  const layoutRows = [
+    { type: "comment", comment: { rawY: 0 } },
+    { type: "rung", rawY: 4 },
+    { type: "rung", rawY: 8 },
+  ];
+  assert.deepEqual(moveLadderCursor(
+    layoutRows, { type: "rung", rawY: 4, column: 3 }, "ArrowUp",
+  ), { type: "comment", rawY: 0, column: 3 });
+  assert.deepEqual(moveLadderCursor(
+    layoutRows, { type: "comment", rawY: 0, column: 3 }, "ArrowDown",
+  ), { type: "rung", rawY: 4, column: 3 });
 });

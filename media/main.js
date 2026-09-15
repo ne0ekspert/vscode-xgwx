@@ -1,5 +1,6 @@
 import init, {
   cpu_catalog,
+  delete_xgwx_ladder_rung_comment,
   delete_xgwx_module,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
@@ -29,7 +30,7 @@ import {
 import {
   ladderPositionKey,
   ladderSelectionKeys,
-  moveLadderPosition,
+  moveLadderCursor,
 } from "./ladder-selection.js";
 import {
   captureLadderSelection,
@@ -65,6 +66,7 @@ let selectedCellOffset = null;
 let selectedBlankCell = null;
 let selectedLadderAnchor = null;
 let selectedLadderFocus = null;
+let selectedLadderComment = null;
 let selectedVariableIndex = 0;
 let selectedNetworkIndex = 0;
 let selectedNetworkModuleKey = null;
@@ -785,6 +787,11 @@ function renderProgramsEditor(canvas, inspector, programs) {
 
   if (ladder?.structuralEditing && !ladder.rungs.length) ladder.rungs = [{ rawY: 0 }];
   if (ladder) {
+    if (selectedLadderComment && !(ladder.rungComments || []).some((comment) => (
+      selectedLadderComment.kind === "Rung" && comment.rawY === selectedLadderComment.rawY
+    ))) {
+      selectedLadderComment = null;
+    }
     const rowValues = ladder.rungs.map((rung) => rung.rawY);
     if (selectedLadderFocus && !rowValues.includes(selectedLadderFocus.rawY)) {
       resetLadderSelection();
@@ -798,6 +805,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
       const rowIndex = rowValues.indexOf(position.rawY);
       if (rowIndex < 0) return;
       const normalized = { rawY: position.rawY, rowIndex, column: position.column };
+      selectedLadderComment = null;
       if (!extend || !selectedLadderAnchor) selectedLadderAnchor = normalized;
       selectedLadderFocus = normalized;
       const cell = ladderCellAtPosition(ladder, normalized);
@@ -806,6 +814,18 @@ function renderProgramsEditor(canvas, inspector, programs) {
       const selection = currentLadderSelection(ladder);
       renderProgramInspector(inspector, selected, ladder, cell, selectedBlankCell, selection);
       syncLadderSelectionClasses(canvas, selection.keys, normalized);
+      syncLadderCommentSelectionClasses(canvas, null);
+    };
+    const selectComment = (comment, column = null) => {
+      const activeColumn = column ?? selectedLadderFocus?.column ?? selectedLadderComment?.column ?? 0;
+      selectedCellOffset = null;
+      selectedBlankCell = null;
+      selectedLadderAnchor = null;
+      selectedLadderFocus = null;
+      selectedLadderComment = { kind: comment.kind, rawY: comment.rawY, column: activeColumn };
+      renderProgramInspector(inspector, selected, ladder, null, null, currentLadderSelection(ladder));
+      syncLadderSelectionClasses(canvas, new Set(), null);
+      syncLadderCommentSelectionClasses(canvas, selectedLadderComment);
     };
     const deleteSelection = async (label = null) => {
       const selection = currentLadderSelection(ladder);
@@ -828,7 +848,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
       return edited;
     };
     canvas.append(editorHeader("Ladder diagram", `${ladder.rungs.length} rungs · ${LD_COLUMN_COUNT} columns`));
-    canvas.append(renderLadderDiagram(ladder, selectPosition, deleteSelection));
+    canvas.append(renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelection));
   } else {
     canvas.append(emptyState("This program has no decoded ladder body."));
   }
@@ -845,6 +865,7 @@ function resetLadderSelection() {
   selectedBlankCell = null;
   selectedLadderAnchor = null;
   selectedLadderFocus = null;
+  selectedLadderComment = null;
 }
 
 function ladderCellAtPosition(ladder, position) {
@@ -876,7 +897,20 @@ function syncLadderSelectionClasses(canvas, keys, focus) {
   });
 }
 
-function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
+function ladderCommentKey(comment) {
+  return `${comment.kind}:${comment.rawY}`;
+}
+
+function syncLadderCommentSelectionClasses(canvas, comment) {
+  const selectedKey = comment ? ladderCommentKey(comment) : null;
+  canvas.querySelectorAll("[data-ladder-comment-key]").forEach((item) => {
+    const selected = item.dataset.ladderCommentKey === selectedKey;
+    item.classList.toggle("selected", selected);
+    item.setAttribute("aria-pressed", String(selected));
+  });
+}
+
+function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelection) {
   const viewport = element("div", "ld-viewport");
   const board = element("div", "ld-board");
   const rowValues = ladder.rungs.map((rung) => rung.rawY);
@@ -892,6 +926,19 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
   board.style.height = `${height}px`;
 
   let dragSelecting = false;
+  const focusCursor = (cursor, extend = false) => {
+    if (!cursor) return;
+    if (cursor.type === "comment") {
+      const target = (ladder.rungComments || []).find((comment) => comment.rawY === cursor.rawY);
+      if (!target) return;
+      selectComment({ kind: "Rung", ...target, expected: target.text }, cursor.column);
+      board.querySelector(`[data-ladder-comment-key="Rung:${cursor.rawY}"]`)?.focus();
+      return;
+    }
+    const position = { rawY: cursor.rawY, column: cursor.column };
+    selectPosition(position, extend);
+    board.querySelector(`[data-ladder-key="${ladderPositionKey(position)}"]`)?.focus();
+  };
   const bindSelection = (node, position) => {
     const key = ladderPositionKey(position);
     let preserveSelectionOnFocus = false;
@@ -936,10 +983,9 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
       }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
         event.preventDefault();
-        const next = moveLadderPosition(rowValues, position, event.key, LD_COLUMN_COUNT);
-        if (!next) return;
-        selectPosition(next, event.shiftKey);
-        board.querySelector(`[data-ladder-key="${ladderPositionKey(next)}"]`)?.focus();
+        focusCursor(moveLadderCursor(layoutRows, {
+          type: "rung", rawY: position.rawY, column: position.column,
+        }, event.key, LD_COLUMN_COUNT), event.shiftKey);
       }
       if (event.key === "Delete" && !event.repeat) {
         event.preventDefault();
@@ -1010,18 +1056,56 @@ function renderLadderDiagram(ladder, selectPosition, deleteSelection) {
   layoutRows.forEach((row, layoutIndex) => {
     if (row.type !== "comment") return;
     const note = element("div", "ld-rung-comment", row.comment.text);
+    const comment = {
+      kind: "Rung",
+      rawY: row.comment.rawY,
+      expected: row.comment.text,
+      text: row.comment.text,
+    };
+    const commentKey = ladderCommentKey(comment);
+    const selected = ladderCommentKey(selectedLadderComment || {}) === commentKey;
+    note.dataset.ladderCommentKey = commentKey;
+    note.tabIndex = 0;
+    note.setAttribute("role", "button");
+    note.setAttribute("aria-label", `Rung comment: ${row.comment.text}`);
+    note.setAttribute("aria-pressed", String(selected));
+    note.classList.toggle("selected", selected);
     note.style.left = `${LD_LEFT_RAIL + 1}px`;
     note.style.width = `${LD_RIGHT_RAIL - LD_LEFT_RAIL - 2}px`;
     note.style.top = `${ldRowY(layoutIndex)}px`;
     note.title = "Double-click to edit rung comment";
+    note.addEventListener("click", () => selectComment(comment));
+    note.addEventListener("focus", () => {
+      if (ladderCommentKey(selectedLadderComment || {}) !== commentKey) selectComment(comment);
+    });
     note.addEventListener("dblclick", (event) => {
       event.preventDefault();
-      showLadderCommentEditor(event.clientX, event.clientY, {
-        kind: "Rung",
-        rawY: row.comment.rawY,
-        expected: row.comment.text,
-        text: row.comment.text,
-      });
+      selectComment(comment);
+      showLadderCommentEditor(event.clientX, event.clientY, comment);
+    });
+    note.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      selectComment(comment);
+      showRungCommentContextMenu(event.clientX, event.clientY, comment);
+    });
+    note.addEventListener("keydown", async (event) => {
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        event.preventDefault();
+        focusCursor(moveLadderCursor(layoutRows, {
+          type: "comment", rawY: comment.rawY, column: selectedLadderComment?.column ?? 0,
+        }, event.key, LD_COLUMN_COUNT));
+        return;
+      }
+      if ((event.key === "Delete" || event.key === "Backspace") && !event.repeat) {
+        event.preventDefault();
+        await deleteRungComment(comment, selectedLadderComment?.column ?? 0);
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const bounds = note.getBoundingClientRect();
+        showLadderCommentEditor(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2, comment);
+      }
     });
     board.append(note);
   });
@@ -1212,6 +1296,64 @@ function showLadderContextMenu(clientX, clientY, ladder, position, deleteSelecti
   menu.append(copy, cut, paste, separator, rung, output);
   positionLadderOverlay(menu, clientX, clientY);
   menu.querySelector(":not(:disabled)")?.focus();
+}
+
+function showRungCommentContextMenu(clientX, clientY, comment) {
+  closeLadderOverlay();
+  const menu = element("div", "ladder-context-menu");
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "Rung comment actions");
+  const close = installLadderOverlayDismissal(menu);
+  const addItem = (label, action) => {
+    const item = button(label, "ladder-context-item", async () => {
+      close();
+      await action();
+    });
+    item.setAttribute("role", "menuitem");
+    item.textContent = label;
+    return item;
+  };
+  const edit = addItem("Edit rung comment", () => {
+    showLadderCommentEditor(clientX, clientY, comment);
+  });
+  const remove = addItem("Delete rung comment", async () => {
+    await deleteRungComment(comment, selectedLadderComment?.column ?? 0);
+  });
+  const separator = element("div", "ladder-context-separator");
+  separator.setAttribute("role", "separator");
+  menu.append(edit, separator, remove);
+  positionLadderOverlay(menu, clientX, clientY);
+  edit.focus();
+}
+
+async function deleteRungComment(comment, column = 0) {
+  selectedLadderComment = null;
+  const edited = await applyEdit(() => delete_xgwx_ladder_rung_comment(
+    current.file.bytes,
+    selectedProgramIndex,
+    comment.rawY,
+    comment.expected,
+  ), "Delete rung comment");
+  if (!edited) {
+    selectedLadderComment = { kind: "Rung", rawY: comment.rawY, column };
+    renderWorkspace();
+    requestAnimationFrame(() => document.querySelector(
+      `[data-ladder-comment-key="${ladderCommentKey(selectedLadderComment)}"]`,
+    )?.focus());
+    return false;
+  }
+  requestAnimationFrame(() => {
+    const exact = document.querySelector(`[data-ladder-key="${comment.rawY}:${column}"]`);
+    const nearest = [...document.querySelectorAll("[data-ladder-key]")]
+      .sort((left, right) => {
+        const [leftRow, leftColumn] = left.dataset.ladderKey.split(":").map(Number);
+        const [rightRow, rightColumn] = right.dataset.ladderKey.split(":").map(Number);
+        return Math.abs(leftRow - comment.rawY) - Math.abs(rightRow - comment.rawY)
+          || Math.abs(leftColumn - column) - Math.abs(rightColumn - column);
+      })[0];
+    (exact || nearest)?.focus();
+  });
+  return true;
 }
 
 function showLadderCommentEditor(clientX, clientY, comment) {

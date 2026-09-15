@@ -721,7 +721,22 @@ button.tree-row:hover,
   background: color-mix(in srgb, var(--vscode-comments-foreground, var(--vscode-descriptionForeground)) 6%, var(--vscode-editor-background));
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: text;
+  cursor: pointer;
+}
+
+.ld-rung-comment:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.ld-rung-comment.selected {
+  border-color: var(--vscode-focusBorder);
+  color: var(--vscode-list-activeSelectionForeground);
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+.ld-rung-comment:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -2px;
 }
 
 .ld-output-comment {

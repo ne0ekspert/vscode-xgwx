@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import init, {
   cpu_catalog,
+  delete_xgwx_ladder_rung_comment,
   delete_xgwx_module,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
@@ -380,6 +381,15 @@ test("bundled WASM edits and creates rung and output comments", async () => {
   assert.throws(() => edit_xgwx_ladder_comment(bytes, 0, {
     kind: "Output", rawY: 4, expected: "stale", replacement: "Rejected",
   }), /changed/);
+
+  const withoutRung = delete_xgwx_ladder_rung_comment(source, 0, 0, "렁 설명문 1");
+  const deleted = parse_xgwx(withoutRung).ladder[0];
+  assert.equal(deleted.rungComments.length, 0);
+  assert.equal(deleted.outputComments[0].rawY, 0);
+  const restored = edit_xgwx_ladder_comment(withoutRung, 0, {
+    kind: "Rung", rawY: 0, expected: null, replacement: "렁 설명문 1",
+  });
+  assert.deepEqual(parse_xgwx(restored).ladder[0], parse_xgwx(source).ladder[0]);
 
   const empty = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/empty.xgwx")));
   const rung = parse_xgwx(edit_xgwx_ladder_comment(empty, 0, {

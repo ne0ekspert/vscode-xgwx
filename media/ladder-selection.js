@@ -16,6 +16,30 @@ export function moveLadderPosition(rowValues, position, key, columnCount = 10) {
   return { rawY: rowValues[rowIndex], rowIndex, column };
 }
 
+export function moveLadderCursor(layoutRows, cursor, key, columnCount = 10) {
+  if (!layoutRows.length || !cursor) return null;
+  const currentIndex = layoutRows.findIndex((row) => (
+    row.type === cursor.type && (row.type === "comment" ? row.comment.rawY : row.rawY) === cursor.rawY
+  ));
+  if (currentIndex < 0) return null;
+
+  let layoutIndex = currentIndex;
+  let column = Math.max(0, Math.min(columnCount - 1, cursor.column ?? 0));
+  if (key === "ArrowUp") layoutIndex -= 1;
+  if (key === "ArrowDown") layoutIndex += 1;
+  if (key === "ArrowLeft") column -= 1;
+  if (key === "ArrowRight") column += 1;
+  layoutIndex = Math.max(0, Math.min(layoutRows.length - 1, layoutIndex));
+  column = Math.max(0, Math.min(columnCount - 1, column));
+
+  const target = layoutRows[layoutIndex];
+  return {
+    type: target.type,
+    rawY: target.type === "comment" ? target.comment.rawY : target.rawY,
+    column,
+  };
+}
+
 export function ladderSelectionKeys(rowValues, anchor, focus) {
   const keys = new Set();
   if (!anchor || !focus || !rowValues.length) return keys;
