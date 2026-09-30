@@ -3,11 +3,14 @@
   "configurations": [
     {
       "name": "Run XGWX Workspace Viewer",
-      "type": "extensionHost",
-      "request": "launch",
-      "args": [
-        "--extensionDevelopmentPath=${workspaceFolder}"
-      ]
+      "type": "node",
+      "request": "attach",
+      "address": "127.0.0.1",
+      "port": 9230,
+      "timeout": 30000,
+      "continueOnAttach": true,
+      "preLaunchTask": "Launch XGWX Extension Host",
+      "skipFiles": ["<node_internals>/**"]
     }
   ]
 }

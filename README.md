@@ -75,6 +75,12 @@ To run the extension, open this directory in VS Code and press `F5`. In the
 Extension Development Host, open an `.xgwx` file. Use **Reopen Editor With… →
 XGWX Workspace Viewer** if another editor association is already configured.
 
+The debug launch task starts an Extension Development Host paused on inspector
+port `9230`, then attaches the Node debugger directly to `127.0.0.1`. This avoids
+the bundled JavaScript debugger's failing IPv4/IPv6 discovery during
+`extensionHost` launches. Close the previous Development Host before starting
+another session; the inspector port can serve only one host at a time.
+
 ## Packaging
 
 Install dependencies and create a VSIX:
