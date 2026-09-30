@@ -42,7 +42,7 @@ Module._load = function load(request, parent, isMain) {
   if (request === "vscode") return mockVscode;
   return originalLoad.call(this, request, parent, isMain);
 };
-const { XgwxDocument, XgwxEditorProvider, bytesEqual } = require(path.resolve(__dirname, "../extension.js"));
+const { XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact } = require(path.resolve(__dirname, "../extension.js"));
 Module._load = originalLoad;
 
 function uri(value) {
@@ -116,4 +116,76 @@ test("an edit updates sibling editors without echoing bytes to its source", asyn
   assert.equal(siblingMessages.length, 1);
   assert.equal(siblingMessages[0].type, "load");
   assert.deepEqual(siblingMessages[0].bytes, [1, 9, 3]);
+});
+
+test("native contact prompt accepts suggestions and free text, and cancels without a value", async () => {
+  let picker;
+  mockVscode.window = { createQuickPick: () => {
+    picker = {
+      activeItems: [], items: [],
+      onDidChangeValue(callback) { this.changed = callback; },
+      onDidAccept(callback) { this.accepted = callback; },
+      onDidHide(callback) { this.hidden = callback; },
+      set value(value) { this._value = value; this.changed?.(value); },
+      get value() { return this._value; },
+      show() {}, dispose() {},
+    };
+    return picker;
+  } };
+  const suggested = promptIecContact("%MX709", ["%MX709", "%MX710"], 3);
+  picker.value = "%MX71";
+  assert.deepEqual(picker.items.map((item) => item.label), ["%MX71", "%MX710"]);
+  picker.activeItems = [picker.items[1]];
+  picker.accepted();
+  assert.equal(await suggested, "%MX710");
+
+  const typed = promptIecContact("%MX709", ["%MX709"], 3);
+  picker.value = "NewBool";
+  picker.activeItems = [picker.items[0]];
+  picker.accepted();
+  assert.equal(await typed, "NewBool");
+
+  const canceled = promptIecContact("%MX709", [], 3);
+  picker.hidden();
+  assert.equal(await canceled, undefined);
+});
+
+test("closing the native contact picker returns focus to its webview", async () => {
+  let picker;
+  mockVscode.window = { createQuickPick: () => {
+    picker = {
+      activeItems: [], items: [],
+      onDidChangeValue(callback) { this.changed = callback; },
+      onDidAccept(callback) { this.accepted = callback; },
+      onDidHide(callback) { this.hidden = callback; },
+      set value(value) { this._value = value; this.changed?.(value); },
+      get value() { return this._value; },
+      show() {}, dispose() {},
+    };
+    return picker;
+  } };
+  mockVscode.Uri.joinPath = (root, ...parts) => ({ toString: () => `${root}/${parts.join("/")}` });
+  const provider = new XgwxEditorProvider({ extensionUri: "/extension" });
+  const document = new XgwxDocument(uri("/workspace/program.xgwx"), [1, 2, 3]);
+  const messages = [];
+  const reveals = [];
+  let receive;
+  const panel = {
+    visible: true,
+    webview: {
+      cspSource: "test-source",
+      asWebviewUri: (value) => value,
+      onDidReceiveMessage(callback) { receive = callback; return { dispose() {} }; },
+      async postMessage(message) { messages.push(message); },
+    },
+    reveal(...args) { reveals.push(args); },
+    onDidDispose() {},
+  };
+  await provider.resolveCustomEditor(document, panel);
+  const pending = receive({ type: "promptIecContact", requestId: 42,
+    value: "%MX709", suggestions: [], rowIndex: 3 });
+  picker.hidden();
+  await pending;
+  assert.deepEqual(reveals, [[undefined, false]]);
+  assert.deepEqual(messages, [{ type: "iecContactInputResult", requestId: 42, value: null }]);
 });

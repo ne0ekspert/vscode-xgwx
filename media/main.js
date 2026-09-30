@@ -1,18 +1,73 @@
 import init, {
   cpu_catalog,
+  copy_xgwx_iec_ld_group,
+  copy_xgwx_iec_ld_group_to_program_with_locals,
+  duplicate_xgwx_iec_ld_function_instance,
   delete_xgwx_ladder_rung_comment,
+  delete_xgwx_iec_ld_blank_row,
+  delete_xgwx_iec_ld_branch_top_row,
+  delete_xgwx_iec_ld_nested_contact_branch_row,
+  delete_xgwx_iec_ld_chained_contact_branch_row,
+  delete_xgwx_iec_ld_empty_branch_row,
+  delete_xgwx_iec_ld_ff_branch_output_row,
+  delete_xgwx_iec_ld_contact,
+  delete_xgwx_iec_ld_contact_cell,
+  delete_xgwx_iec_ld_connected_arithmetic,
+  delete_xgwx_iec_ld_eq_chain_head,
+  delete_xgwx_iec_ld_heating_chain_head,
+  delete_xgwx_iec_ld_heating_chain_middle,
+  delete_xgwx_iec_ld_heating_chain_x3_eq_repaired,
+  delete_xgwx_iec_ld_heating_chain_contact_eq,
+  delete_xgwx_iec_ld_heating_chain_x15_eq,
+  delete_xgwx_iec_ld_function_cell,
+  delete_xgwx_iec_ld_group,
+  delete_xgwx_iec_ld_rung,
+  delete_xgwx_iec_ld_terminal_coil,
+  delete_xgwx_iec_ld_simple_row,
+  delete_xgwx_iec_ld_standalone_function,
+  delete_xgwx_iec_ld_terminal_function,
+  delete_xgwx_iec_local_symbol,
   delete_xgwx_module,
+  edit_xgwx_iec_ld_branch_segment,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
   edit_xgwx_ladder_comment,
+  insert_xgwx_iec_ld_contact,
+  insert_xgwx_iec_ld_comment,
+  insert_xgwx_iec_ld_short_wire_contact,
+  insert_xgwx_iec_ld_leading_contact,
+  insert_xgwx_iec_ld_function_cell,
+  insert_xgwx_iec_ld_terminal_move,
+  insert_xgwx_iec_ld_standalone_function,
+  insert_xgwx_iec_ld_blank_row,
+  insert_xgwx_iec_ld_parallel_contact_kind,
+  insert_xgwx_iec_ld_rung,
+  insert_xgwx_iec_ld_terminal_coil,
+  insert_xgwx_iec_local_symbol,
   insert_xgwx_ladder_row,
   insert_xgwx_module,
+  move_xgwx_iec_ld_group,
   parse_xgwx,
+  rename_xgwx_iec_local_symbol,
+  repair_xgwx_iec_ld_horizontal_wire,
+  replace_xgwx_iec_ld_group,
+  replace_xgwx_iec_ld_group_from_program,
+  delete_xgwx_iec_ld_horizontal_wire,
   select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
   set_xgwx_base_slot_count,
   update_xgwx_ladder_cell,
+  update_xgwx_iec_ld_comment,
+  update_xgwx_iec_ld_coil_kind,
+  update_xgwx_iec_ld_arithmetic_function,
+  update_xgwx_iec_ld_contact_kind,
+  update_xgwx_iec_ld_comparison_function,
+  update_xgwx_iec_ld_element_operand,
+  update_xgwx_iec_ld_function_operand,
+  update_xgwx_iec_local_symbol_address,
+  update_xgwx_iec_local_symbol_description,
+  update_xgwx_iec_local_symbol_type,
   update_xgwx_module,
   update_xgwx_network,
   update_xgwx_network_module,
@@ -37,9 +92,15 @@ import {
   planLadderPaste,
 } from "./ladder-clipboard.js";
 import { groupModuleOptions } from "./module-option-groups.js";
+import { iecGapOffsets } from "./iec-layout-positions.js";
 import {
   COIL_ELEMENT_CHOICES,
   CONTACT_ELEMENT_CHOICES,
+  IEC_ADDRESSED_CONTACT_CHOICES,
+  iecContactGlyph,
+  iecContactVariant,
+  xgkContactGlyph,
+  xgkContactVariant,
   elementKindHasOperand,
   structuralElementFromCell,
 } from "./ladder-elements.js";
@@ -53,6 +114,25 @@ const LD_LEFT_RAIL = 34;
 const LD_RIGHT_RAIL = 770;
 const LD_ROW_HEIGHT = 76;
 const LD_FIRST_ROW_Y = 58;
+const IEC_PRIMITIVE_TYPE_NAMES = ["BOOL", "BYTE", "WORD", "DWORD", "LWORD", "SINT", "INT", "DINT", "LINT", "USINT", "UINT", "UDINT", "ULINT", "REAL", "LREAL", "TIME", "DATE", "TIME_OF_DAY", "DATE_AND_TIME"];
+const IEC_CONTACT_KIND_BY_SOURCE_LABEL = new Map(
+  IEC_ADDRESSED_CONTACT_CHOICES.map(([value, , sourceLabel]) => [sourceLabel, value]),
+);
+const IEC_COIL_GLYPH_BY_SOURCE_LABEL = new Map([
+  ["Output coil variable", "( )"],
+  ["Inverse output coil variable", "(/)"],
+  ["Set coil variable", "(S)"],
+  ["Reset coil variable", "(R)"],
+  ["Rising-edge coil variable", "(P)"],
+  ["Falling-edge coil variable", "(N)"],
+]);
+const IEC_COIL_KIND_CHOICES = [
+  ["OUTPUT", "Output"], ["INVERSE", "Inverse output"], ["SET", "Set"],
+  ["RESET", "Reset"], ["RISING", "Rising edge"], ["FALLING", "Falling edge"],
+];
+const IEC_COIL_KIND_BY_SOURCE_LABEL = new Map([
+  "Output", "Inverse output", "Set", "Reset", "Rising-edge", "Falling-edge",
+].map((label, index) => [`${label} coil variable`, IEC_COIL_KIND_CHOICES[index][0]]));
 
 let current = null;
 let moduleCatalog = [];
@@ -73,8 +153,27 @@ let selectedNetworkModuleKey = null;
 let dirty = false;
 let dismissLadderOverlay = null;
 let ladderClipboard = null;
+let iecClipboard = null;
+let selectedIecRow = null;
+let selectedIecElement = null;
+let selectedIecInsertion = null;
+let selectedIecBlank = null;
+let nextContactPromptId = 0;
+const pendingContactPrompts = new Map();
 
 window.addEventListener("message", async ({ data }) => {
+  if (data?.type === "iecContactInputResult") {
+    const pending = pendingContactPrompts.get(data.requestId);
+    if (pending) {
+      pendingContactPrompts.delete(data.requestId);
+      pending.resolve(data.value);
+      requestAnimationFrame(() => {
+        if (current?.file.uri !== pending.fileUri
+          || selectedProgramIndex !== pending.programIndex) return;
+        document.querySelector(pending.focusSelector)?.focus({ preventScroll: true });
+      });
+    }
+  }
   if (data?.type === "load") await loadWorkspace(data);
   if (data?.type === "error") renderError(data.message);
   if (data?.type === "saved" || data?.type === "reverted") {
@@ -89,6 +188,13 @@ vscode.postMessage({ type: "ready" });
 async function loadWorkspace(file) {
   renderLoading(`Parsing ${file.fileName}…`);
   try {
+    if (current?.file.uri !== file.uri) {
+      iecClipboard = null;
+      selectedIecRow = null;
+      selectedIecElement = null;
+      selectedIecInsertion = null;
+      selectedIecBlank = null;
+    }
     await wasmReady;
     if (!moduleCatalog.length) moduleCatalog = xgk_module_catalog();
     if (!cpuCatalog.length) cpuCatalog = cpu_catalog();
@@ -219,6 +325,10 @@ function buildProgramGroup(programs) {
     row.classList.toggle("selected", activeView === "programs" && selectedProgramIndex === index);
     row.addEventListener("click", () => {
       selectedProgramIndex = index;
+      selectedIecRow = null;
+      selectedIecElement = null;
+      selectedIecInsertion = null;
+      selectedIecBlank = null;
       resetLadderSelection();
       selectView("programs");
     });
@@ -316,7 +426,7 @@ function renderEditor(editor, summary, inspector) {
   if (activeView === "hardware") renderHardwareEditor(canvas, inspector, summary.hardware || {});
   if (activeView === "programs") renderProgramsEditor(canvas, inspector, summary.programs || []);
   if (activeView === "networks") renderNetworksEditor(canvas, inspector, summary);
-  if (activeView === "variables") renderVariablesEditor(canvas, inspector, summary.variables || []);
+  if (activeView === "variables") renderVariablesEditor(canvas, inspector, summary.variables || [], summary.localVariables || [], summary.programs || []);
   if (activeView === "parameters") renderParametersEditor(canvas, inspector, summary.parameters || []);
   if (activeView === "overview") renderOverviewEditor(canvas, inspector, summary, current.file);
 
@@ -766,16 +876,20 @@ function renderProgramsEditor(canvas, inspector, programs) {
   const selected = programs[selectedProgramIndex] || null;
   const ladder = (current.summary.ladder || []).find((item) => item.programIndex === selectedProgramIndex) || null;
 
-  canvas.append(editorHeader("Programs", `${programs.length} program records · supported fields are editable`));
-  const table = createTable(["Name", "Task", "Kind", "Version", "Comment"]);
+  canvas.append(editorHeader("Programs", `${programs.length} program records · program metadata is editable`));
+  const table = createTable(["Name", "Task", "Language", "Kind", "Version", "Comment"]);
   programs.forEach((program, index) => {
     const row = table.tBodies[0].insertRow();
     row.className = selectedProgramIndex === index ? "selected" : "";
     row.tabIndex = 0;
-    appendCells(row, [program.name || `Program ${index + 1}`, program.task, program.kind, program.version, program.comment]);
+    const body = (current.summary.ladder || []).find((item) => item.programIndex === index);
+    appendCells(row, [program.name || `Program ${index + 1}`, program.task, programLanguage(body), program.kind, program.version, program.comment]);
     const select = () => {
       selectedProgramIndex = index;
       resetLadderSelection();
+      selectedIecElement = null;
+      selectedIecInsertion = null;
+      selectedIecBlank = null;
       renderWorkspace();
     };
     row.addEventListener("click", select);
@@ -784,6 +898,69 @@ function renderProgramsEditor(canvas, inspector, programs) {
     });
   });
   canvas.append(tableContainer(table, programs.length));
+
+  if (ladder?.projectType === 2) {
+    const editableCount = (ladder.sourceStrings || []).filter((item) => item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction).length;
+    canvas.append(editorHeader(
+      `${programLanguage(ladder)} payload`,
+      `${ladder.iecRows?.length || 0} stored rows · ${ladder.iecRecords?.length || 0} records · ${ladder.iecFunctions?.length || 0} function blocks · ${ladder.iecFunctionReferences?.length || 0} block links · ${(ladder.iecTerminalFunctionDeletionSites?.length || 0) + (ladder.iecStandaloneFunctionDeletionSites?.length || 0) + (ladder.iecFunctionCellDeletionSites?.length || 0) + (ladder.iecConnectedArithmeticDeletionSites?.length || 0)} function deletions · ${(ladder.iecTerminalFunctionInsertionSites?.length || 0) + (ladder.iecStandaloneFunctionInsertionSites?.length || 0) + (ladder.iecFunctionCellInsertionSites?.length || 0)} function insertions · ${(ladder.iecNoContactInsertionSites?.length || 0) + (ladder.iecShortWireContactInsertionSites?.length || 0)} contact insertion sites · ${ladder.iecNoContactCellDeletionSites?.length || 0} cell deletions · ${ladder.iecHorizontalWireDeletionSites?.length || 0} removable wires · ${ladder.iecHorizontalWireRepairSites?.length || 0} wire gaps · ${editableCount} editable records`,
+    ));
+    const selectedElement = selectedIecElement?.programIndex === selectedProgramIndex
+      ? (ladder.sourceStrings || []).find((item) => item.offset === selectedIecElement.offset) : null;
+    if (!selectedElement) selectedIecElement = null;
+    const selectedInsertion = selectedIecInsertion?.programIndex === selectedProgramIndex
+      ? [...(ladder.iecNoContactInsertionSites || []).map((site) => ({ ...site, type: "long" })),
+        ...(ladder.iecShortWireContactInsertionSites || []).map((site) => ({ ...site, type: "short" }))]
+        .find((site) => site.type === selectedIecInsertion.type
+          && site.wireOffset === selectedIecInsertion.wireOffset) : null;
+    if (!selectedInsertion) selectedIecInsertion = null;
+    const selectedRow = selectedIecRow?.programIndex === selectedProgramIndex
+      ? selectedIecRow.rowIndex : null;
+    const selectedBlank = selectedIecBlank?.programIndex === selectedProgramIndex
+      && !iecOccupiedCell(ladder, selectedIecBlank.rowIndex, selectedIecBlank.rawX)
+      ? selectedIecBlank : null;
+    if (!selectedBlank) selectedIecBlank = null;
+    canvas.append(renderIecLayout(ladder, (item, marker) => {
+      selectedIecElement = { programIndex: selectedProgramIndex, offset: item.offset };
+      selectedIecInsertion = null;
+      selectedIecBlank = null;
+      canvas.querySelectorAll(".iec-layout-marker.inspected").forEach((node) => node.classList.remove("inspected"));
+      canvas.querySelectorAll(".iec-layout-insert.inspected").forEach((node) => node.classList.remove("inspected"));
+      marker.classList.add("inspected");
+      renderProgramInspector(inspector, selected, ladder, item, null, null, null, item.iecRowIndex);
+    }, (site, marker) => {
+      selectedIecElement = null;
+      selectedIecInsertion = { programIndex: selectedProgramIndex,
+        type: site.type, wireOffset: site.wireOffset };
+      selectedIecBlank = null;
+      canvas.querySelectorAll(".iec-layout-marker.inspected, .iec-layout-insert.inspected")
+        .forEach((node) => node.classList.remove("inspected"));
+      marker.classList.add("inspected");
+      renderProgramInspector(inspector, selected, ladder, null, null, null, site, site.rowIndex);
+    }, (rowIndex) => {
+      selectedIecElement = null;
+      selectedIecInsertion = null;
+      selectedIecBlank = null;
+      canvas.querySelectorAll(".iec-layout-marker.inspected, .iec-layout-insert.inspected")
+        .forEach((node) => node.classList.remove("inspected"));
+      renderProgramInspector(inspector, selected, ladder, null, null, null, null, rowIndex);
+    }, (position) => {
+      selectedIecElement = null;
+      selectedIecInsertion = null;
+      selectedIecBlank = { programIndex: selectedProgramIndex, ...position };
+      canvas.querySelectorAll(".iec-layout-marker.inspected, .iec-layout-insert.inspected")
+        .forEach((node) => node.classList.remove("inspected"));
+      renderProgramInspector(inspector, selected, ladder, null, null, null, null,
+        position.rowIndex, selectedIecBlank);
+    }));
+    const records = document.createElement("details");
+    records.className = "iec-records-details";
+    records.append(element("summary", "", "Stored IEC records"), renderIecProgramSource(ladder));
+    canvas.append(records);
+    renderProgramInspector(inspector, selected, ladder, selectedElement, null, null,
+      selectedInsertion, selectedRow, selectedBlank);
+    return;
+  }
 
   if (ladder?.structuralEditing && !ladder.rungs.length) ladder.rungs = [{ rawY: 0 }];
   if (ladder) {
@@ -860,6 +1037,2557 @@ function renderProgramsEditor(canvas, inspector, programs) {
   renderProgramInspector(inspector, selected, ladder, selectedCell, selectedBlankCell, selection);
 }
 
+function programLanguage(body) {
+  const version = body?.version || "";
+  if (/^LD\s+VER\b/i.test(version)) return "Ladder Diagram";
+  if (/^SFC\s+VER\b/i.test(version)) return "SFC";
+  if (/^ST\s+VER\b/i.test(version)) return "Structured Text";
+  return version || "Unknown";
+}
+
+function iecOccupiedCell(body, rowIndex, rawX) {
+  const rows = body.iecRows || [];
+  if (!rows.length || rowIndex < 0
+    || rowIndex > Math.max(...rows.map((row) => row.rowIndex)) + 1
+    || rawX < 1 || rawX > 97 || (rawX - 1) % 3 !== 0) return true;
+  if ((body.sourceStrings || []).some((item) => item.isIecComment
+    && item.iecRowIndex === rowIndex)) return true;
+  const areas = body.iecCircuitGraph?.occupiedAreas;
+  if (areas) return areas.some((area) => area.kind !== "horizontalWire"
+    && rowIndex >= area.startRowIndex && rowIndex <= area.endRowIndex
+    && rawX >= area.startX && rawX <= area.endX);
+  return (body.sourceStrings || []).some((item) => item.iecRowIndex === rowIndex
+    && item.iecPosition?.[0] === rawX
+    && (item.iecElementKind || item.isIecFunctionName));
+}
+
+function iecContactInsertionSiteAt(body, rowIndex, rawX) {
+  const leading = (body.iecLeadingContactInsertionSites || [])
+    .find((site) => site.rowIndex === rowIndex && rawX === 1);
+  if (leading) return { ...leading, type: "leading" };
+  const short = (body.iecShortWireContactInsertionSites || [])
+    .find((site) => site.rowIndex === rowIndex && site.rawX === rawX);
+  if (short) return { ...short, type: "short" };
+  const long = (body.iecNoContactInsertionSites || [])
+    .find((site) => site.rowIndex === rowIndex
+      && rawX >= site.startX + 3 && rawX + 3 <= site.endX
+      && (rawX - site.startX) % 3 === 0);
+  return long ? { ...long, type: "long" } : null;
+}
+
+function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow, selectBlank) {
+  const section = element("section", "iec-layout");
+  section.append(element("h3", "", "IEC ladder layout"));
+  section.append(element("p", "muted",
+    "Select a row label, then Ctrl+C to copy its network. Select an empty row and Ctrl+V to paste, including missing local variables. Click an empty cell to inspect it, or select a contact, coil, or + insertion point to edit."));
+  const rows = body.iecRows || [];
+  if (!rows.length) {
+    section.append(emptyState("No decoded IEC rows."));
+    return section;
+  }
+  const pitch = 68;
+  const scale = 24;
+  const left = 76;
+  const top = 32;
+  const x = (storedX) => left + storedX * scale;
+  const gapOffset = iecGapOffsets(body);
+  const visualX = (rowIndex, storedX) => x(storedX - gapOffset(rowIndex, storedX));
+  const y = (rowIndex) => top + rowIndex * pitch;
+  const maxRow = Math.max(...rows.map((row) => row.rowIndex));
+  const rowByIndex = new Map(rows.map((row) => [row.rowIndex, row]));
+  const viewport = element("div", "iec-layout-viewport");
+  const board = element("div", "iec-layout-board");
+  board.style.width = `${x(100) + 32}px`;
+  board.style.height = `${y(maxRow + 1) + pitch}px`;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.classList.add("iec-layout-wires");
+  svg.setAttribute("viewBox", `0 0 ${x(100) + 32} ${y(maxRow + 1) + pitch}`);
+  svg.setAttribute("aria-hidden", "true");
+  const line = (x1, y1, x2, y2, kind) => {
+    const node = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    node.setAttribute("x1", x1);
+    node.setAttribute("y1", y1);
+    node.setAttribute("x2", x2);
+    node.setAttribute("y2", y2);
+    node.classList.add(kind);
+    svg.append(node);
+  };
+  const commentRows = new Set((body.sourceStrings || [])
+    .filter((item) => item.isIecComment)
+    .map((item) => item.iecRowIndex));
+  const status = element("p", "muted iec-clipboard-status", "");
+  section.append(status);
+  let blankIndicator = null;
+  const selectRow = (rowIndex, clearCells = true) => {
+    selectedIecRow = { programIndex: selectedProgramIndex, rowIndex };
+    if (blankIndicator) blankIndicator.hidden = true;
+    clearDragBlankCells();
+    if (clearCells) board.querySelectorAll(".iec-layout-marker.selected").forEach((marker) => {
+      marker.classList.remove("selected");
+    });
+    board.querySelectorAll(".iec-layout-row").forEach((label) => {
+      label.classList.toggle("selected", Number(label.dataset.rowIndex) === rowIndex);
+    });
+    status.textContent = rowByIndex.has(rowIndex)
+      ? `L${rowIndex} selected. Ctrl+C copies its network.`
+      : `Empty L${rowIndex} selected. Ctrl+V pastes the copied network.`;
+    selectNetworkRow(rowIndex);
+  };
+  for (let rowIndex = 0; rowIndex <= maxRow + 1; rowIndex += 1) {
+    const isCommentRow = commentRows.has(rowIndex);
+    const isEmpty = !rowByIndex.has(rowIndex);
+    const labelText = isCommentRow ? "설명문" : `L${rowIndex}`;
+    const label = button(labelText,
+      `iec-layout-row${isCommentRow ? " comment" : ""}${isEmpty ? " empty" : ""}`,
+      () => selectRow(rowIndex));
+    label.textContent = labelText;
+    label.dataset.rowIndex = String(rowIndex);
+    label.classList.toggle("selected", selectedIecRow?.programIndex === selectedProgramIndex
+      && selectedIecRow.rowIndex === rowIndex);
+    label.setAttribute("aria-label", `${isEmpty ? "Empty row" : "IEC row"} L${rowIndex}`);
+    label.style.top = `${y(rowIndex) - 9}px`;
+    board.append(label);
+  }
+  board.addEventListener("keydown", async (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey
+      || !["c", "v"].includes(event.key.toLowerCase())
+      || event.target.closest("input, textarea, select, [contenteditable]")) return;
+    event.preventDefault();
+    const rowIndex = selectedIecRow?.programIndex === selectedProgramIndex
+      ? selectedIecRow.rowIndex : null;
+    if (event.key.toLowerCase() === "c") {
+      const row = rowByIndex.get(rowIndex);
+      if (!row) {
+        status.textContent = "Select a populated IEC row to copy its network.";
+        return;
+      }
+      const cellGroups = new Set([...board.querySelectorAll(".iec-layout-marker.selected")]
+        .map((marker) => Number(marker.dataset.groupIndex)));
+      if (cellGroups.size > 1) {
+        status.textContent = "Selected cells span multiple networks. Copy one network at a time.";
+        return;
+      }
+      const groupRows = rows.filter((candidate) => candidate.groupIndex === row.groupIndex);
+      iecClipboard = {
+        programIndex: selectedProgramIndex,
+        groupIndex: row.groupIndex,
+        firstRow: groupRows[0].rowIndex,
+        lastRow: groupRows.at(-1).rowIndex,
+      };
+      status.textContent = `Copied network ${row.groupIndex + 1} (L${iecClipboard.firstRow}–L${iecClipboard.lastRow}). Select an empty row and Ctrl+V.`;
+      return;
+    }
+    if (!iecClipboard || rowIndex === null || rowByIndex.has(rowIndex)) {
+      status.textContent = "Copy a network, then select an empty destination row to paste it.";
+      return;
+    }
+    const source = iecClipboard;
+    const label = `Paste IEC network from program ${source.programIndex + 1} L${source.firstRow} to program ${selectedProgramIndex + 1} L${rowIndex}`;
+    await applyEdit(() => source.programIndex === selectedProgramIndex
+      ? copy_xgwx_iec_ld_group(current.file.bytes, selectedProgramIndex,
+        source.groupIndex, source.firstRow, rowIndex)
+      : copy_xgwx_iec_ld_group_to_program_with_locals(current.file.bytes,
+        source.programIndex, source.groupIndex, source.firstRow,
+        selectedProgramIndex, rowIndex), label);
+  });
+  for (const wire of body.iecGeometry?.horizontal || []) {
+    line(visualX(wire.rowIndex, wire.startX), y(wire.rowIndex),
+      visualX(wire.rowIndex, wire.endX), y(wire.rowIndex), "wire");
+  }
+  for (const wire of body.iecGeometry?.vertical || []) {
+    line(x(wire.x), y(wire.startRowIndex), x(wire.x), y(wire.endRowIndex), "branch");
+  }
+  board.append(svg);
+  const insertionSites = [
+    ...(body.iecNoContactInsertionSites || []).map((site) => ({ ...site, type: "long" })),
+    ...(body.iecShortWireContactInsertionSites || []).map((site) => ({ ...site, type: "short" })),
+  ];
+  for (const site of insertionSites) {
+    const position = site.type === "short" ? site.rawX : site.startX + 3;
+    const control = button("+", "iec-layout-insert", () => {
+      selectRow(site.rowIndex);
+      selectInsertion(site, control);
+    });
+    control.textContent = "+";
+    control.style.left = `${visualX(site.rowIndex, position)}px`;
+    control.style.top = `${y(site.rowIndex)}px`;
+    control.setAttribute("aria-label", `Insert contact at L${site.rowIndex} x${position}`);
+    control.title = `Insert IEC contact at L${site.rowIndex}`;
+    control.classList.toggle("inspected", selectedIecInsertion?.programIndex === selectedProgramIndex
+      && selectedIecInsertion.type === site.type
+      && selectedIecInsertion.wireOffset === site.wireOffset);
+    board.append(control);
+  }
+  const focusText = (item) => {
+    const records = section.parentElement?.querySelector(".iec-records-details");
+    if (records) records.open = true;
+    const offset = item.offset;
+    const target = section.parentElement?.querySelector(`[data-iec-offset="${offset}"]`);
+    if (!target) return;
+    if (target.hidden) {
+      const filter = section.parentElement.querySelector(".iec-program-source .filter-control input");
+      if (filter) {
+        filter.value = "";
+        filter.dispatchEvent(new Event("input"));
+      }
+    }
+    target.scrollIntoView({ block: "center" });
+    if (item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction) {
+      target.querySelector("button")?.click();
+    } else {
+      target.focus({ preventScroll: true });
+    }
+  };
+  const blockByNameOffset = new Map((body.iecFunctions || []).map((block) => [block.nameOffset, block]));
+  const blockByOffset = new Map((body.iecFunctions || []).map((block) => [block.recordOffset, block]));
+  const linkByRecord = new Map((body.iecFunctionOperandLinks || []).map((link) => [link.recordOffset, link]));
+  const markers = (body.sourceStrings || []).filter((item) => item.isIecComment || item.iecElementKind
+    || item.isIecFunctionName || (item.isIecFunctionOperand && item.iecPosition));
+  for (const item of markers) {
+    const isComment = item.isIecComment;
+    const isFunction = item.isIecFunctionName;
+    const isOperand = item.isIecFunctionOperand;
+    const contactGlyph = iecContactGlyph(item.iecElementKind);
+    const coilGlyph = IEC_COIL_GLYPH_BY_SOURCE_LABEL.get(item.iecElementKind);
+    const kind = isComment ? "comment" : isFunction ? "function" : isOperand ? "operand"
+      : contactGlyph ? "contact" : coilGlyph ? "coil" : "unknown";
+    const glyph = contactGlyph || coilGlyph || (isFunction ? "▣" : "[?]");
+    const label = isComment || isOperand || isFunction ? item.value : `${glyph} ${item.value}`;
+    const marker = button(label, `iec-layout-marker ${kind}`, (event) => {
+      if (event.detail && marker.dataset.suppressClick === "true") {
+        delete marker.dataset.suppressClick;
+        return;
+      }
+      selectRow(item.iecRowIndex);
+      if (kind === "contact" || kind === "coil" || kind === "comment") selectElement(item, marker);
+      if (kind !== "contact" && kind !== "coil" && kind !== "comment") focusText(item);
+    });
+    if (kind === "contact") {
+      marker.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        void showIecContactInput(item, body);
+      });
+      marker.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void showIecContactInput(item, body);
+      });
+    }
+    if (kind === "contact" || kind === "coil") {
+      marker.textContent = "";
+      const contactVariant = kind === "contact" ? iecContactVariant(item.iecElementKind) : null;
+      if (contactVariant) marker.dataset.contactVariant = contactVariant;
+      marker.append(
+        element("span", "iec-layout-device", item.value),
+        element("span", "iec-layout-glyph", contactVariant
+          ? contactVariant.includes("rising") ? "P" : contactVariant.includes("falling") ? "N" : ""
+          : glyph),
+      );
+    } else if (isComment) {
+      marker.replaceChildren(element("span", "iec-layout-comment-text", item.value));
+    } else {
+      marker.textContent = label;
+    }
+    const link = isOperand && linkByRecord.get(item.iecRecordOffset);
+    const owner = link && blockByOffset.get(link.targetRecordOffset);
+    const linkedPin = owner && functionPins(owner).find((pin) => pin.referenceOrdinal === link.ordinal);
+    const description = owner ? `${owner.name}.${linkedPin?.name || `pin ${link.ordinal}`} · ${linkedPin?.direction || (link.isOutput ? "output" : "input")} · ${functionPinType(linkedPin)}`
+      : item.iecElementKind || (isComment ? "Comment" : isFunction ? "Function block" : "Function operand");
+    marker.title = `${description} · L${item.iecRowIndex} · byte ${item.offset}`
+      + (kind === "contact" ? " · Double-click or Enter to edit operand" : "");
+    marker.dataset.iecOffset = String(item.offset);
+    marker.classList.toggle("inspected", selectedIecElement?.programIndex === selectedProgramIndex
+      && selectedIecElement.offset === item.offset);
+    marker.setAttribute("aria-label", `${description}: ${item.value}, L${item.iecRowIndex}`);
+    const block = isFunction ? blockByNameOffset.get(item.offset) : owner;
+    const ownerOffset = block ? gapOffset(block.rowIndex, block.rawX) : null;
+    const storedX = item.iecPosition?.[0] ?? 1;
+    marker.style.left = `${isComment ? x(0) : x(storedX - (ownerOffset ?? gapOffset(item.iecRowIndex, storedX)))
+      + (isOperand && link?.isOutput ? 4 : 0)}px`;
+    marker.style.top = `${(kind === "contact" || kind === "coil") ? y(item.iecRowIndex)
+      : y(item.iecRowIndex) - (isComment ? 20 : isOperand ? 18 : 22)}px`;
+    if (kind === "contact" || kind === "coil" || kind === "function") {
+      marker.dataset.rowIndex = String(item.iecRowIndex);
+      marker.dataset.rawX = String(item.iecPosition?.[0] ?? 1);
+      marker.dataset.groupIndex = String(item.iecGroupIndex);
+      marker.dataset.cellX = String(parseFloat(marker.style.left) + (kind === "function" ? 20 : 36));
+      marker.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        delete marker.dataset.suppressClick;
+        selectRow(item.iecRowIndex);
+        const originX = event.clientX;
+        const originY = event.clientY;
+        const anchorX = Number(marker.dataset.cellX);
+        const anchorRow = item.iecRowIndex;
+        let moved = false;
+        const move = (motion) => {
+          if (!(motion.buttons & 1)) return;
+          if (Math.hypot(motion.clientX - originX, motion.clientY - originY) < 5 && !moved) return;
+          moved = true;
+          motion.preventDefault();
+          const rect = board.getBoundingClientRect();
+          const focusX = motion.clientX - rect.left;
+          const focusRow = Math.max(0, Math.round((motion.clientY - rect.top - top) / pitch));
+          const minX = Math.min(anchorX, focusX) - 1;
+          const maxX = Math.max(anchorX, focusX) + 1;
+          const minRow = Math.min(anchorRow, focusRow);
+          const maxRow = Math.max(anchorRow, focusRow);
+          const selected = [...board.querySelectorAll(".iec-layout-marker[data-cell-x]")]
+            .filter((cell) => {
+              const row = Number(cell.dataset.rowIndex);
+              const cellX = Number(cell.dataset.cellX);
+              const inside = row >= minRow && row <= maxRow && cellX >= minX && cellX <= maxX;
+              cell.classList.toggle("selected", inside);
+              return inside;
+            });
+          const groups = new Set(selected.map((cell) => cell.dataset.groupIndex));
+          status.textContent = groups.size === 1
+            ? `${selected.length} ladder cells selected. Ctrl+C copies their complete network.`
+            : `${selected.length} ladder cells selected across networks. Copy one network at a time.`;
+        };
+        const up = () => {
+          document.removeEventListener("pointermove", move);
+          document.removeEventListener("pointerup", up);
+          document.removeEventListener("pointercancel", up);
+          if (moved) marker.dataset.suppressClick = "true";
+        };
+        document.addEventListener("pointermove", move);
+        document.addEventListener("pointerup", up);
+        document.addEventListener("pointercancel", up);
+      });
+    }
+    if (isComment) marker.style.width = `${x(96) - x(0)}px`;
+    if (isFunction) {
+      if (block) {
+        marker.style.height = `${Math.max(44, (block.pinCount - 1) * pitch + 44)}px`;
+        marker.title = `${block.name}${block.instance ? ` · ${block.instance}` : ""} · ${block.pinCount} row${block.pinCount === 1 ? "" : "s"}`;
+      }
+    }
+    board.append(marker);
+  }
+  for (const block of body.iecFunctions || []) {
+    const blockOffset = gapOffset(block.rowIndex, block.rawX);
+    for (const port of functionPins(block)) {
+      const pin = element("span", `iec-layout-pin ${port.direction}`);
+      pin.style.left = `${x(port.rawX - blockOffset) - 4}px`;
+      pin.style.top = `${y(port.rowIndex) - 4}px`;
+      pin.title = `${block.name}.${port.name} · ${port.direction} · ${functionPinType(port)} · L${port.rowIndex}${port.referenceOrdinal == null ? "" : ` · reference ${port.referenceOrdinal}`}`;
+      pin.setAttribute("aria-hidden", "true");
+      const label = element("span", `iec-layout-pin-label ${port.direction}`, port.name);
+      label.style.left = `${x(port.rawX - blockOffset) + (port.direction === "input" ? 6 : -6)}px`;
+      label.style.top = `${y(port.rowIndex) - 8}px`;
+      label.title = pin.title;
+      board.append(pin, label);
+    }
+  }
+  blankIndicator = button("Empty IEC cell", "iec-layout-blank-cell", () => {});
+  blankIndicator.tabIndex = 0;
+  const showBlank = (position, focus = false) => {
+    blankIndicator.hidden = false;
+    blankIndicator.style.left = `${visualX(position.rowIndex, position.rawX)}px`;
+    blankIndicator.style.top = `${y(position.rowIndex)}px`;
+    blankIndicator.dataset.rowIndex = String(position.rowIndex);
+    blankIndicator.dataset.rawX = String(position.rawX);
+    blankIndicator.setAttribute("aria-label", `Empty IEC cell L${position.rowIndex} x${position.rawX}`);
+    if (focus) blankIndicator.focus({ preventScroll: true });
+  };
+  const selectBlankPosition = (position) => {
+    if (iecOccupiedCell(body, position.rowIndex, position.rawX)) return;
+    selectRow(position.rowIndex);
+    selectBlank(position);
+    showBlank(position, true);
+  };
+  blankIndicator.hidden = true;
+  board.append(blankIndicator);
+  if (selectedIecBlank?.programIndex === selectedProgramIndex
+    && !iecOccupiedCell(body, selectedIecBlank.rowIndex, selectedIecBlank.rawX)) {
+    showBlank(selectedIecBlank);
+  }
+  blankIndicator.addEventListener("keydown", (event) => {
+    const step = {
+      ArrowLeft: [0, -3], ArrowRight: [0, 3],
+      ArrowUp: [-1, 0], ArrowDown: [1, 0],
+    }[event.key];
+    if (!step) return;
+    event.preventDefault();
+    selectBlankPosition({
+      rowIndex: Number(blankIndicator.dataset.rowIndex) + step[0],
+      rawX: Number(blankIndicator.dataset.rawX) + step[1],
+    });
+  });
+  const dragBlankCells = new Map();
+  const clearDragBlankCells = () => {
+    for (const node of dragBlankCells.values()) node.remove();
+    dragBlankCells.clear();
+  };
+  const cellAtPoint = (clientX, clientY) => {
+    const bounds = board.getBoundingClientRect();
+    const rowIndex = Math.max(0, Math.min(maxRow + 1,
+      Math.round((clientY - bounds.top - top) / pitch)));
+    const localX = clientX - bounds.left;
+    const rawX = Array.from({ length: 33 }, (_, index) => 1 + index * 3)
+      .reduce((closest, candidate) => Math.abs(visualX(rowIndex, candidate) + 36 - localX)
+        < Math.abs(visualX(rowIndex, closest) + 36 - localX) ? candidate : closest, 1);
+    return { rowIndex, rawX };
+  };
+  const selectDragRange = (anchor, focus) => {
+    clearDragBlankCells();
+    const minRow = Math.min(anchor.rowIndex, focus.rowIndex);
+    const maxRowInRange = Math.max(anchor.rowIndex, focus.rowIndex);
+    const minX = Math.min(anchor.rawX, focus.rawX);
+    const maxX = Math.max(anchor.rawX, focus.rawX);
+    let blankCount = 0;
+    for (let rowIndex = minRow; rowIndex <= maxRowInRange; rowIndex += 1) {
+      for (let rawX = minX; rawX <= maxX; rawX += 3) {
+        if (iecOccupiedCell(body, rowIndex, rawX)) continue;
+        const cell = element("span", "iec-layout-drag-cell");
+        cell.style.left = `${visualX(rowIndex, rawX)}px`;
+        cell.style.top = `${y(rowIndex)}px`;
+        cell.setAttribute("aria-label", `Selected empty IEC cell L${rowIndex} x${rawX}`);
+        board.append(cell);
+        dragBlankCells.set(`${rowIndex}:${rawX}`, cell);
+        blankCount += 1;
+      }
+    }
+    const selectedMarkers = [...board.querySelectorAll(".iec-layout-marker[data-cell-x]")]
+      .filter((marker) => {
+        const rowIndex = Number(marker.dataset.rowIndex);
+        const rawX = Number(marker.dataset.rawX);
+        const inside = rowIndex >= minRow && rowIndex <= maxRowInRange
+          && rawX >= minX && rawX <= maxX;
+        marker.classList.toggle("selected", inside);
+        return inside;
+      });
+    status.textContent = `${blankCount + selectedMarkers.length} IEC cells selected`;
+  };
+  board.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest(
+      ".iec-layout-row, .iec-layout-marker, .iec-layout-insert, .iec-layout-pin, .iec-layout-pin-label",
+    )) return;
+    clearDragBlankCells();
+    const anchor = cellAtPoint(event.clientX, event.clientY);
+    selectBlankPosition(anchor);
+    const originX = event.clientX;
+    const originY = event.clientY;
+    let moved = false;
+    const move = (motion) => {
+      if (!(motion.buttons & 1)) return;
+      if (!moved && Math.hypot(motion.clientX - originX, motion.clientY - originY) < 5) return;
+      moved = true;
+      motion.preventDefault();
+      selectDragRange(anchor, cellAtPoint(motion.clientX, motion.clientY));
+    };
+    const up = () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      document.removeEventListener("pointercancel", up);
+    };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
+    document.addEventListener("pointercancel", up);
+  });
+  viewport.append(board);
+  section.append(viewport);
+  return section;
+}
+
+async function showIecContactInput(item, body) {
+  const programIndex = selectedProgramIndex;
+  const fileUri = current.file.uri;
+  const names = [...new Set([
+    ...(current.summary.localVariables?.[programIndex] || [])
+      .filter((symbol) => symbol.dataType === "BOOL" && !symbol.isInstance)
+      .map((symbol) => symbol.name),
+    ...(body.sourceStrings || [])
+      .filter((source) => iecContactGlyph(source.iecElementKind))
+      .map((source) => source.value),
+  ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const value = await requestContactOperand(item.value, item.iecRowIndex, names,
+    `.iec-layout-marker[data-iec-offset="${item.offset}"]`);
+  if (typeof value !== "string" || current?.file.uri !== fileUri
+    || selectedProgramIndex !== programIndex || value.trim() === item.value) return;
+  await applyEdit(() => update_xgwx_iec_ld_element_operand(current.file.bytes,
+    programIndex, item.offset, item.value, value.trim()),
+  `Edit IEC contact at L${item.iecRowIndex}`);
+}
+
+function requestContactOperand(currentValue, rowIndex, suggestions, focusSelector) {
+  const requestId = ++nextContactPromptId;
+  return new Promise((resolve) => {
+    pendingContactPrompts.set(requestId, {
+      resolve, focusSelector, fileUri: current.file.uri,
+      programIndex: selectedProgramIndex,
+    });
+    vscode.postMessage({ type: "promptIecContact", requestId,
+      value: currentValue, rowIndex, suggestions });
+  });
+}
+
+async function showXgkContactInput(cell, ladder) {
+  const expected = structuralElement(cell);
+  if (!expected || !elementKindHasOperand(expected.kind)) return;
+  const programIndex = selectedProgramIndex;
+  const fileUri = current.file.uri;
+  const suggestions = [...new Set([
+    ...(current.summary.variables || [])
+      .filter((variable) => variable.dataType === "BIT")
+      .map((variable) => variable.address),
+    ...(ladder.cells || [])
+      .filter((source) => (source.contact || source.coil) && source.sourceText)
+      .map((source) => source.sourceText),
+  ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const value = await requestContactOperand(cell.sourceText, cell.rawY, suggestions,
+    `[data-ladder-key="${cell.rawY}:${ldCellColumn(cell.rawX)}"]`);
+  if (typeof value !== "string" || current?.file.uri !== fileUri
+    || selectedProgramIndex !== programIndex || value.trim() === cell.sourceText) return;
+  await applyEdit(() => ladder.structuralEditing
+    ? edit_xgwx_ladder_cell(current.file.bytes, programIndex, {
+      rawY: cell.rawY, column: ldCellColumn(cell.rawX),
+      expected, replacement: { ...expected, operand: value.trim() },
+    })
+    : update_xgwx_ladder_cell(current.file.bytes, programIndex,
+      cell.offset, cell.sourceText, value.trim()),
+  `Edit XGK contact at ${cell.rawX}:${cell.rawY}`);
+}
+
+function functionPins(block) {
+  return [block.controlInput, block.controlOutput, ...(block.pins || [])].filter(Boolean);
+}
+
+function functionPinType(pin) {
+  if (!pin) return "unknown type";
+  return pin.typeExpression || pin.dataType || `type mask 0x${pin.dataTypeMask.toString(16)}`;
+}
+
+function renderIecProgramSource(body) {
+  const section = element("section", "iec-program-source");
+  const strings = body.sourceStrings || [];
+  const functionByOffset = new Map((body.iecFunctions || []).map((block) => [block.recordOffset, block]));
+  const terminalFunctionDeletionByOffset = new Map(
+    (body.iecTerminalFunctionDeletionSites || []).map((site) => [site.blockOffset, site]),
+  );
+  const standaloneFunctionDeletionByOffset = new Map(
+    (body.iecStandaloneFunctionDeletionSites || []).map((site) => [site.blockOffset, site]),
+  );
+  const functionCellDeletionByOffset = new Map(
+    (body.iecFunctionCellDeletionSites || []).map((site) => [site.blockOffset, site]),
+  );
+  const connectedArithmeticDeletionByOffset = new Map(
+    (body.iecConnectedArithmeticDeletionSites || []).map((site) => [site.blockOffset, site]),
+  );
+  const pinByRecord = new Map((body.iecFunctionOperandLinks || []).map((link) => [link.recordOffset, link]));
+  const toolbar = element("div", "editor-toolbar");
+  const searchWrap = element("label", "filter-control");
+  searchWrap.append(icon("search"));
+  const search = document.createElement("input");
+  search.type = "search";
+  search.placeholder = "Filter stored text…";
+  search.setAttribute("aria-label", "Filter program text");
+  searchWrap.append(search);
+  const count = element("span", "toolbar-summary", `${strings.length} fragments`);
+  toolbar.append(searchWrap, count);
+  section.append(toolbar);
+
+  const table = createTable(["Byte offset", "Type", "Stored text", "IEC position", "Stored row", "Edit", "Element kind", "Block pin"]);
+  const rows = strings.map((item) => {
+    const row = table.tBodies[0].insertRow();
+    row.dataset.iecOffset = String(item.offset);
+    row.tabIndex = -1;
+    const kind = item.isIecComment ? "Comment" : item.iecElementKind || (item.isIecFunctionOperand ? "Function operand expression" : item.isIecArithmeticFunction ? "Arithmetic function block" : item.isIecComparisonFunction ? "Comparison function block" : item.isIecFunctionName ? "IEC function block" : item.isIecFunctionInstance ? "Function instance" : item.iecRecordKind === "Function block" ? "Function block field" : "Unclassified");
+    const position = item.iecPosition ? `x ${item.iecPosition[0]}, y ${item.iecPosition[1]}` : "—";
+    const storedRow = item.iecRowIndex == null ? "—" : `L${item.iecRowIndex} · group ${item.iecGroupIndex + 1}`;
+    appendCells(row, [item.offset, kind, item.value, position, storedRow]);
+    const action = row.insertCell();
+    const typeAction = row.insertCell();
+    const pin = pinByRecord.get(item.iecRecordOffset);
+    const block = pin && functionByOffset.get(pin.targetRecordOffset);
+    const decodedPin = block && functionPins(block).find((candidate) => candidate.referenceOrdinal === pin.ordinal);
+    const pinLabel = block ? `${block.name}.${decodedPin?.name || `pin ${pin.ordinal}`} · ${functionPinType(decodedPin)}` : "—";
+    row.insertCell().textContent = pinLabel;
+    if (item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction) {
+      const editButton = () => {
+        const control = button("Edit", "secondary-button", openEditor);
+        control.textContent = "Edit";
+        return control;
+      };
+      const openEditor = () => {
+        const textCell = row.cells[2];
+        const editor = element("div", "iec-comment-editor");
+        const input = document.createElement("textarea");
+        input.value = item.value;
+        input.rows = Math.min(5, Math.max(2, Math.ceil(item.value.length / 65)));
+        input.setAttribute("aria-label", `Edit IEC ${kind.toLowerCase()} at byte ${item.offset}`);
+        const length = element("span", "muted");
+        const save = button(`Save ${kind.toLowerCase()}`, "primary-button", async () => {
+          await applyEdit(
+            () => (item.isIecComment ? update_xgwx_iec_ld_comment
+              : item.iecElementKind ? update_xgwx_iec_ld_element_operand
+                : item.isIecFunctionOperand ? update_xgwx_iec_ld_function_operand
+                  : item.isIecArithmeticFunction ? update_xgwx_iec_ld_arithmetic_function
+                    : update_xgwx_iec_ld_comparison_function)(current.file.bytes, selectedProgramIndex,
+              item.offset, item.value, input.value),
+            `Edit IEC ${kind.toLowerCase()}`,
+          );
+        });
+        const cancel = button("Cancel", "secondary-button", () => {
+          textCell.textContent = item.value;
+          action.replaceChildren(editButton());
+        });
+        save.textContent = "Save";
+        cancel.textContent = "Cancel";
+        const validate = () => {
+          const actual = input.value.length;
+          length.textContent = item.isIecArithmeticFunction ? "Choose ADD, SUB, MUL, or DIV"
+            : item.isIecComparisonFunction ? "Choose EQ, GT, GE, LT, or LE"
+              : `${actual}/255 UTF-16 units`;
+          save.disabled = item.isIecArithmeticFunction
+            ? !["ADD", "SUB", "MUL", "DIV"].includes(input.value)
+            : item.isIecComparisonFunction
+              ? !["EQ", "GT", "GE", "LT", "LE"].includes(input.value)
+              : actual > 255 || !input.value.trim() || /[\p{Cc}]/u.test(input.value);
+        };
+        input.addEventListener("input", validate);
+        validate();
+        editor.append(input, length, save, cancel);
+        textCell.replaceChildren(editor);
+        action.replaceChildren();
+        input.focus();
+        input.select();
+      };
+      action.append(editButton());
+      const expectedContactKind = IEC_CONTACT_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
+      const expectedCoilKind = IEC_COIL_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
+      const expectedKind = expectedContactKind || expectedCoilKind;
+      if (expectedKind) {
+        const isContact = Boolean(expectedContactKind);
+        const kindSelect = document.createElement("select");
+        kindSelect.setAttribute("aria-label", `${isContact ? "Contact" : "Coil"} kind for ${item.value}`);
+        const choices = isContact ? IEC_ADDRESSED_CONTACT_CHOICES : IEC_COIL_KIND_CHOICES;
+        for (const [value, label] of choices) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          option.selected = value === expectedKind;
+          kindSelect.append(option);
+        }
+        const kindButton = button("Apply kind", "secondary-button", async () => {
+          const replacement = kindSelect.value;
+          await applyEdit(
+            () => (isContact
+              ? update_xgwx_iec_ld_contact_kind
+              : update_xgwx_iec_ld_coil_kind)(current.file.bytes, selectedProgramIndex,
+              item.offset, expectedKind, replacement),
+            `Change IEC ${isContact ? "contact" : "coil"} to ${replacement}`,
+          );
+        });
+        const validateKind = () => { kindButton.disabled = kindSelect.value === expectedKind; };
+        kindSelect.addEventListener("change", validateKind);
+        validateKind();
+        typeAction.append(kindSelect, kindButton);
+      }
+    }
+    if (item.isIecFunctionInstance && functionByOffset.has(item.iecRecordOffset)) {
+      const block = functionByOffset.get(item.iecRecordOffset);
+      const existingNames = new Set((current.summary.localVariables?.[selectedProgramIndex] || [])
+        .map((symbol) => symbol.name.toLocaleLowerCase()));
+      const startEdit = () => {
+        const editor = element("div", "iec-instance-editor");
+        const input = document.createElement("input");
+        input.type = "text";
+        input.setAttribute("aria-label", `New instance for ${block.name} at L${block.rowIndex}`);
+        let suffix = 2;
+        do {
+          input.value = `${item.value}_${suffix++}`;
+        } while (existingNames.has(input.value.toLocaleLowerCase()));
+        const apply = button("Create instance", "primary-button", async () => {
+          await applyEdit(
+            () => duplicate_xgwx_iec_ld_function_instance(
+              current.file.bytes, selectedProgramIndex, item.iecRecordOffset, item.value, input.value,
+            ),
+            `Create IEC ${block.name} instance ${input.value} at L${block.rowIndex}`,
+          );
+        });
+        const cancel = button("Cancel", "secondary-button", () => action.replaceChildren(openButton()));
+        apply.textContent = "Create";
+        cancel.textContent = "Cancel";
+        const validate = () => {
+          apply.disabled = input.value.length > 255
+            || !/^[\p{L}_][\p{L}\p{N}_]*$/u.test(input.value)
+            || existingNames.has(input.value.toLocaleLowerCase());
+        };
+        input.addEventListener("input", validate);
+        validate();
+        editor.append(input, apply, cancel);
+        action.replaceChildren(editor);
+        input.focus();
+        input.select();
+      };
+      const openButton = () => {
+        const control = button("Separate instance", "secondary-button", startEdit);
+        control.textContent = "Separate instance";
+        return control;
+      };
+      action.append(openButton());
+    }
+    const terminalFunctionDeletion = item.isIecFunctionName
+      ? terminalFunctionDeletionByOffset.get(item.iecRecordOffset)
+      : null;
+    const standaloneFunctionDeletion = item.isIecFunctionName
+      ? standaloneFunctionDeletionByOffset.get(item.iecRecordOffset)
+      : null;
+    const functionCellDeletion = item.isIecFunctionName
+      ? functionCellDeletionByOffset.get(item.iecRecordOffset)
+      : null;
+    const connectedArithmeticDeletion = item.isIecFunctionName
+      ? connectedArithmeticDeletionByOffset.get(item.iecRecordOffset)
+      : null;
+    const eqChainHeadDeletion = selectedProgramIndex === 0
+      && item.isIecFunctionName && item.iecGroupIndex === 33
+      && item.iecRowIndex === 67 && item.value === "EQ"
+      ? { blockOffset: item.iecRecordOffset, rowIndex: 67 }
+      : null;
+    const heatingDeletionKind = selectedProgramIndex === 6
+      && item.isIecFunctionName && item.iecGroupIndex === 13 && item.value === "EQ"
+      ? [
+        ["head", delete_xgwx_iec_ld_heating_chain_head],
+        ["middle", delete_xgwx_iec_ld_heating_chain_middle],
+        ["x3", delete_xgwx_iec_ld_heating_chain_x3_eq_repaired],
+        ["contact", delete_xgwx_iec_ld_heating_chain_contact_eq],
+        ["x15", delete_xgwx_iec_ld_heating_chain_x15_eq],
+      ].find(([, deleteFunction]) => {
+        try {
+          deleteFunction(current.file.bytes, selectedProgramIndex, item.iecRecordOffset, item.value);
+          return true;
+        } catch { return false; }
+      })?.[0]
+      : null;
+    const heatingDeletion = heatingDeletionKind
+      ? { blockOffset: item.iecRecordOffset, rowIndex: item.iecRowIndex }
+      : null;
+    const heatingChainHeadDeletion = heatingDeletionKind === "head" && heatingDeletion;
+    const heatingChainMiddleDeletion = heatingDeletionKind === "middle" && heatingDeletion;
+    const heatingChainX3Deletion = heatingDeletionKind === "x3" && heatingDeletion;
+    const heatingChainContactDeletion = heatingDeletionKind === "contact" && heatingDeletion;
+    const heatingChainX15Deletion = heatingDeletionKind === "x15" && heatingDeletion;
+    const functionDeletion = terminalFunctionDeletion || standaloneFunctionDeletion || functionCellDeletion || connectedArithmeticDeletion || eqChainHeadDeletion || heatingChainHeadDeletion || heatingChainMiddleDeletion || heatingChainX3Deletion || heatingChainContactDeletion || heatingChainX15Deletion;
+    if (functionDeletion) {
+      const functionBlock = functionByOffset.get(functionDeletion.blockOffset);
+      if (functionBlock?.name === item.value) {
+        const deleteButton = button("Delete block", "secondary-button", async () => {
+          await applyEdit(
+            () => (terminalFunctionDeletion
+              ? delete_xgwx_iec_ld_terminal_function
+              : standaloneFunctionDeletion
+                ? delete_xgwx_iec_ld_standalone_function
+                : functionCellDeletion
+                  ? delete_xgwx_iec_ld_function_cell
+                  : connectedArithmeticDeletion
+                    ? delete_xgwx_iec_ld_connected_arithmetic
+                    : eqChainHeadDeletion
+                      ? delete_xgwx_iec_ld_eq_chain_head
+                    : heatingChainHeadDeletion
+                        ? delete_xgwx_iec_ld_heating_chain_head
+                        : heatingChainMiddleDeletion
+                          ? delete_xgwx_iec_ld_heating_chain_middle
+                          : heatingChainX3Deletion
+                            ? delete_xgwx_iec_ld_heating_chain_x3_eq_repaired
+                            : heatingChainContactDeletion
+                              ? delete_xgwx_iec_ld_heating_chain_contact_eq
+                              : delete_xgwx_iec_ld_heating_chain_x15_eq)(
+              current.file.bytes,
+              selectedProgramIndex,
+              functionDeletion.blockOffset,
+              functionBlock.name,
+            ),
+            `Delete ${terminalFunctionDeletion ? "terminal" : standaloneFunctionDeletion ? "standalone" : "connected"} IEC function ${functionBlock.name} at L${functionDeletion.rowIndex}`,
+          );
+        });
+        deleteButton.textContent = "Delete block";
+        deleteButton.title = terminalFunctionDeletion
+          ? `Remove ${functionBlock.name}, its preceding wire, and ${functionDeletion.pinCount} pin rows`
+          : standaloneFunctionDeletion
+            ? `Remove the standalone ${functionBlock.name} group and its ${functionDeletion.pinCount + 1} stored rows`
+            : functionCellDeletion
+              ? `Remove ${functionBlock.name} and its ${functionDeletion.pinCount} link record while retaining surrounding row records`
+              : connectedArithmeticDeletion
+                ? `Remove the connected ${functionBlock.name} and its pin records, retaining R_TRIG and MOVE as separate groups`
+                : heatingChainX3Deletion
+                  ? `Remove this EQ and its pin records, then clear the dangling x15 feed`
+                  : heatingChainContactDeletion
+                    ? `Remove this EQ and its x6/x12 contact branches, retaining the x15 feed`
+                    : heatingChainX15Deletion
+                      ? `Remove this EQ and its pin records, retaining the x15 feed`
+                  : `Remove this EQ and its pin records, close one row, and preserve the shared vertical feed`;
+        action.append(deleteButton);
+      }
+    }
+    return { row, item };
+  });
+  search.addEventListener("input", () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    let matches = 0;
+    for (const { row, item } of rows) {
+      const pin = pinByRecord.get(item.iecRecordOffset);
+      const block = pin && functionByOffset.get(pin.targetRecordOffset);
+      row.hidden = Boolean(query) && !`${item.offset} ${item.value} L${item.iecRowIndex ?? ""} ${block?.name || ""}`.toLocaleLowerCase().includes(query);
+      if (!row.hidden) matches += 1;
+    }
+    count.textContent = query ? `${matches} of ${strings.length} fragments` : `${strings.length} fragments`;
+  });
+  section.append(tableContainer(table, strings.length));
+  return section;
+}
+
+function renderIecNetworkDeletion(body) {
+  if (!body.iecCircuitGraph) return null;
+  const groups = new Map();
+  for (const row of body.iecRows || []) {
+    const rows = groups.get(row.groupIndex) || [];
+    rows.push(row.rowIndex);
+    groups.set(row.groupIndex, rows);
+  }
+  if (groups.size <= 1) return null;
+  const sites = [...groups].map(([groupIndex, rows]) => ({ groupIndex, firstRow: rows[0], lastRow: rows.at(-1) }));
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Delete complete IEC network"));
+  const form = document.createElement("form");
+  const label = element("label", "", "Network");
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "IEC network to delete");
+  select.required = true;
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Choose a network";
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.append(placeholder);
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `Network ${site.groupIndex + 1} · L${site.firstRow}${site.lastRow === site.firstRow ? "" : `–L${site.lastRow}`}`;
+    select.append(option);
+  });
+  label.append(select);
+  const submit = button("Delete network", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Delete network";
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const site = sites[Number(select.value)];
+    await applyEdit(
+      () => delete_xgwx_iec_ld_group(current.file.bytes, selectedProgramIndex, site.groupIndex, site.firstRow),
+      `Delete IEC network ${site.groupIndex + 1} at L${site.firstRow}`,
+    );
+  });
+  form.append(label, submit);
+  section.append(form, element("p", "muted", "Removes the selected network and leaves its rows empty for a later insertion."));
+  return section;
+}
+
+function renderIecCommentInsertion(body) {
+  const rows = body.iecRows || [];
+  const records = body.iecRecords || [];
+  const graph = body.iecCircuitGraph;
+  if (!rows.length || !graph) return null;
+  const template = rows.some((row) => row.recordCount === 1
+    && rows.filter((other) => other.groupIndex === row.groupIndex).length === 1
+    && records.some((record) => record.groupIndex === row.groupIndex
+      && record.rowIndex === row.rowIndex && record.kind === "Comment"));
+  if (!template) return null;
+  const lastRow = Math.max(...rows.map((row) => row.rowIndex));
+  const destinations = [];
+  for (let index = 0; index <= lastRow + 1; index += 1) {
+    if (rows.some((row) => row.rowIndex === index)) continue;
+    if (graph.occupiedAreas.some((area) => area.startRowIndex <= index && area.endRowIndex >= index)) continue;
+    if (graph.edges.some((edge) => Math.min(edge.start.rowIndex, edge.end.rowIndex) <= index
+      && Math.max(edge.start.rowIndex, edge.end.rowIndex) >= index)) continue;
+    destinations.push(index);
+  }
+  if (!destinations.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Insert IEC comment"));
+  const form = document.createElement("form");
+  const rowLabel = element("label", "", "Empty row");
+  const rowSelect = document.createElement("select");
+  rowSelect.setAttribute("aria-label", "IEC comment destination row");
+  for (const row of destinations) {
+    const option = document.createElement("option");
+    option.value = String(row);
+    option.textContent = `L${row}`;
+    rowSelect.append(option);
+  }
+  rowLabel.append(rowSelect);
+  const textLabel = element("label", "", "Comment");
+  const comment = document.createElement("input");
+  comment.type = "text";
+  comment.maxLength = 255;
+  comment.setAttribute("aria-label", "New IEC comment text");
+  textLabel.append(comment);
+  const submit = button("Insert comment", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Insert comment";
+  const status = element("p", "muted");
+  const validate = () => {
+    try {
+      insert_xgwx_iec_ld_comment(current.file.bytes, selectedProgramIndex,
+        Number(rowSelect.value), comment.value);
+      submit.disabled = false;
+      status.textContent = `Ready to insert a comment at L${rowSelect.value}.`;
+    } catch (error) {
+      submit.disabled = true;
+      status.textContent = String(error);
+    }
+  };
+  rowSelect.addEventListener("change", validate);
+  comment.addEventListener("input", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const row = Number(rowSelect.value);
+    await applyEdit(() => insert_xgwx_iec_ld_comment(
+      current.file.bytes, selectedProgramIndex, row, comment.value,
+    ), `Insert IEC comment at L${row}`);
+  });
+  form.append(rowLabel, textLabel, submit);
+  validate();
+  section.append(form, status);
+  return section;
+}
+
+function renderIecNetworkReplacement(body) {
+  if (!body.iecCircuitGraph) return null;
+  const groups = new Map();
+  for (const row of body.iecRows || []) {
+    const rows = groups.get(row.groupIndex) || [];
+    rows.push(row.rowIndex);
+    groups.set(row.groupIndex, rows);
+  }
+  if (groups.size < 2) return null;
+  const networks = [...groups].map(([groupIndex, rows]) => ({
+    groupIndex,
+    firstRow: rows[0],
+    lastRow: rows.at(-1),
+  }));
+  const label = (network) => `Network ${network.groupIndex + 1} · L${network.firstRow}`
+    + (network.lastRow === network.firstRow ? "" : `–L${network.lastRow}`);
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Replace complete IEC network"));
+  section.append(element("p", "muted", "Copy one decoded network over another occupied network in this program. The destination is replaced as one edit. Review reused outputs and function instances."));
+  const form = document.createElement("form");
+  const sourceLabel = element("label", "", "Copy from");
+  const source = document.createElement("select");
+  source.setAttribute("aria-label", "IEC replacement source network");
+  source.append(new Option("Choose a network", ""));
+  for (const network of networks) source.append(new Option(label(network), String(network.groupIndex)));
+  sourceLabel.append(source);
+  const destinationLabel = element("label", "", "Replace");
+  const destination = document.createElement("select");
+  destination.setAttribute("aria-label", "IEC replacement destination network");
+  destination.disabled = true;
+  destinationLabel.append(destination);
+  const submit = button("Replace network", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Replace network";
+  submit.disabled = true;
+  const status = element("p", "muted");
+  const update = () => {
+    destination.replaceChildren();
+    const selected = networks.find((network) => String(network.groupIndex) === source.value);
+    if (!selected) {
+      destination.disabled = true;
+      submit.disabled = true;
+      status.textContent = "Choose a source network.";
+      return;
+    }
+    const span = selected.lastRow - selected.firstRow;
+    for (const network of networks) {
+      if (network.groupIndex !== selected.groupIndex
+          && network.lastRow - network.firstRow >= span) {
+        destination.append(new Option(label(network), String(network.groupIndex)));
+      }
+    }
+    destination.disabled = !destination.options.length;
+    if (destination.disabled) {
+      submit.disabled = true;
+      status.textContent = "No occupied network has enough rows for this source.";
+      return;
+    }
+    validate();
+  };
+  const validate = () => {
+    const from = networks.find((network) => String(network.groupIndex) === source.value);
+    const to = networks.find((network) => String(network.groupIndex) === destination.value);
+    if (!from || !to) {
+      submit.disabled = true;
+      return;
+    }
+    try {
+      replace_xgwx_iec_ld_group(current.file.bytes, selectedProgramIndex,
+        from.groupIndex, from.firstRow, to.groupIndex, to.firstRow);
+      submit.disabled = false;
+      status.textContent = `Ready to replace ${label(to)} with ${label(from)}.`;
+    } catch (error) {
+      submit.disabled = true;
+      status.textContent = String(error);
+    }
+  };
+  source.addEventListener("change", update);
+  destination.addEventListener("change", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const from = networks.find((network) => String(network.groupIndex) === source.value);
+    const to = networks.find((network) => String(network.groupIndex) === destination.value);
+    if (!from || !to) return;
+    await applyEdit(() => replace_xgwx_iec_ld_group(current.file.bytes, selectedProgramIndex,
+      from.groupIndex, from.firstRow, to.groupIndex, to.firstRow),
+    `Replace IEC network at L${to.firstRow}`);
+  });
+  form.append(sourceLabel, destinationLabel, submit);
+  section.append(form, status);
+  update();
+  return section;
+}
+
+function renderIecNetworkRelocation(body) {
+  if (!body.iecCircuitGraph) return null;
+  const rows = body.iecRows || [];
+  if (!rows.length) return null;
+  const groups = new Map();
+  for (const row of rows) {
+    const group = groups.get(row.groupIndex) || [];
+    group.push(row.rowIndex);
+    groups.set(row.groupIndex, group);
+  }
+  const maxRow = Math.max(...rows.map((row) => row.rowIndex));
+  const sites = [...groups].map(([groupIndex, groupRows]) => {
+    const firstRow = groupRows[0];
+    const lastRow = groupRows.at(-1);
+    const span = lastRow - firstRow;
+    const destinations = [];
+    for (let first = 0; first + span <= maxRow; first += 1) {
+      const last = first + span;
+      if (last >= firstRow && first <= lastRow) continue;
+      if (rows.some((row) => row.groupIndex !== groupIndex && row.rowIndex >= first && row.rowIndex <= last)) continue;
+      if (body.iecCircuitGraph.occupiedAreas.some((area) => area.groupIndex !== groupIndex
+        && area.startRowIndex <= last && area.endRowIndex >= first)) continue;
+      if (body.iecCircuitGraph.edges.some((edge) => edge.start.groupIndex !== groupIndex
+        && Math.min(edge.start.rowIndex, edge.end.rowIndex) <= last
+        && Math.max(edge.start.rowIndex, edge.end.rowIndex) >= first)) continue;
+      destinations.push(first);
+    }
+    return { groupIndex, firstRow, lastRow, destinations };
+  }).filter((site) => site.destinations.length);
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Move or copy complete IEC network"));
+  const form = document.createElement("form");
+  const sourceLabel = element("label", "", "Network");
+  const source = document.createElement("select");
+  source.setAttribute("aria-label", "IEC network to move or copy");
+  source.required = true;
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "Choose a network";
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  source.append(placeholder);
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `Network ${site.groupIndex + 1} · L${site.firstRow}${site.lastRow === site.firstRow ? "" : `–L${site.lastRow}`}`;
+    source.append(option);
+  });
+  sourceLabel.append(source);
+  const destinationLabel = element("label", "", "Empty row range");
+  const destination = document.createElement("select");
+  destination.setAttribute("aria-label", "IEC network destination");
+  destination.required = true;
+  destination.disabled = true;
+  destinationLabel.append(destination);
+  const updateDestinations = () => {
+    destination.replaceChildren();
+    const site = sites[Number(source.value)];
+    if (!source.value || !site) {
+      destination.disabled = true;
+      return;
+    }
+    for (const first of site.destinations) {
+      const option = document.createElement("option");
+      option.value = String(first);
+      option.textContent = `L${first}${site.lastRow === site.firstRow ? "" : `–L${first + site.lastRow - site.firstRow}`}`;
+      destination.append(option);
+    }
+    destination.disabled = false;
+  };
+  source.addEventListener("change", updateDestinations);
+  const submit = button("Move network", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Move network";
+  const copy = button("Copy network", "secondary-button", () => {});
+  copy.type = "submit";
+  copy.dataset.operation = "copy";
+  copy.textContent = "Copy network";
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const site = sites[Number(source.value)];
+    if (!site || destination.disabled) return;
+    const first = Number(destination.value);
+    const copying = event.submitter?.dataset.operation === "copy";
+    await applyEdit(
+      () => (copying ? copy_xgwx_iec_ld_group : move_xgwx_iec_ld_group)(
+        current.file.bytes, selectedProgramIndex, site.groupIndex, site.firstRow, first,
+      ),
+      `${copying ? "Copy" : "Move"} IEC network ${site.groupIndex + 1} from L${site.firstRow} to L${first}`,
+    );
+  });
+  form.append(sourceLabel, destinationLabel, submit, copy);
+  section.append(form, element("p", "muted",
+    "Moves or copies the whole network, including branches and function links. Copies reuse output operands and function instances; reassign them for independent logic, then run Check Program. Reused outputs can trigger duplicate-write warnings."));
+  return section;
+}
+
+function renderIecCrossProgramReplacement(body) {
+  if (!body.iecCircuitGraph || !(body.iecRows || []).length) return null;
+  const allowed = new Set(["Contact", "Coil", "Long wire", "Short wire", "Branch start", "Branch end", "Comment", "Function block", "Function operand", "Link reference"]);
+  const programs = current.summary.programs || [];
+  const sourceSites = (current.summary.ladder || []).flatMap((program) => {
+    if (program.programIndex === selectedProgramIndex || program.projectType !== 2 || !program.iecCircuitGraph) return [];
+    const groups = new Map();
+    for (const row of program.iecRows || []) {
+      const group = groups.get(row.groupIndex) || [];
+      group.push(row.rowIndex);
+      groups.set(row.groupIndex, group);
+    }
+    return [...groups].flatMap(([groupIndex, rows]) => {
+      const records = (program.iecRecords || []).filter((record) => record.groupIndex === groupIndex);
+      return records.length && records.every((record) => allowed.has(record.kind))
+        ? [{ programIndex: program.programIndex, groupIndex, firstRow: rows[0], lastRow: rows.at(-1) }]
+        : [];
+    });
+  });
+  if (!sourceSites.length) return null;
+
+  const section = element("section", "iec-insert-contact");
+  const sourceLabel = element("label", "", "Source network");
+  const sourceSelect = document.createElement("select");
+  sourceSelect.setAttribute("aria-label", "IEC cross-program source network");
+  sourceSites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `${programs[site.programIndex]?.name || `Program ${site.programIndex + 1}`} · network ${site.groupIndex + 1} · L${site.firstRow}${site.lastRow === site.firstRow ? "" : `–L${site.lastRow}`}`;
+    sourceSelect.append(option);
+  });
+  sourceLabel.append(sourceSelect);
+  const targetRows = body.iecRows || [];
+  const occupied = new Map();
+  for (const row of targetRows) {
+    const group = occupied.get(row.groupIndex) || [];
+    group.push(row.rowIndex);
+    occupied.set(row.groupIndex, group);
+  }
+  const replacementForm = document.createElement("form");
+  const replacementSourceLabel = element("label", "", "Source network to replace with");
+  const replacementSource = sourceSelect.cloneNode(true);
+  replacementSource.setAttribute("aria-label", "IEC cross-program replacement source network");
+  replacementSourceLabel.append(replacementSource);
+  const replacementDestinationLabel = element("label", "", "Occupied network to replace");
+  const replacementDestination = document.createElement("select");
+  replacementDestination.setAttribute("aria-label", "IEC cross-program replacement destination network");
+  for (const [groupIndex, rows] of occupied) {
+    const option = document.createElement("option");
+    option.value = String(groupIndex);
+    option.textContent = `network ${groupIndex + 1} · L${rows[0]}${rows.length > 1 ? `–L${rows.at(-1)}` : ""}`;
+    replacementDestination.append(option);
+  }
+  replacementDestinationLabel.append(replacementDestination);
+  const replacementLocalLabel = element("label", "", "Copy missing local variables");
+  const replacementLocals = document.createElement("input");
+  replacementLocals.type = "checkbox";
+  replacementLocals.setAttribute("aria-label", "Copy missing IEC locals for replacement");
+  replacementLocalLabel.prepend(replacementLocals);
+  const replacementSubmit = button("Replace network from another program", "secondary-button", () => {});
+  replacementSubmit.type = "submit";
+  replacementSubmit.textContent = "Replace network";
+  const replacementStatus = element("p", "muted");
+  const validateReplacement = () => {
+    const site = sourceSites[Number(replacementSource.value)];
+    const groupIndex = Number(replacementDestination.value);
+    const rows = occupied.get(groupIndex);
+    if (!site || !rows) {
+      replacementSubmit.disabled = true;
+      replacementStatus.textContent = "Choose both networks.";
+      return;
+    }
+    try {
+      replace_xgwx_iec_ld_group_from_program(current.file.bytes,
+        site.programIndex, site.groupIndex, site.firstRow,
+        selectedProgramIndex, groupIndex, rows[0], replacementLocals.checked);
+      replacementSubmit.disabled = false;
+      replacementStatus.textContent = "Ready to replace the occupied network in one edit. Review output addresses and function instances after copying.";
+    } catch (error) {
+      replacementSubmit.disabled = true;
+      replacementStatus.textContent = String(error);
+    }
+  };
+  replacementSource.addEventListener("change", validateReplacement);
+  replacementDestination.addEventListener("change", validateReplacement);
+  replacementLocals.addEventListener("change", validateReplacement);
+  replacementForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (replacementSubmit.disabled) return;
+    const site = sourceSites[Number(replacementSource.value)];
+    const groupIndex = Number(replacementDestination.value);
+    await applyEdit(() => replace_xgwx_iec_ld_group_from_program(current.file.bytes,
+      site.programIndex, site.groupIndex, site.firstRow,
+      selectedProgramIndex, groupIndex, occupied.get(groupIndex)[0], replacementLocals.checked),
+    `Replace IEC network ${groupIndex + 1} from program ${site.programIndex + 1}`);
+  });
+  replacementForm.append(replacementSourceLabel, replacementDestinationLabel,
+    replacementLocalLabel, replacementSubmit);
+  section.append(element("h3", "", "Replace IEC network from another program"),
+    replacementForm, replacementStatus);
+  validateReplacement();
+  return section;
+}
+
+function renderIecTerminalMoveInsertion(body) {
+  const sites = body.iecTerminalFunctionInsertionSites || [];
+  if (!sites.length) return null;
+  const lightingMove = selectedProgramIndex === 0
+    && sites[0].groupIndex === 32 && sites[0].rowIndex === 63;
+  const section = element("section", "iec-insert-contact iec-function-cell-insertion");
+  section.append(element("h3", "", "Insert terminal MOVE block"));
+  const form = document.createElement("form");
+  const siteLabel = element("label", "", "Retained contact");
+  const siteSelect = document.createElement("select");
+  siteSelect.setAttribute("aria-label", "IEC terminal MOVE insertion site");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · x ${site.rawX} · contact ${site.contactOffset}`;
+    siteSelect.append(option);
+  });
+  siteLabel.append(siteSelect);
+  const inputLabel = element("label", "", "Integer input");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = lightingMove ? "0" : "1";
+  input.setAttribute("aria-label", "IEC terminal MOVE input");
+  inputLabel.append(input);
+  const outputLabel = element("label", "", lightingMove ? "BOOL output" : "WORD output");
+  const output = document.createElement("input");
+  output.type = "text";
+  output.value = lightingMove ? "자기유지2" : "%MW300";
+  output.setAttribute("aria-label", "IEC terminal MOVE output");
+  outputLabel.append(output);
+  const submit = button("Insert MOVE", "primary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Insert MOVE";
+  const status = element("p", "muted");
+  const validate = () => {
+    const site = sites[Number(siteSelect.value)];
+    try {
+      insert_xgwx_iec_ld_terminal_move(
+        current.file.bytes, selectedProgramIndex, site.contactOffset,
+        input.value.trim(), output.value.trim(),
+      );
+      submit.disabled = false;
+      status.textContent = `Ready to insert MOVE at L${site.rowIndex}.`;
+    } catch (error) {
+      submit.disabled = true;
+      status.textContent = String(error);
+    }
+  };
+  siteSelect.addEventListener("change", validate);
+  input.addEventListener("input", validate);
+  output.addEventListener("input", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const site = sites[Number(siteSelect.value)];
+    await applyEdit(
+      () => insert_xgwx_iec_ld_terminal_move(
+        current.file.bytes, selectedProgramIndex, site.contactOffset,
+        input.value.trim(), output.value.trim(),
+      ),
+      `Insert terminal MOVE at L${site.rowIndex}`,
+    );
+  });
+  form.append(siteLabel, inputLabel, outputLabel, submit);
+  validate();
+  section.append(form, status);
+  return section;
+}
+
+function renderIecStandaloneFunctionInsertion(body) {
+  const sites = body.iecStandaloneFunctionInsertionSites || [];
+  const outputs = (current.summary.localVariables?.[selectedProgramIndex] || [])
+    .filter((symbol) => symbol.dataType === "UDINT" && !symbol.isInstance && symbol.storageClass !== "I");
+  if (!sites.length || !outputs.length) return null;
+  const section = element("section", "iec-insert-contact iec-function-cell-insertion");
+  section.append(element("h3", "", "Insert standalone WORD_TO_UDINT block"));
+  const form = document.createElement("form");
+  const label = element("label", "", "Stored gap");
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "IEC WORD_TO_UDINT insertion site");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex}–L${site.rowIndex + 2} · group ${site.groupIndex + 1} · x ${site.rawX}`;
+    select.append(option);
+  });
+  label.append(select);
+  const inputLabel = element("label", "", "WORD input");
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = "%MW301";
+  input.setAttribute("aria-label", "IEC WORD_TO_UDINT input");
+  inputLabel.append(input);
+  const outputLabel = element("label", "", "UDINT output");
+  const output = document.createElement("select");
+  output.setAttribute("aria-label", "IEC WORD_TO_UDINT output");
+  for (const symbol of outputs) {
+    const option = document.createElement("option");
+    option.value = symbol.name;
+    option.textContent = symbol.name;
+    output.append(option);
+  }
+  outputLabel.append(output);
+  const submit = button("Insert WORD_TO_UDINT", "primary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Insert WORD_TO_UDINT";
+  const status = element("p", "muted");
+  const validate = () => {
+    const site = sites[Number(select.value)];
+    try {
+      insert_xgwx_iec_ld_standalone_function(
+        current.file.bytes, selectedProgramIndex, site.insertionOffset,
+        "WORD_TO_UDINT", input.value.trim(), output.value,
+      );
+      submit.disabled = false;
+      status.textContent = `Ready to insert WORD_TO_UDINT at L${site.rowIndex}.`;
+    } catch (error) {
+      submit.disabled = true;
+      status.textContent = String(error);
+    }
+  };
+  select.addEventListener("change", validate);
+  input.addEventListener("input", validate);
+  output.addEventListener("change", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const site = sites[Number(select.value)];
+    await applyEdit(
+      () => insert_xgwx_iec_ld_standalone_function(
+        current.file.bytes, selectedProgramIndex, site.insertionOffset,
+        "WORD_TO_UDINT", input.value.trim(), output.value,
+      ),
+      `Insert standalone WORD_TO_UDINT at L${site.rowIndex}`,
+    );
+  });
+  form.append(label, inputLabel, outputLabel, submit);
+  validate();
+  section.append(form, status);
+  return section;
+}
+
+function renderIecFunctionCellInsertion(body) {
+  const sites = body.iecFunctionCellInsertionSites || [];
+  const instances = (current.summary.localVariables?.[selectedProgramIndex] || [])
+    .filter((symbol) => symbol.isInstance && symbol.typeReference === "FF");
+  if (!sites.length || !instances.length) return null;
+  const section = element("section", "iec-insert-contact iec-function-cell-insertion");
+  section.append(element("h3", "", "Insert connected FF block"));
+  const form = document.createElement("form");
+  const siteLabel = element("label", "", "Stored gap");
+  const siteSelect = document.createElement("select");
+  siteSelect.setAttribute("aria-label", "IEC FF insertion site");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · group ${site.groupIndex + 1} · x ${site.rawX}`;
+    siteSelect.append(option);
+  });
+  siteLabel.append(siteSelect);
+  const instanceLabel = element("label", "", "FF instance");
+  const instanceSelect = document.createElement("select");
+  instanceSelect.setAttribute("aria-label", "IEC FF instance");
+  for (const instance of instances) {
+    const option = document.createElement("option");
+    option.value = instance.name;
+    option.textContent = instance.name;
+    instanceSelect.append(option);
+  }
+  instanceLabel.append(instanceSelect);
+  const submit = button("Insert FF block", "primary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Insert FF block";
+  const status = element("p", "muted");
+  const validate = () => {
+    const site = sites[Number(siteSelect.value)];
+    try {
+      insert_xgwx_iec_ld_function_cell(
+        current.file.bytes, selectedProgramIndex, site.insertionOffset, "FF", instanceSelect.value,
+      );
+      submit.disabled = false;
+      status.textContent = `Ready to insert FF instance ${instanceSelect.value} at L${site.rowIndex}.`;
+    } catch (error) {
+      submit.disabled = true;
+      status.textContent = String(error);
+    }
+  };
+  siteSelect.addEventListener("change", validate);
+  instanceSelect.addEventListener("change", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const site = sites[Number(siteSelect.value)];
+    const instance = instanceSelect.value;
+    await applyEdit(
+      () => insert_xgwx_iec_ld_function_cell(
+        current.file.bytes, selectedProgramIndex, site.insertionOffset, "FF", instance,
+      ),
+      `Insert connected IEC function FF instance ${instance} at L${site.rowIndex}`,
+    );
+  });
+  form.append(siteLabel, instanceLabel, submit);
+  validate();
+  section.append(form, status);
+  return section;
+}
+
+function renderIecRungCreation(section, body, candidateRows) {
+  const rows = candidateRows.filter((rowIndex) => {
+    try {
+      insert_xgwx_iec_ld_rung(current.file.bytes, selectedProgramIndex, rowIndex,
+        "NO", "%MX0", "OUTPUT", "%MX1");
+      return true;
+    } catch { return false; }
+  });
+  if (!rows.length) return;
+  const form = element("form", "iec-rung-creation");
+  const rowLabel = element("label", "property-field", "Create rung on empty row");
+  const rowSelect = document.createElement("select");
+  rowSelect.setAttribute("aria-label", "IEC simple rung row");
+  for (const rowIndex of rows) {
+    const option = document.createElement("option");
+    option.value = String(rowIndex);
+    option.textContent = `L${rowIndex}`;
+    rowSelect.append(option);
+  }
+  rowLabel.append(rowSelect);
+  const kinds = (labelText, ariaLabel, choices) => {
+    const label = element("label", "property-field", labelText);
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", ariaLabel);
+    for (const [value, text] of choices) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    }
+    label.append(select);
+    form.append(label);
+    return select;
+  };
+  const names = [...new Set([
+    ...(current.summary.localVariables?.[selectedProgramIndex] || [])
+      .filter((symbol) => symbol.dataType === "BOOL" && !symbol.isInstance)
+      .map((symbol) => symbol.name),
+    ...(body.sourceStrings || [])
+      .filter((item) => iecContactGlyph(item.iecElementKind)
+        || IEC_COIL_GLYPH_BY_SOURCE_LABEL.has(item.iecElementKind))
+      .map((item) => item.value),
+  ])];
+  const operand = (labelText, ariaLabel, preferred, fallback) => {
+    const input = property(form, labelText, names.includes(preferred) ? preferred : fallback, false);
+    input.setAttribute("aria-label", ariaLabel);
+    const list = document.createElement("datalist");
+    list.id = `iec-rung-${++nextContactPromptId}`;
+    for (const name of names) {
+      const option = document.createElement("option");
+      option.value = name;
+      list.append(option);
+    }
+    input.setAttribute("list", list.id);
+    form.append(list);
+    return input;
+  };
+  form.append(rowLabel);
+  const contactKind = kinds("Contact kind", "IEC simple rung contact kind", IEC_ADDRESSED_CONTACT_CHOICES);
+  const contact = operand("Contact BOOL variable", "IEC simple rung contact", "ON", "%MX0");
+  const coilKind = kinds("Coil kind", "IEC simple rung coil kind", [
+    ["OUTPUT", "Output"], ["INVERSE", "Inverse output"], ["SET", "Set"],
+    ["RESET", "Reset"], ["RISING", "Rising edge"], ["FALLING", "Falling edge"],
+  ]);
+  const coil = operand("Coil BOOL variable", "IEC simple rung coil", "OFF", "%MX1");
+  const create = button("Create simple rung", "primary-button", () => {});
+  create.type = "submit";
+  const status = element("div", "length-counter");
+  const validate = () => {
+    try {
+      insert_xgwx_iec_ld_rung(current.file.bytes, selectedProgramIndex, Number(rowSelect.value),
+        contactKind.value, contact.value.trim(), coilKind.value, coil.value.trim());
+      create.disabled = false;
+      status.textContent = `Ready to create a rung on L${rowSelect.value}.`;
+      status.classList.remove("invalid");
+    } catch (error) {
+      create.disabled = true;
+      status.textContent = String(error);
+      status.classList.add("invalid");
+    }
+  };
+  form.addEventListener("input", validate);
+  form.addEventListener("change", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (create.disabled) return;
+    const rowIndex = Number(rowSelect.value);
+    await applyEdit(() => insert_xgwx_iec_ld_rung(current.file.bytes, selectedProgramIndex, rowIndex,
+      contactKind.value, contact.value.trim(), coilKind.value, coil.value.trim()),
+    `Create IEC rung L${rowIndex}: ${contact.value.trim()} to ${coil.value.trim()}`);
+  });
+  form.append(status, create);
+  validate();
+  section.append(form);
+}
+
+function renderIecBlankRowInsertion(body) {
+  const rows = body.iecRows || [];
+  if (!rows.length || !body.iecCircuitGraph) return null;
+  const section = element("section", "iec-insert-contact iec-blank-row-editor");
+  section.append(element("h3", "", "Edit blank IEC rows"));
+  const form = document.createElement("form");
+  const label = element("label", "", "Insert after stored row");
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "IEC blank row boundary");
+  rows.forEach((row, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${row.rowIndex} · group ${row.groupIndex + 1}`;
+    select.append(option);
+  });
+  label.append(select);
+  const submit = button("Insert blank row", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Insert blank row";
+  const status = element("p", "muted");
+  const validate = () => {
+    const row = rows[Number(select.value)];
+    try {
+      insert_xgwx_iec_ld_blank_row(current.file.bytes, selectedProgramIndex, row.rowIndex);
+      submit.disabled = false;
+      status.textContent = `Ready to shift every decoded row after L${row.rowIndex} down by one line.`;
+    } catch (error) {
+      submit.disabled = true;
+      status.textContent = String(error);
+    }
+  };
+  select.addEventListener("change", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const row = rows[Number(select.value)];
+    await applyEdit(
+      () => insert_xgwx_iec_ld_blank_row(
+        current.file.bytes, selectedProgramIndex, row.rowIndex,
+      ),
+      `Insert blank IEC row after L${row.rowIndex}`,
+    );
+  });
+  form.append(label, submit);
+  validate();
+  section.append(form, status);
+
+  const gaps = rows.slice(0, -1).flatMap((row, index) => {
+    const next = rows[index + 1];
+    return Array.from(
+      { length: Math.max(0, next.rowIndex - row.rowIndex - 1) },
+      (_, gap) => row.rowIndex + gap + 1,
+    );
+  });
+  if (gaps.length) {
+    const deleteForm = document.createElement("form");
+    const deleteLabel = element("label", "", "Delete empty row");
+    const deleteSelect = document.createElement("select");
+    deleteSelect.setAttribute("aria-label", "IEC blank row to delete");
+    gaps.forEach((rowIndex) => {
+      const option = document.createElement("option");
+      option.value = String(rowIndex);
+      option.textContent = `L${rowIndex}`;
+      deleteSelect.append(option);
+    });
+    deleteLabel.append(deleteSelect);
+    const deleteButton = button("Delete blank row", "secondary-button", () => {});
+    deleteButton.type = "submit";
+    const deleteStatus = element("p", "muted");
+    const validateDelete = () => {
+      const rowIndex = Number(deleteSelect.value);
+      try {
+        delete_xgwx_iec_ld_blank_row(current.file.bytes, selectedProgramIndex, rowIndex);
+        deleteButton.disabled = false;
+        deleteStatus.textContent = `Ready to close the empty L${rowIndex} gap and move later decoded rows up.`;
+      } catch (error) {
+        deleteButton.disabled = true;
+        deleteStatus.textContent = String(error);
+      }
+    };
+    deleteSelect.addEventListener("change", validateDelete);
+    deleteForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (deleteButton.disabled) return;
+      const rowIndex = Number(deleteSelect.value);
+      await applyEdit(
+        () => delete_xgwx_iec_ld_blank_row(
+          current.file.bytes, selectedProgramIndex, rowIndex,
+        ),
+        `Delete blank IEC row L${rowIndex}`,
+      );
+    });
+    deleteForm.append(deleteLabel, deleteButton);
+    validateDelete();
+    section.append(deleteForm, deleteStatus);
+  }
+  const boolSymbols = (current.summary.localVariables?.[selectedProgramIndex] || [])
+    .filter((symbol) => symbol.dataType === "BOOL" && !symbol.isInstance)
+    .map((symbol) => symbol.name)
+    .filter((name, index, names) => name && names.indexOf(name) === index);
+  const contactKinds = IEC_ADDRESSED_CONTACT_CHOICES.map(([value, label, , code]) =>
+    ({ value, label, code }));
+  const coilKinds = [
+    { value: "OUTPUT", code: 0x0e, label: "Output" },
+    { value: "INVERSE", code: 0x0f, label: "Inverse output" },
+    { value: "SET", code: 0x10, label: "Set" },
+    { value: "RESET", code: 0x11, label: "Reset" },
+    { value: "RISING", code: 0x12, label: "Rising edge" },
+    { value: "FALLING", code: 0x13, label: "Falling edge" },
+  ];
+  renderIecRungCreation(section, body, [...gaps, Math.max(...rows.map((row) => row.rowIndex)) + 1]);
+  const simpleRungs = rows.flatMap((row) => {
+    const groupRows = rows.filter((candidate) => candidate.groupIndex === row.groupIndex);
+    const records = (body.iecRecords || []).filter((record) => (
+      record.groupIndex === row.groupIndex && record.rowIndex === row.rowIndex
+    ));
+    const contactKind = contactKinds.find((kind) => kind.code === records[0]?.code);
+    const coilKind = coilKinds.find((kind) => kind.code === records[2]?.code);
+    if (groupRows.length !== 1 || records.length !== 3
+      || records[0].kind !== "Contact" || !contactKind
+      || records[1].kind !== "Long wire"
+      || records[2].kind !== "Coil" || !coilKind) return [];
+    const sourceFor = (record) => (body.sourceStrings || []).find((item) => (
+      item.iecRecordOffset === record.offset && item.iecRecordKind === record.kind
+    ));
+    const contact = sourceFor(records[0]);
+    const coil = sourceFor(records[2]);
+    if (!contact?.value || !coil?.value) return [];
+    try {
+      delete_xgwx_iec_ld_rung(
+        current.file.bytes, selectedProgramIndex, row.rowIndex,
+        contactKind.value, contact.value, coilKind.value, coil.value,
+      );
+      let canDeleteRow = false;
+      let canDeleteCoil = false;
+      try {
+        delete_xgwx_iec_ld_simple_row(
+          current.file.bytes, selectedProgramIndex, row.rowIndex,
+          contactKind.value, contact.value, coilKind.value, coil.value,
+        );
+        canDeleteRow = true;
+      } catch { /* The row cannot be closed safely. */ }
+      try {
+        delete_xgwx_iec_ld_terminal_coil(
+          current.file.bytes, selectedProgramIndex, records[2].offset, coil.value,
+        );
+        canDeleteCoil = true;
+      } catch { /* This rung has a different terminal shape. */ }
+      return [{
+        rowIndex: row.rowIndex,
+        contact: contact.value,
+        contactKind: contactKind.value,
+        contactLabel: contactKind.label,
+        coil: coil.value,
+        coilRecordOffset: records[2].offset,
+        coilKind: coilKind.value,
+        coilLabel: coilKind.label,
+        canDeleteRow,
+        canDeleteCoil,
+      }];
+    } catch {
+      return [];
+    }
+  });
+  if (simpleRungs.length) {
+    const parallelRungs = simpleRungs;
+    if (parallelRungs.length) {
+      const parallelForm = document.createElement("form");
+      const rungLabel = element("label", "", "Add parallel contact to rung");
+      const rungSelect = document.createElement("select");
+      rungSelect.setAttribute("aria-label", "IEC parallel contact rung");
+      parallelRungs.forEach((rung, index) => {
+        const option = document.createElement("option");
+        option.value = String(index);
+        option.textContent = `L${rung.rowIndex} · ${rung.contact} to ${rung.coilLabel} ${rung.coil}`;
+        rungSelect.append(option);
+      });
+      rungLabel.append(rungSelect);
+      const kindLabel = element("label", "", "Parallel contact kind");
+      const kindSelect = document.createElement("select");
+      kindSelect.setAttribute("aria-label", "IEC parallel contact kind");
+      for (const kind of contactKinds) {
+        const option = document.createElement("option");
+        option.value = kind.value;
+        option.textContent = kind.label;
+        kindSelect.append(option);
+      }
+      kindLabel.append(kindSelect);
+      const symbolLabel = element("label", "", "Parallel BOOL contact");
+      const symbolInput = document.createElement("input");
+      symbolInput.setAttribute("aria-label", "IEC parallel contact variable");
+      symbolInput.setAttribute("list", `iec-parallel-symbols-${selectedProgramIndex}`);
+      const symbolList = document.createElement("datalist");
+      symbolList.id = `iec-parallel-symbols-${selectedProgramIndex}`;
+      const capturedContacts = (body.iecRecords || [])
+        .filter((record) => record.kind === "Contact")
+        .map((record) => (body.sourceStrings || []).find((item) => (
+          item.iecRecordOffset === record.offset && item.iecRecordKind === "Contact"
+        ))?.value)
+        .filter(Boolean);
+      const suggestions = [...new Set([...boolSymbols, ...capturedContacts])];
+      for (const name of suggestions) {
+        const option = document.createElement("option");
+        option.value = name;
+        symbolList.append(option);
+      }
+      symbolInput.value = boolSymbols.includes("OFF") ? "OFF"
+        : suggestions.find((name) => name !== parallelRungs[0].contact)
+          || parallelRungs[0].contact;
+      symbolLabel.append(symbolInput, symbolList);
+      const addButton = button("Add parallel contact", "primary-button", () => {});
+      addButton.type = "submit";
+      const status = element("p", "muted");
+      const validate = () => {
+        const rung = parallelRungs[Number(rungSelect.value)];
+        try {
+          insert_xgwx_iec_ld_parallel_contact_kind(
+            current.file.bytes, selectedProgramIndex, rung.rowIndex,
+            rung.contact, rung.coil, kindSelect.value, symbolInput.value.trim(),
+          );
+          addButton.disabled = false;
+          status.textContent = `Ready to add a parallel contact below L${rung.rowIndex}.`;
+        } catch (error) {
+          addButton.disabled = true;
+          status.textContent = String(error);
+        }
+      };
+      rungSelect.addEventListener("change", validate);
+      kindSelect.addEventListener("change", validate);
+      symbolInput.addEventListener("input", validate);
+      parallelForm.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (addButton.disabled) return;
+        const rung = parallelRungs[Number(rungSelect.value)];
+        const variable = symbolInput.value.trim();
+        await applyEdit(
+          () => insert_xgwx_iec_ld_parallel_contact_kind(
+            current.file.bytes, selectedProgramIndex, rung.rowIndex,
+            rung.contact, rung.coil, kindSelect.value, variable,
+          ),
+          `Add IEC parallel ${kindSelect.value} contact ${variable} below L${rung.rowIndex}`,
+        );
+      });
+      parallelForm.append(rungLabel, kindLabel, symbolLabel, addButton);
+      validate();
+      section.append(parallelForm, status);
+    }
+    const removeForm = document.createElement("form");
+    const removeLabel = element("label", "", "Delete simple rung");
+    const removeSelect = document.createElement("select");
+    removeSelect.setAttribute("aria-label", "IEC simple rung to delete");
+    simpleRungs.forEach((rung, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `L${rung.rowIndex} · ${rung.contactLabel} ${rung.contact} to ${rung.coilLabel} ${rung.coil}`;
+      removeSelect.append(option);
+    });
+    removeLabel.append(removeSelect);
+    const removeButton = button("Delete simple rung", "secondary-button", () => {});
+    removeButton.type = "submit";
+    removeForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const rung = simpleRungs[Number(removeSelect.value)];
+      await applyEdit(
+        () => delete_xgwx_iec_ld_rung(
+          current.file.bytes, selectedProgramIndex, rung.rowIndex,
+          rung.contactKind, rung.contact, rung.coilKind, rung.coil,
+        ),
+        rung.contactKind === "NO" && rung.coilKind === "OUTPUT"
+          ? `Delete IEC rung L${rung.rowIndex}: ${rung.contact} to ${rung.coil}`
+          : `Delete IEC rung L${rung.rowIndex}: ${rung.contactKind} ${rung.contact} to ${rung.coilKind} ${rung.coil}`,
+      );
+    });
+    removeForm.append(removeLabel, removeButton);
+    if (simpleRungs.some((rung) => rung.canDeleteCoil)) {
+      const deleteCoilButton = button("Delete output coil", "secondary-button", async () => {
+        const rung = simpleRungs[Number(removeSelect.value)];
+        if (!rung?.canDeleteCoil) return;
+        await applyEdit(
+          () => delete_xgwx_iec_ld_terminal_coil(
+            current.file.bytes, selectedProgramIndex, rung.coilRecordOffset, rung.coil,
+          ),
+          `Delete IEC output coil at L${rung.rowIndex}`,
+        );
+      });
+      removeSelect.addEventListener("change", () => {
+        deleteCoilButton.disabled = !simpleRungs[Number(removeSelect.value)]?.canDeleteCoil;
+      });
+      deleteCoilButton.disabled = !simpleRungs[0].canDeleteCoil;
+      removeForm.append(deleteCoilButton);
+    }
+    if (simpleRungs.some((rung) => rung.canDeleteRow)) {
+      const deleteRowButton = button("Delete occupied row", "secondary-button", async () => {
+        const rung = simpleRungs[Number(removeSelect.value)];
+        if (!rung?.canDeleteRow) return;
+        await applyEdit(
+          () => delete_xgwx_iec_ld_simple_row(
+            current.file.bytes, selectedProgramIndex, rung.rowIndex,
+            rung.contactKind, rung.contact, rung.coilKind, rung.coil,
+          ),
+          `Delete occupied IEC row L${rung.rowIndex}`,
+        );
+      });
+      deleteRowButton.type = "button";
+      removeSelect.addEventListener("change", () => {
+        deleteRowButton.disabled = !simpleRungs[Number(removeSelect.value)]?.canDeleteRow;
+      });
+      deleteRowButton.disabled = !simpleRungs[0].canDeleteRow;
+      removeForm.append(deleteRowButton);
+    }
+    section.append(removeForm);
+  }
+  const contactOnlyRows = rows.flatMap((row) => {
+    if (rows.filter((candidate) => candidate.groupIndex === row.groupIndex).length !== 1) return [];
+    const records = (body.iecRecords || []).filter((record) =>
+      record.groupIndex === row.groupIndex && record.rowIndex === row.rowIndex);
+    if (records.length !== 1 || records[0].kind !== "Contact") return [];
+    const contact = (body.sourceStrings || []).find((item) =>
+      item.iecRecordOffset === records[0].offset && item.iecRecordKind === "Contact");
+    if (!contact?.value || !boolSymbols.length) return [];
+    try {
+      insert_xgwx_iec_ld_terminal_coil(
+        current.file.bytes, selectedProgramIndex, records[0].offset, contact.value,
+        "OUTPUT", boolSymbols[0],
+      );
+      return [{ rowIndex: row.rowIndex, contactRecordOffset: records[0].offset, contact: contact.value }];
+    } catch { return []; }
+  });
+  if (contactOnlyRows.length) {
+    const form = document.createElement("form");
+    const rowLabel = element("label", "", "Complete contact-only rung");
+    const rowSelect = document.createElement("select");
+    rowSelect.setAttribute("aria-label", "IEC contact-only rung to complete");
+    contactOnlyRows.forEach((site, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `L${site.rowIndex} · ${site.contact}`;
+      rowSelect.append(option);
+    });
+    rowLabel.append(rowSelect);
+    const kindLabel = element("label", "", "Coil kind");
+    const kindSelect = document.createElement("select");
+    kindSelect.setAttribute("aria-label", "IEC terminal coil kind");
+    coilKinds.forEach((kind) => {
+      const option = document.createElement("option");
+      option.value = kind.value;
+      option.textContent = kind.label;
+      kindSelect.append(option);
+    });
+    kindLabel.append(kindSelect);
+    const variableLabel = element("label", "", "Coil BOOL variable");
+    const variableSelect = document.createElement("select");
+    variableSelect.setAttribute("aria-label", "IEC terminal coil variable");
+    boolSymbols.forEach((name) => {
+      const option = document.createElement("option");
+      option.value = name;
+      option.textContent = name;
+      variableSelect.append(option);
+    });
+    variableLabel.append(variableSelect);
+    const insertButton = button("Insert output coil", "primary-button", () => {});
+    insertButton.type = "submit";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const site = contactOnlyRows[Number(rowSelect.value)];
+      await applyEdit(
+        () => insert_xgwx_iec_ld_terminal_coil(
+          current.file.bytes, selectedProgramIndex, site.contactRecordOffset,
+          site.contact, kindSelect.value, variableSelect.value,
+        ),
+        `Insert IEC ${kindSelect.value} coil at L${site.rowIndex}`,
+      );
+    });
+    form.append(rowLabel, kindLabel, variableLabel, insertButton);
+    section.append(form);
+  }
+  section.append(element("p", "muted", "Matches XG5000 Ctrl+L and Ctrl+D: the row high-water mark and later row, branch, function, pin, and expression coordinates move together."));
+  return section;
+}
+
+function renderIecNoContactInsertion(body) {
+  const sites = body.iecNoContactInsertionSites || [];
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Insert contact"));
+  const form = document.createElement("form");
+  const siteLabel = element("label", "", "Stored row");
+  const siteSelect = document.createElement("select");
+  siteSelect.setAttribute("aria-label", "IEC insertion row");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · group ${site.groupIndex + 1} · wire ${site.wireOffset}`;
+    siteSelect.append(option);
+  });
+  siteLabel.append(siteSelect);
+  const positionLabel = element("label", "", "Position");
+  const positionSelect = document.createElement("select");
+  positionSelect.setAttribute("aria-label", "IEC contact x position");
+  positionLabel.append(positionSelect);
+  const kindLabel = element("label", "", "Contact kind");
+  const kind = document.createElement("select");
+  kind.setAttribute("aria-label", "IEC contact kind to insert");
+  for (const [value, label] of IEC_ADDRESSED_CONTACT_CHOICES) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    kind.append(option);
+  }
+  kindLabel.append(kind);
+  const variableLabel = element("label", "", "BOOL variable");
+  const variable = document.createElement("input");
+  variable.type = "text";
+  variable.maxLength = 255;
+  variable.placeholder = "Existing BOOL variable";
+  variable.setAttribute("aria-label", "IEC contact BOOL variable");
+  variableLabel.append(variable);
+  const submit = button("Insert contact", "primary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Insert contact";
+  const update = () => {
+    const site = sites[Number(siteSelect.value)];
+    positionSelect.replaceChildren();
+    for (let x = site.startX + 3; x + 3 <= site.endX; x += 3) {
+      const option = document.createElement("option");
+      option.value = String(x);
+      option.textContent = `x ${x}`;
+      positionSelect.append(option);
+    }
+  };
+  const validate = () => {
+    submit.disabled = !variable.value.trim() || /[\p{Cc}]/u.test(variable.value);
+  };
+  siteSelect.addEventListener("change", update);
+  variable.addEventListener("input", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const site = sites[Number(siteSelect.value)];
+    const name = variable.value.trim();
+    await applyEdit(() => insert_xgwx_iec_ld_contact(
+      current.file.bytes, selectedProgramIndex, site.wireOffset,
+      Number(positionSelect.value), site.startX, site.endX, kind.value, name,
+    ), `Insert IEC ${kind.options[kind.selectedIndex].text.toLowerCase()} contact ${name}`);
+  });
+  update();
+  validate();
+  form.append(siteLabel, positionLabel, kindLabel, variableLabel, submit);
+  section.append(form);
+  return section;
+}
+
+function renderIecShortWireContactInsertion(body) {
+  const sites = body.iecShortWireContactInsertionSites || [];
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Replace short wire with contact"));
+  const form = document.createElement("form");
+  const siteLabel = element("label", "", "One-cell wire");
+  const siteSelect = document.createElement("select");
+  siteSelect.setAttribute("aria-label", "IEC short wire contact site");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · group ${site.groupIndex + 1} · x ${site.rawX}`;
+    siteSelect.append(option);
+  });
+  siteLabel.append(siteSelect);
+  const kindLabel = element("label", "", "Contact kind");
+  const kind = document.createElement("select");
+  kind.setAttribute("aria-label", "IEC short wire contact kind");
+  for (const [value, label] of IEC_ADDRESSED_CONTACT_CHOICES) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    kind.append(option);
+  }
+  kindLabel.append(kind);
+  const variableLabel = element("label", "", "BOOL variable");
+  const variable = document.createElement("input");
+  variable.type = "text";
+  variable.maxLength = 255;
+  variable.placeholder = "Existing BOOL variable";
+  variable.setAttribute("aria-label", "IEC short wire BOOL variable");
+  variableLabel.append(variable);
+  const submit = button("Replace short wire with contact", "primary-button", () => {});
+  submit.type = "submit";
+  const validate = () => {
+    try {
+      const site = sites[Number(siteSelect.value)];
+      insert_xgwx_iec_ld_short_wire_contact(current.file.bytes, selectedProgramIndex,
+        site.wireOffset, site.rawX, kind.value, variable.value.trim());
+      submit.disabled = false;
+    } catch { submit.disabled = true; }
+  };
+  siteSelect.addEventListener("change", validate);
+  kind.addEventListener("change", validate);
+  variable.addEventListener("input", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const site = sites[Number(siteSelect.value)];
+    const name = variable.value.trim();
+    await applyEdit(() => insert_xgwx_iec_ld_short_wire_contact(
+      current.file.bytes, selectedProgramIndex, site.wireOffset, site.rawX, kind.value, name,
+    ), `Insert IEC contact ${name} at L${site.rowIndex} x${site.rawX}`);
+  });
+  form.append(siteLabel, kindLabel, variableLabel, submit);
+  validate();
+  section.append(form, element("p", "muted",
+    "Replaces a captured one-cell wire. The operand must resolve to BOOL and the circuit must remain valid."));
+  return section;
+}
+
+function renderIecLeadingContactInsertion(body) {
+  const sites = body.iecLeadingContactInsertionSites || [];
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Insert leading contact"));
+  const form = document.createElement("form");
+  const rowLabel = element("label", "", "Empty first cell");
+  const row = document.createElement("select");
+  row.setAttribute("aria-label", "IEC leading contact row");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · group ${site.groupIndex + 1} · x 1`;
+    row.append(option);
+  });
+  rowLabel.append(row);
+  const kindLabel = element("label", "", "Contact kind");
+  const kind = document.createElement("select");
+  kind.setAttribute("aria-label", "IEC leading contact kind");
+  for (const [value, label] of IEC_ADDRESSED_CONTACT_CHOICES) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    kind.append(option);
+  }
+  kindLabel.append(kind);
+  const variableLabel = element("label", "", "BOOL variable");
+  const variable = document.createElement("input");
+  variable.type = "text";
+  variable.maxLength = 255;
+  variable.placeholder = "Existing BOOL variable";
+  variable.setAttribute("aria-label", "IEC leading contact BOOL variable");
+  variableLabel.append(variable);
+  const submit = button("Insert leading contact", "primary-button", () => {});
+  submit.type = "submit";
+  const validate = () => {
+    try {
+      insert_xgwx_iec_ld_leading_contact(current.file.bytes, selectedProgramIndex,
+        sites[Number(row.value)].insertionOffset, kind.value, variable.value.trim());
+      submit.disabled = false;
+    } catch { submit.disabled = true; }
+  };
+  row.addEventListener("change", validate);
+  kind.addEventListener("change", validate);
+  variable.addEventListener("input", validate);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    const site = sites[Number(row.value)];
+    const name = variable.value.trim();
+    await applyEdit(() => insert_xgwx_iec_ld_leading_contact(
+      current.file.bytes, selectedProgramIndex, site.insertionOffset, kind.value, name,
+    ), `Insert leading IEC contact ${name} at L${site.rowIndex}`);
+  });
+  form.append(rowLabel, kindLabel, variableLabel, submit);
+  validate();
+  section.append(form, element("p", "muted",
+    "Fills the first x1 cell on a captured two-row branch. The operand must resolve to BOOL."));
+  return section;
+}
+
+function iecAddressedContactSites(body, property) {
+  return (body[property] || []).map((site) => ({
+    ...site,
+    operand: (body.sourceStrings || []).find((item) => item.iecRecordOffset === site.contactOffset && item.iecElementKind),
+  })).map((site) => ({
+    ...site,
+    variable: site.operand?.value,
+    kind: IEC_CONTACT_KIND_BY_SOURCE_LABEL.get(site.operand?.iecElementKind),
+  })).filter((site) => site.variable && site.kind);
+}
+
+function renderIecNoContactDeletion(body) {
+  const sites = iecAddressedContactSites(body, "iecNoContactCellDeletionSites");
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Cell Delete contact"));
+  const form = document.createElement("form");
+  const label = element("label", "", "Stored contact");
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "IEC contact to delete");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · x ${site.rawX} · ${site.kind} · ${site.variable}`;
+    select.append(option);
+  });
+  label.append(select);
+  const submit = button("Delete contact and close cell", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Delete contact and close cell";
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const site = sites[Number(select.value)];
+    await applyEdit(() => delete_xgwx_iec_ld_contact_cell(
+      current.file.bytes, selectedProgramIndex, site.contactOffset, site.rawX, site.kind, site.variable,
+    ), `Cell delete IEC contact ${site.variable}`);
+  });
+  form.append(label, submit);
+  section.append(form, element("p", "muted", "Uses XG5000 Cell Delete semantics. A leading branch contact moves the next contact into the first cell; a contact between wires shifts later cells left."));
+  return section;
+}
+
+function renderIecContactGapDeletion(body) {
+  const sites = iecAddressedContactSites(body, "iecNoContactDeletionSites");
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Delete contact"));
+  const form = document.createElement("form");
+  const label = element("label", "", "Stored contact");
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "IEC contact to remove without closing cell");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · x ${site.rawX} · ${site.kind} · ${site.variable}`;
+    select.append(option);
+  });
+  label.append(select);
+  const submit = button("Delete contact and leave gap", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Delete contact and leave gap";
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const site = sites[Number(select.value)];
+    await applyEdit(() => delete_xgwx_iec_ld_contact(
+      current.file.bytes, selectedProgramIndex, site.contactOffset, site.rawX, site.kind, site.variable,
+    ), `Delete IEC contact ${site.variable}`);
+  });
+  form.append(label, submit);
+  section.append(form, element("p", "muted", "Uses XG5000 Delete semantics. A leading branch contact leaves its first cell empty; a contact between wires leaves the two wire fragments separated."));
+  return section;
+}
+
+function renderIecHorizontalWireRepair(body) {
+  const sites = body.iecHorizontalWireRepairSites || [];
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Reconnect deleted-contact gap"));
+  const form = document.createElement("form");
+  const label = element("label", "", "Wire gap");
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "IEC horizontal wire gap to reconnect");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · x ${site.rawX}`;
+    select.append(option);
+  });
+  label.append(select);
+  const submit = button("Insert horizontal wire", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Insert horizontal wire";
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const site = sites[Number(select.value)];
+    await applyEdit(() => repair_xgwx_iec_ld_horizontal_wire(
+      current.file.bytes, selectedProgramIndex, site.insertionOffset, site.rawX,
+    ), `Reconnect IEC wire at L${site.rowIndex} x ${site.rawX}`);
+  });
+  form.append(label, submit);
+  section.append(form, element("p", "muted", "This inserts the same short horizontal wire as XG5000 F5 for the captured deletion gap."));
+  return section;
+}
+
+function renderIecHorizontalWireDeletion(body) {
+  const sites = body.iecHorizontalWireDeletionSites || [];
+  if (!sites.length) return null;
+  const section = element("section", "iec-insert-contact");
+  section.append(element("h3", "", "Remove horizontal wire"));
+  const form = document.createElement("form");
+  const label = element("label", "", "Wire segment");
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "IEC horizontal wire segment to remove");
+  sites.forEach((site, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `L${site.rowIndex} · x ${site.rawX}`;
+    select.append(option);
+  });
+  label.append(select);
+  const submit = button("Remove horizontal wire", "secondary-button", () => {});
+  submit.type = "submit";
+  submit.textContent = "Remove horizontal wire";
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const site = sites[Number(select.value)];
+    await applyEdit(() => delete_xgwx_iec_ld_horizontal_wire(
+      current.file.bytes, selectedProgramIndex, site.wireOffset, site.rawX,
+    ), `Remove IEC wire at L${site.rowIndex} x ${site.rawX}`);
+  });
+  form.append(label, submit);
+  section.append(form, element("p", "muted", "Removing a wire opens a one-cell gap. Reconnect it before using the program if Check Program reports a disconnected circuit."));
+  return section;
+}
+
+function renderIecBranchEditing(body) {
+  const rows = body.iecRows || [];
+  const records = body.iecRecords || [];
+  const segments = body.iecGeometry?.vertical || [];
+  if (!segments.length || rows.length < 2) return null;
+
+  const simpleKinds = new Set([
+    "Long wire", "Short wire", "Contact", "Coil", "Branch start", "Branch end",
+  ]);
+  const simpleRow = (row) => records
+    .filter((record) => record.groupIndex === row.groupIndex && record.rowIndex === row.rowIndex)
+    .every((record) => simpleKinds.has(record.kind));
+  const pairs = rows.slice(0, -1).flatMap((row, index) => {
+    const next = rows[index + 1];
+    return next.groupIndex === row.groupIndex
+      && next.rowIndex === row.rowIndex + 1
+      && simpleRow(row) && simpleRow(next)
+      ? [{ groupIndex: row.groupIndex, startRowIndex: row.rowIndex, endRowIndex: next.rowIndex }]
+      : [];
+  });
+  let ffBranchOutputRow = null;
+  if (selectedProgramIndex === 0
+    && rows.some((row) => row.groupIndex === 9 && row.rowIndex === 15)) {
+    try {
+      delete_xgwx_iec_ld_ff_branch_output_row(current.file.bytes, 0, 9, 15);
+      ffBranchOutputRow = { groupIndex: 9, rowIndex: 15 };
+    } catch { /* Other FF branch layouts remain unavailable. */ }
+  }
+  const nestedDeletionSites = selectedProgramIndex === 6
+    ? rows.filter((row) => (row.groupIndex === 3 && [4, 6].includes(row.rowIndex))
+        || (row.groupIndex === 8 && [21, 23].includes(row.rowIndex)))
+      .filter((row) => {
+        const kinds = records.filter((record) => record.groupIndex === row.groupIndex
+          && record.rowIndex === row.rowIndex).map((record) => record.kind);
+        if (kinds.join(",") !== "Branch end,Branch start,Branch end,Contact,Branch end") return false;
+        try {
+          delete_xgwx_iec_ld_nested_contact_branch_row(
+            current.file.bytes, selectedProgramIndex, row.groupIndex, row.rowIndex,
+          );
+          return true;
+        } catch { return false; }
+      })
+    : [];
+  const chainedDeletionSites = selectedProgramIndex === 6
+    ? rows.filter((row) => row.groupIndex === 14 && [83, 84].includes(row.rowIndex))
+      .filter((row) => {
+        const kinds = records.filter((record) => record.groupIndex === row.groupIndex
+          && record.rowIndex === row.rowIndex).map((record) => record.kind);
+        if (kinds.join(",") !== "Contact,Branch end,Branch start") return false;
+        try {
+          delete_xgwx_iec_ld_chained_contact_branch_row(
+            current.file.bytes, selectedProgramIndex, row.groupIndex, row.rowIndex,
+          );
+          return true;
+        } catch { return false; }
+      })
+    : [];
+  const emptyDeletionSites = selectedProgramIndex === 2
+    ? rows.filter((row) => (row.groupIndex === 7 && row.rowIndex === 21)
+        || (row.groupIndex === 8 && row.rowIndex === 28))
+      .filter((row) => {
+        const kinds = records.filter((record) => record.groupIndex === row.groupIndex
+          && record.rowIndex === row.rowIndex).map((record) => record.kind);
+        if (kinds.join(",") !== "Branch end,Branch start") return false;
+        try {
+          delete_xgwx_iec_ld_empty_branch_row(
+            current.file.bytes, selectedProgramIndex, row.groupIndex, row.rowIndex,
+          );
+          return true;
+        } catch { return false; }
+      })
+    : [];
+  if (!pairs.length && !ffBranchOutputRow && !nestedDeletionSites.length
+    && !chainedDeletionSites.length && !emptyDeletionSites.length) return null;
+
+  const section = element("section", "iec-insert-contact iec-branch-editor");
+  section.append(element("h3", "", "Edit vertical branch"));
+
+  if (ffBranchOutputRow) {
+    const deleteFfRow = button("Delete L15 FF output branch row", "secondary-button", async () => {
+      await applyEdit(() => delete_xgwx_iec_ld_ff_branch_output_row(
+        current.file.bytes, selectedProgramIndex,
+        ffBranchOutputRow.groupIndex, ffBranchOutputRow.rowIndex,
+      ), "Delete IEC L15 FF output branch row and connected FF block");
+    });
+    section.append(deleteFfRow, element("p", "muted",
+      "Matches XG5000 Delete Line: removes the lower output, connected FF block, and branch, then closes the row gap."));
+  }
+
+  if (nestedDeletionSites.length) {
+    const deleteMiddleForm = document.createElement("form");
+    const deleteMiddleLabel = element("label", "", "Nested contact branch row");
+    const deleteMiddleSelect = document.createElement("select");
+    deleteMiddleSelect.setAttribute("aria-label", "IEC nested contact branch row to delete");
+    nestedDeletionSites.forEach((site, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `group ${site.groupIndex + 1} · L${site.rowIndex}`;
+      deleteMiddleSelect.append(option);
+    });
+    deleteMiddleLabel.append(deleteMiddleSelect);
+    const deleteMiddle = button("Delete middle branch row", "secondary-button", () => {});
+    deleteMiddle.type = "submit";
+    deleteMiddleForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const site = nestedDeletionSites[Number(deleteMiddleSelect.value)];
+      await applyEdit(() => delete_xgwx_iec_ld_nested_contact_branch_row(
+        current.file.bytes, selectedProgramIndex, site.groupIndex, site.rowIndex,
+      ), `Delete IEC nested contact branch row L${site.rowIndex}`);
+    });
+    deleteMiddleForm.append(deleteMiddleLabel, deleteMiddle);
+    section.append(deleteMiddleForm, element("p", "muted",
+      "Matches XG5000 Delete Line: reconnects the outer branch, removes the two inner branches, and shifts later rows up."));
+  }
+
+  if (chainedDeletionSites.length) {
+    const form = document.createElement("form");
+    const label = element("label", "", "Chained contact branch row");
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "IEC chained contact branch row to delete");
+    chainedDeletionSites.forEach((site, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `group ${site.groupIndex + 1} · L${site.rowIndex}`;
+      select.append(option);
+    });
+    label.append(select);
+    const submit = button("Delete contact branch row", "secondary-button", () => {});
+    submit.type = "submit";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const site = chainedDeletionSites[Number(select.value)];
+      await applyEdit(() => delete_xgwx_iec_ld_chained_contact_branch_row(
+        current.file.bytes, selectedProgramIndex, site.groupIndex, site.rowIndex,
+      ), `Delete IEC chained contact branch row L${site.rowIndex}`);
+    });
+    form.append(label, submit);
+    section.append(form, element("p", "muted",
+      "Matches XG5000 Delete Line: joins the adjacent x3 branches and shifts later rows up."));
+  }
+
+  if (emptyDeletionSites.length) {
+    const form = document.createElement("form");
+    const label = element("label", "", "Branch-only row");
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "IEC branch-only row to delete");
+    emptyDeletionSites.forEach((site, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `group ${site.groupIndex + 1} · L${site.rowIndex}`;
+      select.append(option);
+    });
+    label.append(select);
+    const submit = button("Delete branch-only row", "secondary-button", () => {});
+    submit.type = "submit";
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const site = emptyDeletionSites[Number(select.value)];
+      await applyEdit(() => delete_xgwx_iec_ld_empty_branch_row(
+        current.file.bytes, selectedProgramIndex, site.groupIndex, site.rowIndex,
+      ), `Delete IEC branch-only row L${site.rowIndex}`);
+    });
+    form.append(label, submit);
+    section.append(form, element("p", "muted",
+      "Matches XG5000 Delete Line: joins the vertical branch across the removed row."));
+  }
+
+  if (!pairs.length) return section;
+
+  const deletableTopRows = pairs.filter((pair) => {
+    const topRecords = records.filter((record) => record.groupIndex === pair.groupIndex
+      && record.rowIndex === pair.startRowIndex);
+    const lowerRecords = records.filter((record) => record.groupIndex === pair.groupIndex
+      && record.rowIndex === pair.endRowIndex);
+    if (topRecords.at(-1)?.kind !== "Coil"
+      || !topRecords.some((record) => record.kind === "Branch start")
+      || lowerRecords.at(-1)?.kind !== "Branch end"
+      || !lowerRecords.slice(0, -1).every((record) => record.kind === "Contact")) return false;
+    try {
+      delete_xgwx_iec_ld_branch_top_row(
+        current.file.bytes, selectedProgramIndex, pair.groupIndex, pair.startRowIndex,
+      );
+      return true;
+    } catch { return false; }
+  });
+  if (deletableTopRows.length) {
+    const deleteRowForm = document.createElement("form");
+    const deleteRowLabel = element("label", "", "Upper branch row");
+    const deleteRowSelect = document.createElement("select");
+    deleteRowSelect.setAttribute("aria-label", "IEC upper branch row to delete");
+    deletableTopRows.forEach((pair, index) => {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = `group ${pair.groupIndex + 1} · L${pair.startRowIndex}–L${pair.endRowIndex}`;
+      deleteRowSelect.append(option);
+    });
+    deleteRowLabel.append(deleteRowSelect);
+    const deleteRow = button("Delete upper branch row", "secondary-button", () => {});
+    deleteRow.type = "submit";
+    deleteRowForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const pair = deletableTopRows[Number(deleteRowSelect.value)];
+      await applyEdit(() => delete_xgwx_iec_ld_branch_top_row(
+        current.file.bytes, selectedProgramIndex, pair.groupIndex, pair.startRowIndex,
+      ), `Delete upper IEC branch row L${pair.startRowIndex}`);
+    });
+    deleteRowForm.append(deleteRowLabel, deleteRow);
+    section.append(deleteRowForm, element("p", "muted",
+      "Matches XG5000 Delete Line: keeps the lower contacts, removes the upper line, and shifts later rows up."));
+  }
+
+  const removeForm = document.createElement("form");
+  const existingLabel = element("label", "", "Existing segment");
+  const existing = document.createElement("select");
+  existing.setAttribute("aria-label", "Existing IEC branch segment");
+  segments.forEach((segment, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `group ${segment.groupIndex + 1} (index ${segment.groupIndex}) · L${segment.startRowIndex}–L${segment.endRowIndex} · x ${segment.x}`;
+    existing.append(option);
+  });
+  existingLabel.append(existing);
+  const remove = button("Remove branch segment", "secondary-button", () => {});
+  remove.type = "submit";
+  remove.textContent = "Remove branch segment";
+  const removeStatus = element("p", "muted");
+  const validateRemove = () => {
+    const segment = segments[Number(existing.value)];
+    try {
+      edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
+        segment.groupIndex, segment.startRowIndex, segment.endRowIndex, segment.x, true, false);
+      remove.disabled = false;
+      const parallelCount = segments.filter((candidate) =>
+        candidate.groupIndex === segment.groupIndex
+          && candidate.startRowIndex === segment.startRowIndex
+          && candidate.endRowIndex === segment.endRowIndex).length;
+      removeStatus.textContent = parallelCount > 1
+        ? "Another parallel segment keeps these rows in the same native group."
+        : "Removing this final segment also removes its captured contact-only branch row and shifts later rows, matching XG5000.";
+    } catch (error) {
+      remove.disabled = true;
+      removeStatus.textContent = String(error);
+    }
+  };
+  existing.addEventListener("change", validateRemove);
+  removeForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (remove.disabled) return;
+    const segment = segments[Number(existing.value)];
+    await applyEdit(() => edit_xgwx_iec_ld_branch_segment(
+      current.file.bytes, selectedProgramIndex, segment.groupIndex,
+      segment.startRowIndex, segment.endRowIndex, segment.x, true, false,
+    ), `Remove IEC branch at x ${segment.x} between L${segment.startRowIndex} and L${segment.endRowIndex}`);
+  });
+  removeForm.append(existingLabel, remove);
+
+  const addForm = document.createElement("form");
+  const pairLabel = element("label", "", "Adjacent rows");
+  const pairSelect = document.createElement("select");
+  pairSelect.setAttribute("aria-label", "IEC branch row pair");
+  pairs.forEach((pair, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `group ${pair.groupIndex + 1} (index ${pair.groupIndex}) · L${pair.startRowIndex}–L${pair.endRowIndex}`;
+    pairSelect.append(option);
+  });
+  pairLabel.append(pairSelect);
+  const boundaryLabel = element("label", "", "Boundary");
+  const boundary = document.createElement("select");
+  boundary.setAttribute("aria-label", "IEC branch boundary");
+  for (let x = 3; x <= 93; x += 3) {
+    const option = document.createElement("option");
+    option.value = String(x);
+    option.textContent = `x ${x}`;
+    boundary.append(option);
+  }
+  boundaryLabel.append(boundary);
+  const add = button("Add branch segment", "primary-button", () => {});
+  add.type = "submit";
+  add.textContent = "Add branch segment";
+  const addStatus = element("p", "muted");
+  const validateAdd = () => {
+    const pair = pairs[Number(pairSelect.value)];
+    const x = Number(boundary.value);
+    const duplicate = segments.some((segment) => segment.groupIndex === pair.groupIndex
+      && segment.startRowIndex === pair.startRowIndex
+      && segment.endRowIndex === pair.endRowIndex && segment.x === x);
+    if (duplicate) {
+      add.disabled = true;
+      addStatus.textContent = "A segment already exists at this boundary.";
+      return;
+    }
+    try {
+      edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
+        pair.groupIndex, pair.startRowIndex, pair.endRowIndex, x, false, true);
+      add.disabled = false;
+      addStatus.textContent = "Ready to add a paired branch start and end record.";
+    } catch (error) {
+      add.disabled = true;
+      addStatus.textContent = String(error);
+    }
+  };
+  pairSelect.addEventListener("change", validateAdd);
+  boundary.addEventListener("change", validateAdd);
+  addForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (add.disabled) return;
+    const pair = pairs[Number(pairSelect.value)];
+    const x = Number(boundary.value);
+    await applyEdit(() => edit_xgwx_iec_ld_branch_segment(
+      current.file.bytes, selectedProgramIndex, pair.groupIndex,
+      pair.startRowIndex, pair.endRowIndex, x, false, true,
+    ), `Add IEC branch at x ${x} between L${pair.startRowIndex} and L${pair.endRowIndex}`);
+  });
+  addForm.append(pairLabel, boundaryLabel, add);
+
+  validateRemove();
+  validateAdd();
+  section.append(removeForm, removeStatus, addForm, addStatus,
+    element("p", "muted", "Final-segment removal is limited to a captured two-row group whose lower row contains contacts only. Addition is limited to decoded contact, coil, and wire rows in one native group."));
+  return section;
+}
+
 function resetLadderSelection() {
   selectedCellOffset = null;
   selectedBlankCell = null;
@@ -926,6 +3654,7 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
   board.style.height = `${height}px`;
 
   let dragSelecting = false;
+  let dragMoved = false;
   const focusCursor = (cursor, extend = false) => {
     if (!cursor) return;
     if (cursor.type === "comment") {
@@ -956,13 +3685,17 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
       }
       if (event.button !== 0) return;
       dragSelecting = true;
+      dragMoved = false;
       selectPosition(position, event.shiftKey);
       document.addEventListener("pointerup", () => {
         dragSelecting = false;
       }, { once: true });
     });
     node.addEventListener("pointerenter", (event) => {
-      if (dragSelecting && (event.buttons & 1)) selectPosition(position, true);
+      if (dragSelecting && (event.buttons & 1)) {
+        dragMoved = true;
+        selectPosition(position, true);
+      }
     });
     node.addEventListener("focus", () => {
       if (preserveSelectionOnFocus) return;
@@ -976,6 +3709,27 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
       showLadderContextMenu(event.clientX, event.clientY, ladder, position, deleteSelection);
     });
     node.addEventListener("keydown", async (event) => {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey
+        && ["c", "x", "v"].includes(event.key.toLowerCase())) {
+        event.preventDefault();
+        event.stopPropagation();
+        const operation = event.key.toLowerCase();
+        if (operation === "c" || operation === "x") {
+          try {
+            if (!ladder.structuralEditing) throw new Error("Structural editing is unavailable for this program layout");
+            const copied = selectedLadderClipboard(ladder);
+            if (operation === "c") ladderClipboard = copied;
+            else if (await deleteSelection(`Cut ${copied.cells.length} ladder elements`)) ladderClipboard = copied;
+          } catch (error) {
+            vscode.postMessage({ type: "showError", message: String(error) });
+          }
+        } else {
+          await applyEdit(() => ladderPasteEdits(ladder, position).reduce((bytes, edit) =>
+            edit_xgwx_ladder_cell(bytes, selectedProgramIndex, edit), current.file.bytes),
+          `Paste XGK ladder cells at ${position.column + 1}:${position.rawY}`);
+        }
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "l" && ladder.structuralEditing) {
         event.preventDefault(); event.stopPropagation();
         await insertLadderRow(position.rawY);
@@ -1055,6 +3809,9 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
 
   layoutRows.forEach((row, layoutIndex) => {
     if (row.type !== "comment") return;
+    const commentLabel = element("span", "ld-comment-label", "설명문");
+    commentLabel.style.top = `${ldRowY(layoutIndex)}px`;
+    board.append(commentLabel);
     const note = element("div", "ld-rung-comment", row.comment.text);
     const comment = {
       kind: "Rung",
@@ -1137,11 +3894,36 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     const node = button(ldCellAriaLabel(cell, rungNumbers.get(cell.rawY)), `ld-cell ${ldCellClass(cell)}`, () => {});
     node.dataset.cellOffset = String(cell.offset);
     bindSelection(node, position);
+    node.addEventListener("click", (event) => {
+      if (event.detail && dragMoved) {
+        dragMoved = false;
+        return;
+      }
+    });
+    if (cell.contact && cell.sourceText) {
+      node.addEventListener("dblclick", (event) => {
+        event.preventDefault();
+        void showXgkContactInput(cell, ladder);
+      });
+      node.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+        event.preventDefault();
+        event.stopPropagation();
+        void showXgkContactInput(cell, ladder);
+      });
+    }
     node.style.left = `${ldCellX(ldCellColumn(cell.rawX))}px`;
     node.style.top = `${ldRowY(rowIndex)}px`;
-    node.title = cell.sourceText || cell.value || cell.contact || cell.coil || cell.kind;
+    node.title = cell.contact && cell.sourceText
+      ? `${cell.sourceText} · Double-click or Enter to edit operand`
+      : cell.sourceText || cell.value || cell.contact || cell.coil || cell.kind;
     const value = element("span", "ld-value", cell.value || ldMarkerLabel(cell));
-    const glyph = element("span", "ld-glyph", ldCellGlyph(cell));
+    const contactVariant = cell.kind !== "Instruction" && !cell.coil
+      ? xgkContactVariant(cell.contact) : null;
+    if (contactVariant) node.dataset.contactVariant = contactVariant;
+    const glyph = element("span", "ld-glyph", contactVariant
+      ? contactVariant.includes("rising") ? "P" : contactVariant.includes("falling") ? "N" : ""
+      : ldCellGlyph(cell));
     if (cell.kind === "Instruction") node.append(glyph);
     else node.append(value, glyph);
     if (cell.operands?.length) node.append(element("span", "ld-operands", cell.operands.join(" ")));
@@ -1477,10 +4259,7 @@ function ldCellGlyph(cell) {
     }[cell.coil] || "( )";
   }
   if (cell.kind === "Instruction") return cell.value || "FN";
-  return {
-    NO: "| |", NC: "|/|", P_CONTACT: "|P|", P_NOT_CONTACT: "|P/|",
-    N_CONTACT: "|N|", N_NOT_CONTACT: "|N/|", PUP: "[↑]", PDN: "[↓]", INV: "[¬]",
-  }[cell.contact] || "[ ]";
+  return xgkContactGlyph(cell.contact);
 }
 
 function ldMarkerLabel(cell) {
@@ -1594,7 +4373,8 @@ function renderBranchControls(section, ladder, position) {
   controls.append(label, boundary, toggle, status); section.append(controls);
 }
 
-function renderProgramInspector(inspector, program, ladder, cell, blankCell = null, selection = null) {
+function renderProgramInspector(inspector, program, ladder, cell, blankCell = null, selection = null,
+  insertion = null, iecRowIndex = null, iecBlankCell = null) {
   inspector.replaceChildren(inspectorHeading("PROGRAM"));
   if (!program) {
     inspector.append(emptyState("Select a program to edit it."));
@@ -1622,6 +4402,18 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   inspector.append(form);
 
   const cellSection = element("section", "cell-editor");
+  if (ladder?.projectType === 2) {
+    cellSection.append(element("h3", "", cell || insertion || iecBlankCell ? "Ladder cell" : "Ladder row"));
+    if (cell?.isIecComment) renderIecCommentCell(cellSection, cell);
+    else if (cell?.iecElementKind) renderIecLadderCell(cellSection, ladder, cell);
+    else if (insertion) renderIecContactInsertion(cellSection, insertion);
+    else if (iecBlankCell) renderIecBlankCell(cellSection, ladder, iecBlankCell);
+    else if (iecRowIndex !== null) renderIecRowInspector(cellSection, ladder, iecRowIndex);
+    else cellSection.append(element("p", "muted", "Select a row, contact, coil, comment, or insertion point in the IEC diagram."));
+    inspector.append(cellSection);
+    renderIecActionsDialog(inspector, ladder);
+    return;
+  }
   cellSection.append(element("h3", "", "Ladder cell"));
   if (selection?.total > 1) {
     cellSection.append(element(
@@ -1712,8 +4504,311 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   if (ladder?.structuralEditing && position) renderBranchControls(inspector, ladder, position);
 }
 
+function renderIecLadderCell(section, body, item) {
+  section.classList.add("structural-cell-editor");
+  const contactKind = IEC_CONTACT_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
+  const coilKind = IEC_COIL_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
+  if (!contactKind && !coilKind) {
+    section.append(element("p", "muted", "This IEC element remains read only."));
+    return;
+  }
+  const isContact = Boolean(contactKind);
+  const expectedKind = contactKind || coilKind;
+  const kind = document.createElement("select");
+  kind.setAttribute("aria-label", `${isContact ? "Contact" : "Coil"} kind at L${item.iecRowIndex}`);
+  for (const [value, label] of isContact ? IEC_ADDRESSED_CONTACT_CHOICES : IEC_COIL_KIND_CHOICES) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    kind.append(option);
+  }
+  kind.value = expectedKind;
+  const kindLabel = element("label", "property-field");
+  kindLabel.append(element("span", "property-label", "Element"), kind);
+  section.append(element("div", "blank-cell-position",
+    `L${item.iecRowIndex} · x ${item.iecPosition?.[0] ?? "?"}`), kindLabel);
+  const operand = property(section, "Variable", item.value, false);
+  operand.setAttribute("aria-label", `${isContact ? "Contact" : "Coil"} variable at L${item.iecRowIndex}`);
+  const status = element("div", "length-counter");
+  const applyKind = button("Apply element kind", "primary-button", async () => {
+    if (applyKind.disabled) return;
+    await applyEdit(() => (isContact ? update_xgwx_iec_ld_contact_kind
+      : update_xgwx_iec_ld_coil_kind)(current.file.bytes, selectedProgramIndex,
+      item.offset, expectedKind, kind.value),
+    `Change IEC ${isContact ? "contact" : "coil"} to ${kind.value}`);
+  });
+  applyKind.textContent = "Apply kind";
+  const applyOperand = button("Apply element variable", "primary-button", async () => {
+    if (applyOperand.disabled) return;
+    await applyEdit(() => update_xgwx_iec_ld_element_operand(current.file.bytes,
+      selectedProgramIndex, item.offset, item.value, operand.value.trim()),
+    `Edit IEC ${isContact ? "contact" : "coil"} at L${item.iecRowIndex}`);
+  });
+  applyOperand.textContent = "Apply variable";
+  const validate = () => {
+    const value = operand.value.trim();
+    let error = "";
+    if (value !== item.value) {
+      try {
+        update_xgwx_iec_ld_element_operand(current.file.bytes, selectedProgramIndex,
+          item.offset, item.value, value);
+      } catch (failure) { error = String(failure); }
+    }
+    status.textContent = error || `${utf16Length(value)}/255 UTF-16 units`;
+    status.classList.toggle("invalid", Boolean(error));
+    applyOperand.disabled = Boolean(error) || value === item.value;
+    applyKind.disabled = kind.value === expectedKind;
+  };
+  kind.addEventListener("change", validate);
+  operand.addEventListener("input", validate);
+  validate();
+  section.append(status, applyKind, applyOperand);
+
+  if (isContact) {
+    const cellSite = iecAddressedContactSites(body, "iecNoContactCellDeletionSites")
+      .find((site) => site.contactOffset === item.iecRecordOffset);
+    const gapSite = iecAddressedContactSites(body, "iecNoContactDeletionSites")
+      .find((site) => site.contactOffset === item.iecRecordOffset);
+    if (cellSite) {
+      const remove = button("Delete IEC contact and close cell", "secondary-button", async () => {
+        await applyEdit(() => delete_xgwx_iec_ld_contact_cell(current.file.bytes,
+          selectedProgramIndex, cellSite.contactOffset, cellSite.rawX,
+          cellSite.kind, cellSite.variable), `Cell delete IEC contact ${cellSite.variable}`);
+      });
+      remove.textContent = "Delete and close cell";
+      section.append(remove);
+    }
+    if (gapSite) {
+      const remove = button("Delete IEC contact and leave gap", "secondary-button", async () => {
+        await applyEdit(() => delete_xgwx_iec_ld_contact(current.file.bytes,
+          selectedProgramIndex, gapSite.contactOffset, gapSite.rawX,
+          gapSite.kind, gapSite.variable), `Delete IEC contact ${gapSite.variable}`);
+      });
+      remove.textContent = "Delete and leave gap";
+      section.append(remove);
+    }
+  } else {
+    let removable = false;
+    try {
+      delete_xgwx_iec_ld_terminal_coil(current.file.bytes,
+        selectedProgramIndex, item.iecRecordOffset, item.value);
+      removable = true;
+    } catch { /* Only captured terminal coil layouts can be deleted. */ }
+    if (removable) {
+      const remove = button("Delete IEC terminal coil", "secondary-button", async () => {
+        await applyEdit(() => delete_xgwx_iec_ld_terminal_coil(current.file.bytes,
+          selectedProgramIndex, item.iecRecordOffset, item.value),
+        `Delete IEC terminal coil ${item.value}`);
+      });
+      remove.textContent = "Delete coil";
+      section.append(remove);
+    }
+  }
+}
+
+function renderIecCommentCell(section, item) {
+  section.append(element("div", "blank-cell-position", `Comment at L${item.iecRowIndex}`));
+  const comment = property(section, "Comment", item.value, false, true);
+  comment.setAttribute("aria-label", `IEC comment at L${item.iecRowIndex}`);
+  const apply = button("Apply IEC comment", "primary-button", async () => {
+    if (apply.disabled) return;
+    await applyEdit(() => update_xgwx_iec_ld_comment(current.file.bytes,
+      selectedProgramIndex, item.offset, item.value, comment.value),
+    `Edit IEC comment at L${item.iecRowIndex}`);
+  });
+  apply.textContent = "Apply comment";
+  const validate = () => {
+    apply.disabled = !comment.value.trim() || comment.value === item.value
+      || utf16Length(comment.value) > 255 || /[\p{Cc}]/u.test(comment.value);
+  };
+  comment.addEventListener("input", validate);
+  validate();
+  section.append(apply);
+}
+
+function renderIecRowInspector(section, body, rowIndex) {
+  section.append(element("div", "blank-cell-position", `L${rowIndex}`));
+  const row = (body.iecRows || []).find((candidate) => candidate.rowIndex === rowIndex);
+  if (!row) {
+    section.append(element("p", "muted", "Empty row. Create a rung, paste a copied network with Ctrl+V, or add a comment."));
+    renderIecRungCreation(section, body, [rowIndex]);
+    const comment = property(section, "New comment", "", false);
+    comment.setAttribute("aria-label", `New IEC comment at L${rowIndex}`);
+    const status = element("div", "length-counter");
+    const insert = button("Insert IEC comment", "primary-button", async () => {
+      if (insert.disabled) return;
+      await applyEdit(() => insert_xgwx_iec_ld_comment(current.file.bytes,
+        selectedProgramIndex, rowIndex, comment.value.trim()),
+      `Insert IEC comment at L${rowIndex}`);
+    });
+    insert.textContent = "Insert comment";
+    const validate = () => {
+      let error = "";
+      try {
+        insert_xgwx_iec_ld_comment(current.file.bytes,
+          selectedProgramIndex, rowIndex, comment.value.trim());
+      } catch (failure) { error = String(failure); }
+      status.textContent = error || "Ready to insert comment";
+      status.classList.toggle("invalid", Boolean(error));
+      insert.disabled = Boolean(error);
+    };
+    comment.addEventListener("input", validate);
+    validate();
+    section.append(status, insert);
+    return;
+  }
+
+  const groupRows = (body.iecRows || []).filter((candidate) => candidate.groupIndex === row.groupIndex);
+  section.append(element("p", "muted",
+    `Network ${row.groupIndex + 1} · L${groupRows[0].rowIndex}–L${groupRows.at(-1).rowIndex}. Ctrl+C copies this network.`));
+  if (body.iecCircuitGraph && new Set((body.iecRows || []).map((candidate) => candidate.groupIndex)).size > 1) {
+    let canDelete = false;
+    try {
+      delete_xgwx_iec_ld_group(current.file.bytes, selectedProgramIndex,
+        row.groupIndex, groupRows[0].rowIndex);
+      canDelete = true;
+    } catch { /* This network has a layout the writer cannot remove. */ }
+    if (canDelete) {
+      const remove = button("Delete selected IEC network", "secondary-button", async () => {
+        await applyEdit(() => delete_xgwx_iec_ld_group(current.file.bytes,
+          selectedProgramIndex, row.groupIndex, groupRows[0].rowIndex),
+        `Delete IEC network ${row.groupIndex + 1} at L${groupRows[0].rowIndex}`);
+      });
+      remove.textContent = "Delete network";
+      section.append(remove);
+    }
+  }
+  let canInsertRow = false;
+  try {
+    insert_xgwx_iec_ld_blank_row(current.file.bytes, selectedProgramIndex, rowIndex);
+    canInsertRow = true;
+  } catch { /* A branch or layout may prevent row insertion here. */ }
+  if (canInsertRow) {
+    const insertRow = button("Insert blank IEC row after selection", "secondary-button", async () => {
+      await applyEdit(() => insert_xgwx_iec_ld_blank_row(current.file.bytes,
+        selectedProgramIndex, rowIndex), `Insert blank IEC row after L${rowIndex}`);
+    });
+    insertRow.textContent = "Insert row after";
+    section.append(insertRow);
+  }
+}
+
+function renderIecActionsDialog(inspector, body) {
+  const dialog = document.createElement("dialog");
+  dialog.className = "iec-actions-dialog";
+  const heading = element("h2", "", "IEC operations");
+  const close = button("Close IEC operations", "secondary-button", () => dialog.close());
+  close.textContent = "Close";
+  dialog.append(heading, close);
+  const open = button("Open IEC operations", "secondary-button", () => {
+    if (!dialog.dataset.built) {
+      const actions = [
+        renderIecNetworkRelocation, renderIecNetworkReplacement,
+        renderIecCrossProgramReplacement, renderIecTerminalMoveInsertion,
+        renderIecStandaloneFunctionInsertion, renderIecFunctionCellInsertion,
+        renderIecLeadingContactInsertion, renderIecHorizontalWireRepair,
+        renderIecHorizontalWireDeletion, renderIecBranchEditing,
+        renderIecBlankRowInsertion,
+      ].map((render) => render(body)).filter(Boolean);
+      dialog.append(...actions);
+      dialog.dataset.built = "true";
+    }
+    dialog.showModal();
+  });
+  open.textContent = "More IEC operations…";
+  inspector.append(open, dialog);
+}
+
+function renderIecBlankCell(section, body, position) {
+  section.append(element("div", "blank-cell-position",
+    `Empty IEC cell · L${position.rowIndex} · x ${position.rawX}`));
+  if (!(body.iecRows || []).some((row) => row.rowIndex === position.rowIndex)) {
+    renderIecRowInspector(section, body, position.rowIndex);
+    return;
+  }
+  const site = iecContactInsertionSiteAt(body, position.rowIndex, position.rawX);
+  if (site) renderIecContactInsertion(section, site, position.rawX);
+  else section.append(element("p", "muted",
+    "This cell can be selected, but its layout has no verified contact insertion."));
+}
+
+function insertIecContactAtSite(site, rawX, kind, name) {
+  if (site.type === "leading") return insert_xgwx_iec_ld_leading_contact(
+    current.file.bytes, selectedProgramIndex, site.insertionOffset, kind, name);
+  if (site.type === "short") return insert_xgwx_iec_ld_short_wire_contact(
+    current.file.bytes, selectedProgramIndex, site.wireOffset, site.rawX, kind, name);
+  return insert_xgwx_iec_ld_contact(current.file.bytes, selectedProgramIndex,
+    site.wireOffset, rawX, site.startX, site.endX, kind, name);
+}
+
+function renderIecContactInsertion(section, site, initialX = null) {
+  section.classList.add("structural-cell-editor");
+  const position = document.createElement("select");
+  position.setAttribute("aria-label", `Contact position at L${site.rowIndex}`);
+  if (site.type === "short" || site.type === "leading") {
+    const option = document.createElement("option");
+    option.value = String(site.type === "leading" ? 1 : site.rawX);
+    option.textContent = `x ${option.value}`;
+    position.append(option);
+  } else {
+    for (let x = site.startX + 3; x + 3 <= site.endX; x += 3) {
+      const option = document.createElement("option");
+      option.value = String(x);
+      option.textContent = `x ${x}`;
+      position.append(option);
+    }
+  }
+  if (initialX !== null) position.value = String(initialX);
+  const positionLabel = element("label", "property-field");
+  positionLabel.append(element("span", "property-label", `L${site.rowIndex} position`), position);
+  section.append(positionLabel);
+  const kind = document.createElement("select");
+  kind.setAttribute("aria-label", "IEC contact kind to insert");
+  for (const [value, label] of IEC_ADDRESSED_CONTACT_CHOICES) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    kind.append(option);
+  }
+  const kindLabel = element("label", "property-field");
+  kindLabel.append(element("span", "property-label", "Element"), kind);
+  section.append(kindLabel);
+  const variable = property(section, "BOOL variable", "", false);
+  variable.setAttribute("aria-label", `IEC contact BOOL variable at L${site.rowIndex}`);
+  variable.placeholder = "Existing BOOL variable";
+  const status = element("div", "length-counter");
+  const insert = button("Insert IEC contact", "primary-button", async () => {
+    if (insert.disabled) return;
+    const name = variable.value.trim();
+    await applyEdit(() => insertIecContactAtSite(site, Number(position.value), kind.value, name),
+    `Insert IEC contact ${name} at L${site.rowIndex} x${position.value}`);
+  });
+  insert.textContent = "Insert contact";
+  const validate = () => {
+    let error = "";
+    try {
+      insertIecContactAtSite(site, Number(position.value), kind.value, variable.value.trim());
+    } catch (failure) { error = String(failure); }
+    status.textContent = error || "Captured IEC contact insertion point";
+    status.classList.toggle("invalid", Boolean(error));
+    insert.disabled = Boolean(error);
+  };
+  position.addEventListener("change", validate);
+  kind.addEventListener("change", validate);
+  variable.addEventListener("input", validate);
+  validate();
+  section.append(status, insert);
+}
+
 async function applyEdit(update, label) {
   try {
+    const editorPane = app.querySelector(".editor-canvas");
+    const iecViewport = app.querySelector(".iec-layout-viewport");
+    const scroll = activeView === "programs" ? {
+      editorTop: editorPane?.scrollTop ?? 0,
+      layoutTop: iecViewport?.scrollTop ?? 0,
+      layoutLeft: iecViewport?.scrollLeft ?? 0,
+    } : null;
     const selectedModuleKey = selectedModule
       ? { base: selectedModule.base, slot: selectedModule.slot }
       : null;
@@ -1728,6 +4823,15 @@ async function applyEdit(update, label) {
     dirty = true;
     vscode.postMessage({ type: "edit", label, bytes: Array.from(bytes) });
     renderWorkspace();
+    if (scroll) {
+      const refreshedEditor = app.querySelector(".editor-canvas");
+      const refreshedLayout = app.querySelector(".iec-layout-viewport");
+      if (refreshedEditor) refreshedEditor.scrollTop = scroll.editorTop;
+      if (refreshedLayout) {
+        refreshedLayout.scrollTop = scroll.layoutTop;
+        refreshedLayout.scrollLeft = scroll.layoutLeft;
+      }
+    }
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -1911,7 +5015,17 @@ function formatNetworkAttributeLabel(name) {
     .replaceAll(/_/g, " ");
 }
 
-function renderVariablesEditor(canvas, inspector, variables) {
+function renderVariablesEditor(canvas, inspector, globalVariables, localTables, programs) {
+  const variables = [
+    ...globalVariables.map((variable, globalVariableIndex) => ({ ...variable, globalVariableIndex, location: "Global" })),
+    ...localTables.flatMap((symbols, localProgramIndex) => symbols.map((symbol, localVariableIndex) => ({
+      ...symbol,
+      localProgramIndex,
+      localVariableIndex,
+      location: programs[localProgramIndex]?.name || `Program ${localProgramIndex + 1}`,
+      dataType: symbol.dataType || symbol.typeReference || "—",
+    }))),
+  ];
   const toolbar = element("div", "editor-toolbar");
   const searchWrap = element("label", "filter-control");
   searchWrap.append(icon("search"));
@@ -1929,12 +5043,12 @@ function renderVariablesEditor(canvas, inspector, variables) {
       .filter(({ variable }) => Object.values(variable).join(" ").toLocaleLowerCase().includes(query));
     const shown = matches.slice(0, 750);
     scope.textContent = shown.length === matches.length ? `${matches.length} variables` : `${shown.length} of ${matches.length} matches`;
-    const table = createTable(["Name", "Address", "Type", "Comment"]);
+    const table = createTable(["Program", "Name", "Address", "Type", "Comment"]);
     shown.forEach(({ variable, index }) => {
       const row = table.tBodies[0].insertRow();
       row.className = selectedVariableIndex === index ? "selected" : "";
       row.tabIndex = 0;
-      appendCells(row, [variable.name, variable.address, variable.dataType, variable.description]);
+      appendCells(row, [variable.location, variable.name, variable.address, variable.dataType, variable.description]);
       const select = () => {
         selectedVariableIndex = index;
         table.querySelectorAll("tbody tr").forEach((item) => item.classList.toggle("selected", item === row));
@@ -1948,7 +5062,70 @@ function renderVariablesEditor(canvas, inspector, variables) {
     host.replaceChildren(tableContainer(table, shown.length));
   };
   search.addEventListener("input", renderRows);
-  canvas.append(toolbar, host);
+  const iecPrograms = programs.map((item, index) => ({ item, index }))
+    .filter(({ index }) => (current.summary.ladder || []).some((body) => body.programIndex === index && body.projectType === 2));
+  const add = element("section", "iec-add-local-symbol");
+  add.append(element("h3", "", "Add IEC local variable"));
+  const fields = element("div", "iec-add-local-symbol-fields");
+  const program = document.createElement("select");
+  program.setAttribute("aria-label", "IEC local program");
+  iecPrograms.forEach(({ item, index }) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = item.name || `Program ${index + 1}`;
+    program.append(option);
+  });
+  program.value = String(iecPrograms.some(({ index }) => index === selectedProgramIndex)
+    ? selectedProgramIndex : iecPrograms[0]?.index ?? "");
+  const name = document.createElement("input");
+  name.setAttribute("aria-label", "New IEC local variable name");
+  name.placeholder = "Name";
+  const type = document.createElement("select");
+  type.setAttribute("aria-label", "New IEC local variable type");
+  for (const value of IEC_PRIMITIVE_TYPE_NAMES) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = value;
+    type.append(option);
+  }
+  const description = document.createElement("input");
+  description.setAttribute("aria-label", "New IEC local variable description");
+  description.placeholder = "Description (optional)";
+  const addButton = button("Add local variable", "primary-button", async () => {
+    const programIndex = Number(program.value);
+    const newName = name.value;
+    const edited = await applyEdit(() => insert_xgwx_iec_local_symbol(
+      current.file.bytes, Number(program.value), name.value, type.value, description.value,
+    ), `Add IEC local variable ${newName}`);
+    if (edited) {
+      const tables = current.summary.localVariables || [];
+      const before = tables.slice(0, programIndex).reduce((sum, symbols) => sum + symbols.length, 0);
+      const index = tables[programIndex]?.findIndex((symbol) => symbol.name === newName) ?? -1;
+      if (index >= 0) {
+        selectedVariableIndex = (current.summary.variables || []).length + before + index;
+        renderWorkspace();
+      }
+    }
+  });
+  const validation = element("div", "validation-summary");
+  const validate = () => {
+    const siblings = localTables[Number(program.value)] || [];
+    const validName = /^[\p{L}_][\p{L}\p{N}_]*$/u.test(name.value) && utf16Length(name.value) <= 255;
+    const unique = !siblings.some((symbol) => symbol.name.toLocaleLowerCase() === name.value.toLocaleLowerCase());
+    const validDescription = utf16Length(description.value) <= 255 && !/\p{Cc}/u.test(description.value);
+    const valid = validName && unique && validDescription && program.value !== "";
+    validation.textContent = !name.value && validDescription
+      ? "Enter a unique name. New variables start without an address or allocation."
+      : valid ? "New variables start without an address or allocation."
+        : "Enter a unique name and keep name and description within 255 UTF-16 units.";
+    validation.classList.toggle("invalid", !valid && (name.value.length > 0 || !validDescription));
+    addButton.disabled = !valid;
+  };
+  for (const control of [program, name, description]) control.addEventListener("input", validate);
+  validate();
+  fields.append(program, name, type, description, addButton);
+  add.append(fields, validation);
+  canvas.append(toolbar, ...(iecPrograms.length ? [add] : []), host);
   renderRows();
   if (selectedVariableIndex >= variables.length) selectedVariableIndex = 0;
   renderVariableInspector(inspector, variables[selectedVariableIndex] || null, selectedVariableIndex);
@@ -1958,6 +5135,160 @@ function renderVariableInspector(inspector, variable, index) {
   inspector.replaceChildren(inspectorHeading("VARIABLE"));
   if (!variable) {
     inspector.append(emptyState("Select a variable to edit it."));
+    return;
+  }
+
+  if (variable.localProgramIndex != null) {
+    const form = element("div", "property-grid variable-editor");
+    property(form, "Program", variable.location, true);
+    const name = property(form, "Name", variable.name, false);
+    const siblings = current.summary.localVariables?.[variable.localProgramIndex] || [];
+    const nameValidation = element("div", "validation-summary");
+    const rename = button("Rename local symbol", "primary-button", async () => {
+      await applyEdit(() => rename_xgwx_iec_local_symbol(
+        current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
+        variable.name, name.value,
+      ), `Rename IEC local symbol ${variable.name}`);
+    });
+    const validateName = () => {
+      const valid = name.value !== variable.name && name.value.length > 0
+        && name.value.length <= 255 && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(name.value)
+        && !siblings.some((symbol, index) => index !== variable.localVariableIndex && symbol.name === name.value);
+      nameValidation.textContent = name.value === variable.name ? "Current symbol name." : valid
+        ? "Program references will be updated with the symbol."
+        : "Use a unique identifier of at most 255 characters.";
+      nameValidation.classList.toggle("invalid", !valid && name.value !== variable.name);
+      rename.disabled = !valid;
+    };
+    name.addEventListener("input", validateName);
+    validateName();
+    form.append(nameValidation, rename);
+    const encodedBit = (value) => {
+      const simple = /^%[MQ]X([0-9]+)$/.exec(value);
+      if (simple) {
+        const bit = Number(simple[1]);
+        return Number.isInteger(bit) && bit <= 0xffffffff ? bit : null;
+      }
+      const dotted = /^%[IQ]X0\.([0-9]+)\.([0-9]+)$/.exec(value);
+      if (!dotted) return null;
+      const slot = Number(dotted[1]);
+      const bit = Number(dotted[2]);
+      const encoded = slot * 64 + bit;
+      return Number.isInteger(slot) && Number.isInteger(bit) && bit < 64 && encoded <= 0xffffffff ? encoded : null;
+    };
+    const mapped = variable.dataType === "BOOL" && encodedBit(variable.address || "") !== null;
+    const assignable = variable.dataType === "BOOL" && !variable.isInstance
+      && !variable.address && variable.storageClass === ""
+      && variable.allocationNumber == null && variable.allocationWidth == null;
+    const address = property(form, "Address", variable.address, !(mapped || assignable));
+    if (variable.typeReference) property(form, "Type reference", variable.typeReference, true);
+    if (variable.dataType && !variable.isInstance && !variable.address) {
+      const typeField = element("label", "property-field");
+      typeField.append(element("span", "property-label", "Data type"));
+      const type = document.createElement("select");
+      type.setAttribute("aria-label", "IEC local data type");
+      for (const label of IEC_PRIMITIVE_TYPE_NAMES) {
+        const option = document.createElement("option");
+        option.value = label;
+        option.textContent = label;
+        type.append(option);
+      }
+      type.value = variable.dataType;
+      typeField.append(type);
+      form.append(typeField);
+      const typeApply = button("Apply local type", "primary-button", async () => {
+        await applyEdit(() => update_xgwx_iec_local_symbol_type(
+          current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
+          variable.name, variable.dataType, type.value,
+        ), `Edit IEC local type ${variable.name}`);
+      });
+      const typeValidation = element("div", "validation-summary", "Changing type clears this variable's allocation. Program references may need compatible edits.");
+      typeApply.disabled = true;
+      type.addEventListener("change", () => { typeApply.disabled = type.value === variable.dataType; });
+      form.append(typeValidation, typeApply);
+    } else if (variable.dataType) {
+      property(form, "Data type", variable.dataType, true);
+    }
+    property(form, "Storage class", variable.storageClass, true);
+    property(form, "Allocation number", variable.allocationNumber, true);
+    property(form, "Allocation width", variable.allocationWidth, true);
+    const description = property(form, "Description", variable.description, false, true);
+    description.setAttribute("aria-label", "IEC local description");
+    const descriptionValidation = element("div", "validation-summary");
+    const descriptionApply = button("Apply local description", "primary-button", async () => {
+      await applyEdit(() => update_xgwx_iec_local_symbol_description(
+        current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
+        variable.name, variable.description || "", description.value,
+      ), `Edit IEC local description ${variable.name}`);
+    });
+    const validateDescription = () => {
+      const changed = description.value !== (variable.description || "");
+      const valid = utf16Length(description.value) <= 255 && !/\p{Cc}/u.test(description.value);
+      descriptionValidation.textContent = valid
+        ? "Description may contain up to 255 UTF-16 units."
+        : "Use at most 255 UTF-16 units and no control characters.";
+      descriptionValidation.classList.toggle("invalid", !valid);
+      descriptionApply.disabled = !changed || !valid;
+    };
+    description.addEventListener("input", validateDescription);
+    validateDescription();
+    form.append(descriptionValidation, descriptionApply);
+    if (mapped || assignable) {
+      const validation = element("div", "validation-summary");
+      const apply = button("Apply local address", "primary-button", async () => {
+        await applyEdit(() => update_xgwx_iec_local_symbol_address(
+          current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
+          variable.name, variable.address || "", address.value,
+        ), `Edit IEC local address ${variable.name}`);
+      });
+      const validate = () => {
+        const bit = encodedBit(address.value);
+        const area = mapped ? variable.address.slice(0, 3) : address.value.slice(0, 3);
+        const valid = address.value !== (variable.address || "")
+          && utf16Length(address.value) <= 255
+          && ["%MX", "%IX", "%QX"].includes(area)
+          && address.value.startsWith(area)
+          && bit !== null && bit !== encodedBit(variable.address)
+          && !siblings.some((symbol, index) => index !== variable.localVariableIndex
+            && symbol.address?.startsWith(area)
+            && encodedBit(symbol.address) === bit);
+        const unchanged = address.value === (variable.address || "");
+        validation.textContent = unchanged ? (mapped ? "Current mapped address." : "Enter a BOOL bit address to map this variable.") : valid
+          ? "Address area and bit mapping are valid."
+          : mapped ? "Use a different, unused bit address in the same area."
+            : "Use an unused %MX, %IX, or %QX bit address.";
+        validation.classList.toggle("invalid", !valid && !unchanged);
+        apply.disabled = !valid;
+      };
+      address.addEventListener("input", validate);
+      validate();
+      form.append(validation, apply);
+      if (mapped) {
+        const clear = button("Clear mapped address", "", async () => {
+          await applyEdit(() => update_xgwx_iec_local_symbol_address(
+            current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
+            variable.name, variable.address, "",
+          ), `Clear IEC local address ${variable.name}`);
+        });
+        form.append(clear);
+      }
+    }
+    const referenced = (current.summary.ladder || [])
+      .find((body) => body.programIndex === variable.localProgramIndex)
+      ?.sourceStrings?.some((item) => item.value === variable.name) || false;
+    const deleteValidation = element("div", "validation-summary", referenced
+      ? "This variable is referenced by its program and cannot be deleted."
+      : "Delete this unreferenced local variable. Undo is available in VS Code.");
+    const deleteButton = button("Delete local variable", "", async () => {
+      await applyEdit(() => delete_xgwx_iec_local_symbol(
+        current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
+        variable.name,
+      ), `Delete IEC local variable ${variable.name}`);
+    });
+    deleteButton.disabled = referenced;
+    form.append(deleteValidation, deleteButton);
+    form.append(element("p", "muted", "Clear a mapped BOOL address before changing its type. Function instance types cannot be changed here yet."));
+    inspector.append(form);
     return;
   }
 
@@ -1978,7 +5309,7 @@ function renderVariableInspector(inspector, variable, index) {
   const validation = element("div", "validation-summary");
   const apply = button("Apply variable changes", "primary-button", async () => {
     await applyEdit(
-      () => update_xgwx_variable(current.file.bytes, index, {
+      () => update_xgwx_variable(current.file.bytes, variable.globalVariableIndex, {
         name: name.value,
         addressArea: addressArea.value,
         addressNumber: Number(addressNumber.value),

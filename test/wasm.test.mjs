@@ -6,19 +6,82 @@ import { fileURLToPath } from "node:url";
 
 import init, {
   cpu_catalog,
+  copy_xgwx_iec_ld_group,
+  copy_xgwx_iec_ld_group_to_program,
+  copy_xgwx_iec_ld_group_to_program_with_locals,
+  replace_xgwx_iec_ld_group_from_program,
+  duplicate_xgwx_iec_ld_function_instance,
   delete_xgwx_ladder_rung_comment,
+  delete_xgwx_iec_ld_blank_row,
+  delete_xgwx_iec_ld_branch_top_row,
+  delete_xgwx_iec_ld_nested_contact_branch_row,
+  delete_xgwx_iec_ld_chained_contact_branch_row,
+  delete_xgwx_iec_ld_empty_branch_row,
+  delete_xgwx_iec_ld_ff_branch_output_row,
+  delete_xgwx_iec_ld_contact,
+  delete_xgwx_iec_ld_contact_cell,
+  delete_xgwx_iec_ld_connected_arithmetic,
+  delete_xgwx_iec_ld_eq_chain_head,
+  delete_xgwx_iec_ld_heating_chain_head,
+  delete_xgwx_iec_ld_heating_chain_middle,
+  delete_xgwx_iec_ld_heating_chain_x3_eq_repaired,
+  delete_xgwx_iec_ld_heating_chain_contact_eq,
+  delete_xgwx_iec_ld_heating_chain_x15_eq,
+  delete_xgwx_iec_ld_function_cell,
+  delete_xgwx_iec_ld_group,
+  delete_xgwx_iec_ld_horizontal_wire,
+  delete_xgwx_iec_ld_linear_rung,
+  delete_xgwx_iec_ld_rung,
+  delete_xgwx_iec_ld_terminal_coil,
+  delete_xgwx_iec_ld_simple_row,
+  delete_xgwx_iec_ld_standalone_function,
+  delete_xgwx_iec_ld_terminal_function,
   delete_xgwx_module,
+  edit_xgwx_iec_ld_branch_segment,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
   edit_xgwx_ladder_comment,
+  insert_xgwx_iec_ld_contact,
+  insert_xgwx_iec_ld_comment,
+  insert_xgwx_iec_ld_short_wire_contact,
+  insert_xgwx_iec_ld_leading_contact,
+  insert_xgwx_iec_ld_function_cell,
+  insert_xgwx_iec_ld_terminal_move,
+  insert_xgwx_iec_ld_standalone_function,
+  insert_xgwx_iec_ld_blank_row,
+  insert_xgwx_iec_ld_linear_rung,
+  insert_xgwx_iec_ld_parallel_contact,
+  insert_xgwx_iec_ld_parallel_contact_kind,
+  insert_xgwx_iec_ld_rung,
+  insert_xgwx_iec_ld_terminal_coil,
+  insert_xgwx_iec_ld_no_contact,
+  insert_xgwx_iec_local_symbol,
+  delete_xgwx_iec_ld_no_contact,
+  delete_xgwx_iec_ld_no_contact_cell,
+  delete_xgwx_iec_local_symbol,
   insert_xgwx_ladder_row,
   insert_xgwx_module,
+  move_xgwx_iec_ld_group,
   parse_xgwx,
+  rename_xgwx_iec_local_symbol,
+  repair_xgwx_iec_ld_horizontal_wire,
+  replace_xgwx_iec_ld_group,
   select_xgwx_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
   set_xgwx_base_slot_count,
   update_xgwx_ladder_cell,
+  update_xgwx_iec_ld_comment,
+  update_xgwx_iec_ld_coil_kind,
+  update_xgwx_iec_ld_arithmetic_function,
+  update_xgwx_iec_ld_contact_kind,
+  update_xgwx_iec_ld_comparison_function,
+  update_xgwx_iec_ld_element_operand,
+  update_xgwx_iec_ld_function_operand,
+  update_xgwx_iec_local_symbol_address,
+  update_xgwx_iec_local_symbol_description,
+  update_xgwx_iec_local_symbol_type,
+  update_xgwx_iec_ld_rising_contact_operand,
   update_xgwx_module,
   update_xgwx_network,
   update_xgwx_network_module,
@@ -32,6 +95,1295 @@ import { groupModuleOptions } from "../media/module-option-groups.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const libraryRoot = process.env.LIBXGWX_DIR || path.resolve(root, "../libxgwx");
+
+test("bundled WASM matches the native FF branch output-row deletion", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-function-output-branch/generated_l15_delete.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home and native comparison fixtures are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => delete_xgwx_iec_ld_ff_branch_output_row(source, 0, 9, 14));
+  const edited = delete_xgwx_iec_ld_ff_branch_output_row(source, 0, 9, 15);
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const summary = parse_xgwx(edited);
+  assert.equal(summary.ladder[0].iecRows.filter((row) => row.groupIndex === 9).length, 1);
+  assert.ok(summary.ladder[0].iecCircuitGraph);
+});
+
+test("bundled WASM deletes the captured EQ chain head like the native accepted file", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-eq-chain-head/generated_eq_chain_head.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
+    context.skip("smart home and XG5000 accepted fixtures are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.ok(parse_xgwx(source).ladder[0].sourceStrings.some((item) =>
+    item.isIecFunctionName && item.iecRecordOffset === 0x2a5c
+    && item.iecGroupIndex === 33 && item.iecRowIndex === 67 && item.value === "EQ"));
+  assert.throws(() => delete_xgwx_iec_ld_eq_chain_head(source, 0, 0x2a5c, "GT"));
+  const edited = delete_xgwx_iec_ld_eq_chain_head(source, 0, 0x2a5c, "EQ");
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(acceptedPath));
+  const summary = parse_xgwx(edited);
+  assert.equal(summary.ladder[0].iecRows.filter((row) => row.groupIndex === 33).length, 15);
+  assert.equal(summary.ladder[0].iecFunctions.length, 22);
+  assert.ok(summary.ladder[0].iecCircuitGraph);
+});
+
+test("bundled WASM deletes the heating comparison head like XG5000", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l47.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
+    context.skip("smart home and native comparison fixtures are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const block = parse_xgwx(source).ladder[6].iecFunctions.find((item) =>
+    item.groupIndex === 13 && item.rowIndex === 46 && item.name === "EQ");
+  assert.ok(block);
+  assert.throws(() => delete_xgwx_iec_ld_heating_chain_head(source, 6, block.recordOffset, "GT"));
+  const edited = delete_xgwx_iec_ld_heating_chain_head(source, 6, block.recordOffset, "EQ");
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(acceptedPath));
+  const summary = parse_xgwx(edited);
+  assert.equal(summary.ladder[6].iecRows.filter((row) => row.groupIndex === 13).length, 31);
+  assert.ok(summary.ladder[6].iecCircuitGraph);
+});
+
+test("bundled WASM deletes both captured middle heating comparisons", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const capture = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(capture, "generated_p6_g13_l55.xgwx"))) {
+    context.skip("smart home and native comparison fixtures are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const functions = parse_xgwx(source).ladder[6].iecFunctions;
+  for (const [row, pin] of [[50, 51], [54, 55]]) {
+    const block = functions.find((item) => item.groupIndex === 13 && item.rowIndex === row && item.name === "EQ");
+    assert.ok(block);
+    assert.throws(() => delete_xgwx_iec_ld_heating_chain_middle(source, 6, block.recordOffset, "GT"));
+    const edited = delete_xgwx_iec_ld_heating_chain_middle(source, 6, block.recordOffset, "EQ");
+    assert.deepEqual(Buffer.from(edited), fs.readFileSync(path.join(capture, `generated_p6_g13_l${pin}.xgwx`)));
+    const summary = parse_xgwx(edited);
+    assert.equal(summary.ladder[6].iecRows.filter((item) => item.groupIndex === 13).length, 31);
+    assert.ok(summary.ladder[6].iecCircuitGraph);
+  }
+});
+
+test("bundled WASM deletes L58 EQ with its dangling feed", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l59_repaired.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
+    context.skip("smart home and repaired heating comparison fixture are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const block = parse_xgwx(source).ladder[6].iecFunctions.find((item) =>
+    item.groupIndex === 13 && item.rowIndex === 58 && item.name === "EQ");
+  assert.ok(block);
+  assert.throws(() => delete_xgwx_iec_ld_heating_chain_x3_eq_repaired(source, 6, block.recordOffset, "GT"));
+  const edited = delete_xgwx_iec_ld_heating_chain_x3_eq_repaired(source, 6, block.recordOffset, "EQ");
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(acceptedPath));
+  const summary = parse_xgwx(edited);
+  assert.equal(summary.ladder[6].iecRows.filter((row) => row.groupIndex === 13).length, 31);
+  assert.ok(summary.ladder[6].iecCircuitGraph);
+});
+
+test("bundled WASM deletes the contact-fed L62 EQ", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l63.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
+    context.skip("smart home and contact-fed comparison fixture are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const block = parse_xgwx(source).ladder[6].iecFunctions.find((item) =>
+    item.groupIndex === 13 && item.rowIndex === 62 && item.name === "EQ");
+  assert.ok(block);
+  assert.throws(() => delete_xgwx_iec_ld_heating_chain_contact_eq(source, 6, block.recordOffset, "GT"));
+  const edited = delete_xgwx_iec_ld_heating_chain_contact_eq(source, 6, block.recordOffset, "EQ");
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(acceptedPath));
+  const summary = parse_xgwx(edited);
+  assert.equal(summary.ladder[6].iecRows.filter((row) => row.groupIndex === 13).length, 31);
+  assert.ok(summary.ladder[6].iecCircuitGraph);
+});
+
+test("bundled WASM deletes both x15-fed heating comparisons", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const capture = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(capture, "generated_p6_g13_l67.xgwx"))) {
+    context.skip("smart home and x15-fed comparison fixtures are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const functions = parse_xgwx(source).ladder[6].iecFunctions;
+  for (const [row, pin] of [[66, 67], [70, 71]]) {
+    const block = functions.find((item) => item.groupIndex === 13 && item.rowIndex === row && item.name === "EQ");
+    assert.ok(block);
+    assert.throws(() => delete_xgwx_iec_ld_heating_chain_x15_eq(source, 6, block.recordOffset, "GT"));
+    const edited = delete_xgwx_iec_ld_heating_chain_x15_eq(source, 6, block.recordOffset, "EQ");
+    assert.deepEqual(Buffer.from(edited), fs.readFileSync(path.join(capture, `generated_p6_g13_l${pin}.xgwx`)));
+    const summary = parse_xgwx(edited);
+    assert.equal(summary.ladder[6].iecRows.filter((item) => item.groupIndex === 13).length, 31);
+    assert.ok(summary.ladder[6].iecCircuitGraph);
+  }
+  const first = functions.find((item) => item.groupIndex === 13 && item.rowIndex === 66 && item.name === "EQ");
+  const later = functions.find((item) => item.groupIndex === 13 && item.rowIndex === 70 && item.name === "EQ");
+  const afterFirst = delete_xgwx_iec_ld_heating_chain_x15_eq(source, 6, first.recordOffset, "EQ");
+  const shifted = parse_xgwx(afterFirst).ladder[6].iecFunctions.find((item) =>
+    item.groupIndex === 13 && item.rowIndex === 69 && item.name === "EQ");
+  assert.ok(shifted);
+  const forward = delete_xgwx_iec_ld_heating_chain_x15_eq(afterFirst, 6, shifted.recordOffset, "EQ");
+  const afterLater = delete_xgwx_iec_ld_heating_chain_x15_eq(source, 6, later.recordOffset, "EQ");
+  const surviving = parse_xgwx(afterLater).ladder[6].iecFunctions.find((item) =>
+    item.groupIndex === 13 && item.rowIndex === 66 && item.name === "EQ");
+  assert.ok(surviving);
+  const reverse = delete_xgwx_iec_ld_heating_chain_x15_eq(afterLater, 6, surviving.recordOffset, "EQ");
+  assert.deepEqual(Buffer.from(forward), Buffer.from(reverse));
+  assert.equal(parse_xgwx(forward).ladder[6].iecRows.filter((item) => item.groupIndex === 13).length, 30);
+  assert.ok(parse_xgwx(forward).ladder[6].iecCircuitGraph);
+});
+
+test("bundled WASM composes six heating comparison deletions in either order", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const expectedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_six.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(expectedPath)) {
+    context.skip("smart home and six-comparison fixtures are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const strategies = {
+    head: delete_xgwx_iec_ld_heating_chain_head,
+    middle: delete_xgwx_iec_ld_heating_chain_middle,
+    contact: delete_xgwx_iec_ld_heating_chain_contact_eq,
+    x15: delete_xgwx_iec_ld_heating_chain_x15_eq,
+  };
+  const applySequence = (steps) => steps.reduce((bytes, [row, kind]) => {
+    const block = parse_xgwx(bytes).ladder[6].iecFunctions.find((item) =>
+      item.groupIndex === 13 && item.rowIndex === row && item.name === "EQ");
+    assert.ok(block, `EQ at L${row}`);
+    return strategies[kind](bytes, 6, block.recordOffset, "EQ");
+  }, source);
+  const reverse = applySequence([[70, "x15"], [66, "x15"], [62, "contact"],
+    [54, "middle"], [50, "middle"], [46, "head"]]);
+  const forward = applySequence([[46, "head"], [49, "middle"], [52, "middle"],
+    [59, "contact"], [62, "x15"], [65, "x15"]]);
+  assert.deepEqual(Buffer.from(forward), Buffer.from(reverse));
+  assert.deepEqual(Buffer.from(forward), fs.readFileSync(expectedPath));
+  const summary = parse_xgwx(forward).ladder[6];
+  assert.equal(summary.iecRows.filter((item) => item.groupIndex === 13).length, 26);
+  assert.ok(summary.iecCircuitGraph);
+});
+
+test("bundled WASM composes the repaired x3 deletion with six heating comparisons", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const expectedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_seven.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(expectedPath)) {
+    context.skip("smart home and seven-comparison fixtures are required");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const strategies = {
+    head: delete_xgwx_iec_ld_heating_chain_head,
+    middle: delete_xgwx_iec_ld_heating_chain_middle,
+    x3: delete_xgwx_iec_ld_heating_chain_x3_eq_repaired,
+    contact: delete_xgwx_iec_ld_heating_chain_contact_eq,
+    x15: delete_xgwx_iec_ld_heating_chain_x15_eq,
+  };
+  const applySequence = (steps) => steps.reduce((bytes, [row, kind]) => {
+    const block = parse_xgwx(bytes).ladder[6].iecFunctions.find((item) =>
+      item.groupIndex === 13 && item.rowIndex === row && item.name === "EQ");
+    assert.ok(block, `EQ at L${row}`);
+    return strategies[kind](bytes, 6, block.recordOffset, "EQ");
+  }, source);
+  const x3Last = applySequence([[70, "x15"], [66, "x15"], [62, "contact"],
+    [54, "middle"], [50, "middle"], [46, "head"], [55, "x3"]]);
+  const x3Middle = applySequence([[46, "head"], [49, "middle"], [52, "middle"],
+    [55, "x3"], [58, "contact"], [61, "x15"], [64, "x15"]]);
+  assert.deepEqual(Buffer.from(x3Last), Buffer.from(x3Middle));
+  assert.deepEqual(Buffer.from(x3Last), fs.readFileSync(expectedPath));
+  const summary = parse_xgwx(x3Last).ladder[6];
+  assert.equal(summary.iecRows.filter((item) => item.groupIndex === 13).length, 25);
+  assert.ok(summary.iecCircuitGraph);
+  const cleaned = delete_xgwx_iec_ld_group(x3Last, 6, 13, 46);
+  const cleanedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_seven_then_group_removed.xgwx";
+  assert.deepEqual(Buffer.from(cleaned), fs.readFileSync(cleanedPath));
+  assert.ok(parse_xgwx(cleaned).ladder[6].iecCircuitGraph);
+});
+
+test("bundled WASM deletes the native terminal coil and restores its IEC rung", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const nativePath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-coil-delete/COI.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(nativePath)) {
+    context.skip("smart home and native XG5000 captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => delete_xgwx_iec_ld_terminal_coil(source, 0, 271, "wrong"));
+  const deleted = delete_xgwx_iec_ld_terminal_coil(source, 0, 271, "시작");
+  assert.deepEqual(parse_xgwx(deleted).ladder, parse_xgwx(fs.readFileSync(nativePath)).ladder);
+  assert.throws(() => insert_xgwx_iec_ld_terminal_coil(deleted, 0, 223, "스위치_1", "OUTPUT", "UNKNOWN"));
+  const restored = insert_xgwx_iec_ld_terminal_coil(deleted, 0, 223, "스위치_1", "OUTPUT", "시작");
+  assert.deepEqual(parse_xgwx(restored).ladder, parse_xgwx(source).ladder);
+});
+
+test("bundled WASM removes complete branched and function IEC networks", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  if (!fs.existsSync(sourcePath)) {
+    context.skip("smart home fixture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const original = parse_xgwx(source);
+  for (const [groupIndex, firstRow] of [[3, 3], [14, 20]]) {
+    assert.throws(() => delete_xgwx_iec_ld_group(source, 0, groupIndex, firstRow + 1));
+    const edited = parse_xgwx(delete_xgwx_iec_ld_group(source, 0, groupIndex, firstRow));
+    const removed = original.ladder[0].iecRows.filter((row) => row.groupIndex === groupIndex).length;
+    assert.equal(edited.ladder[0].iecRows.length, original.ladder[0].iecRows.length - removed);
+    assert.ok(edited.ladder[0].iecCircuitGraph);
+    assert.deepEqual(edited.ladder.slice(1), original.ladder.slice(1));
+  }
+});
+
+test("bundled WASM adds a standalone IEC comment to an empty row", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  if (!fs.existsSync(sourcePath)) {
+    context.skip("smart home fixture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => insert_xgwx_iec_ld_comment(source, 0, 6, "새 설명"));
+  assert.throws(() => insert_xgwx_iec_ld_comment(source, 0, 5, ""));
+  const edited = parse_xgwx(insert_xgwx_iec_ld_comment(source, 0, 5, "새 설명"));
+  const original = parse_xgwx(source);
+  assert.ok(edited.ladder[0].iecCircuitGraph);
+  assert.equal(edited.ladder[0].iecRows.filter((row) => row.rowIndex === 5).length, 1);
+  assert.equal(edited.ladder[0].sourceStrings.find((item) => item.iecRowIndex === 5)?.value, "새 설명");
+  assert.deepEqual(edited.ladder.slice(1), original.ladder.slice(1));
+});
+
+test("bundled WASM moves complete IEC networks into empty rows", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-move";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(captures, "GMS.XGWX"))
+      || !fs.existsSync(path.join(captures, "GMF.XGWX"))) {
+    context.skip("smart home and native move captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => move_xgwx_iec_ld_group(source, 0, 4, 7, 5));
+  assert.throws(() => move_xgwx_iec_ld_group(source, 0, 4, 6, 7));
+  const simple = move_xgwx_iec_ld_group(source, 0, 4, 6, 5);
+  assert.deepEqual(parse_xgwx(simple).ladder, parse_xgwx(fs.readFileSync(path.join(captures, "GMS.XGWX"))).ladder);
+  const cleared = delete_xgwx_iec_ld_group(source, 0, 33, 67);
+  const functionMove = move_xgwx_iec_ld_group(cleared, 0, 14, 20, 67);
+  assert.deepEqual(parse_xgwx(functionMove).ladder,
+    parse_xgwx(fs.readFileSync(path.join(captures, "GMF.XGWX"))).ladder);
+});
+
+test("bundled WASM copies complete IEC networks into empty rows", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(captures, "GCS.XGWX"))
+      || !fs.existsSync(path.join(captures, "GCF.XGWX"))) {
+    context.skip("smart home and native copy captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => copy_xgwx_iec_ld_group(source, 0, 4, 7, 5));
+  assert.throws(() => copy_xgwx_iec_ld_group(source, 0, 4, 6, 7));
+  const simple = copy_xgwx_iec_ld_group(source, 0, 4, 6, 5);
+  assert.deepEqual(parse_xgwx(simple).ladder,
+    parse_xgwx(fs.readFileSync(path.join(captures, "GCS.XGWX"))).ladder);
+  const cleared = delete_xgwx_iec_ld_group(source, 0, 33, 67);
+  const functionCopy = copy_xgwx_iec_ld_group(cleared, 0, 14, 20, 67);
+  assert.deepEqual(parse_xgwx(functionCopy).ladder,
+    parse_xgwx(fs.readFileSync(path.join(captures, "GCF.XGWX"))).ladder);
+});
+
+test("bundled WASM replaces one occupied IEC network atomically", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-network-replace/generated_l6_from_l2.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home network replacement capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => replace_xgwx_iec_ld_group(source, 0, 2, 2, 2, 2));
+  assert.throws(() => replace_xgwx_iec_ld_group(source, 0, 2, 3, 4, 6));
+  const replaced = replace_xgwx_iec_ld_group(source, 0, 2, 2, 4, 6);
+  assert.deepEqual(Buffer.from(replaced), fs.readFileSync(generatedPath));
+  const before = parse_xgwx(source);
+  const after = parse_xgwx(replaced);
+  assert.equal(after.ladder[0].iecRows.length, before.ladder[0].iecRows.length);
+  assert.deepEqual(after.ladder.slice(1), before.ladder.slice(1));
+});
+
+test("bundled WASM gives a copied IEC function its own local instance", async (context) => {
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const copiedPath = path.join(captures, "GCF.XGWX");
+  const independentPath = path.join(captures, "GCI.XGWX");
+  if (!fs.existsSync(copiedPath) || !fs.existsSync(independentPath)) {
+    context.skip("function-copy captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(copiedPath);
+  const before = parse_xgwx(source);
+  const block = before.ladder[0].iecFunctions.find((item) =>
+    item.groupIndex === 33 && item.name === "R_TRIG");
+  assert.ok(block?.instance);
+  assert.throws(() => duplicate_xgwx_iec_ld_function_instance(
+    source, 0, block.recordOffset, "WRONG", "INST4"));
+  const edited = parse_xgwx(duplicate_xgwx_iec_ld_function_instance(
+    source, 0, block.recordOffset, block.instance, "INST4"));
+  const generated = parse_xgwx(fs.readFileSync(independentPath));
+  assert.deepEqual(edited.ladder, generated.ladder);
+  assert.deepEqual(edited.localVariables, generated.localVariables);
+  assert.equal(edited.localVariables[0].find((item) => item.name === "INST4")?.allocationNumber, 1920);
+});
+
+test("parallel contact insertion matches XG5000's valid two-row branch", async (context) => {
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const sourcePath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-linear-rung/generated_linear_rung_l31.xgwx";
+  const nativePath = path.join(captures, "native_or_good.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_parallel.xgwx");
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(nativePath)) {
+    context.skip("native XG5000 parallel-contact capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => insert_xgwx_iec_ld_parallel_contact(source, 0, 31, "WRONG", "OFF", "OFF"));
+  assert.throws(() => insert_xgwx_iec_ld_parallel_contact(source, 0, 31, "ON", "OFF", "%MW700"));
+  const generatedBytes = insert_xgwx_iec_ld_parallel_contact(source, 0, 31, "ON", "OFF", "OFF");
+  const generated = parse_xgwx(generatedBytes);
+  const native = parse_xgwx(fs.readFileSync(nativePath));
+  const group = generated.ladder[0].iecRows.find((row) => row.rowIndex === 31).groupIndex;
+  assert.deepEqual(generated.ladder[0].iecRows.filter((row) => row.groupIndex === group)
+    .map((row) => [row.rowIndex, row.recordCount]), [[31, 4], [32, 2]]);
+  assert.deepEqual(generated.ladder[0].iecRecords.filter((record) => record.groupIndex === group)
+    .map((record) => record.kind), ["Contact", "Branch start", "Long wire", "Coil", "Contact", "Branch end"]);
+  for (const field of ["iecRows", "iecRecords", "iecGeometry", "iecCircuitGraph", "sourceStrings"]) {
+    assert.deepEqual(generated.ladder[0][field], native.ladder[0][field], field);
+  }
+  assert.deepEqual(generated.ladder.slice(1), native.ladder.slice(1));
+  if (fs.existsSync(resavedPath)) {
+    assert.deepEqual(generated.ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  }
+  assert.deepEqual(Buffer.from(edit_xgwx_iec_ld_branch_segment(
+    generatedBytes, 0, group, 31, 32, 3, true, false,
+  )), source);
+});
+
+test("parallel contact insertion edits an existing smart home rung", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy/generated_original_parallel.xgwx";
+  const resavedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy/native_resaved_original_parallel.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home fixture or generated branch is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const edited = insert_xgwx_iec_ld_parallel_contact(
+    source, 5, 4, "%MX761", "%MX762", "%MX760",
+  );
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(edited);
+  if (fs.existsSync(resavedPath)) {
+    assert.deepEqual(generated.ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  }
+  const top = generated.ladder[5].iecRows.find((row) => row.rowIndex === 4);
+  assert.deepEqual(generated.ladder[5].iecRows.filter((row) => row.groupIndex === top.groupIndex)
+    .map((row) => [row.rowIndex, row.recordCount]), [[4, 4], [5, 2]]);
+  const restored = parse_xgwx(edit_xgwx_iec_ld_branch_segment(
+    edited, 5, top.groupIndex, 4, 5, 3, true, false,
+  ));
+  const original = parse_xgwx(source);
+  assert.deepEqual(restored.ladder, original.ladder);
+  assert.deepEqual(restored.localVariables, original.localVariables);
+});
+
+test("parallel contact kind insertion preserves the smart home branch shape", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const generatedPath = path.join(captures, "generated_original_parallel_nc.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_original_parallel_nc.xgwx");
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home fixture or generated NC branch is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const original = parse_xgwx(source);
+  assert.throws(() => insert_xgwx_iec_ld_parallel_contact_kind(
+    source, 5, 4, "%MX761", "%MX762", "OUTPUT", "%MX760",
+  ));
+  for (const [kind, code] of [["NO", 6], ["NC", 7], ["RISING", 8],
+    ["FALLING", 9], ["NEGATED_RISING", 10], ["NEGATED_FALLING", 11]]) {
+    const edited = insert_xgwx_iec_ld_parallel_contact_kind(
+      source, 5, 4, "%MX761", "%MX762", kind, "%MX760",
+    );
+    const generated = parse_xgwx(edited);
+    const top = generated.ladder[5].iecRows.find((row) => row.rowIndex === 4);
+    const lower = generated.ladder[5].iecRecords.find((record) =>
+      record.groupIndex === top.groupIndex && record.rowIndex === 5 && record.kind === "Contact");
+    assert.equal(lower.code, code, kind);
+    assert.deepEqual(generated.ladder[5].iecRows.filter((row) => row.groupIndex === top.groupIndex)
+      .map((row) => [row.rowIndex, row.recordCount]), [[4, 4], [5, 2]], kind);
+    const restored = parse_xgwx(edit_xgwx_iec_ld_branch_segment(
+      edited, 5, top.groupIndex, 4, 5, 3, true, false,
+    ));
+    assert.deepEqual(restored.ladder, original.ladder, kind);
+    assert.deepEqual(restored.localVariables, original.localVariables, kind);
+    if (kind === "NC") {
+      assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+      if (fs.existsSync(resavedPath)) {
+        assert.deepEqual(generated.ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+      }
+    }
+  }
+});
+
+test("parallel contact insertion supports a SET-coil smart home rung", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-parallel-set";
+  const generatedPath = path.join(captures, "generated_parallel_set.xgwx");
+  const nativePath = path.join(captures, "native_resaved_parallel_set.xgwx");
+  if (![sourcePath, generatedPath].every(fs.existsSync)) {
+    context.skip("smart home SET-coil branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const setOnly = update_xgwx_iec_ld_coil_kind(source, 5, 555, "OUTPUT", "SET");
+  const edited = insert_xgwx_iec_ld_parallel_contact_kind(
+    setOnly, 5, 4, "%MX761", "%MX762", "NC", "%MX760",
+  );
+  assert.ok(Buffer.from(edited).equals(fs.readFileSync(generatedPath)));
+  const generated = parse_xgwx(edited);
+  assert.deepEqual(generated.ladder[5].iecRecords.filter((record) => record.groupIndex === 4)
+    .map((record) => record.code ?? null), [6, null, null, 16, 7, null]);
+  const restored = edit_xgwx_iec_ld_branch_segment(edited, 5, 4, 4, 5, 3, true, false);
+  assert.ok(Buffer.from(restored).equals(Buffer.from(setOnly)));
+  if (fs.existsSync(nativePath)) {
+    const native = parse_xgwx(fs.readFileSync(nativePath));
+    assert.deepEqual(generated.ladder, native.ladder);
+  }
+});
+
+test("final branch removal preserves a serial contact after the branch", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-branch-wire-delete";
+  const generatedPath = path.join(captures, "generated_branch_wire_delete.xgwx");
+  const nativePath = path.join(captures, "native_branch_wire_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_generated_branch_wire_delete.xgwx");
+  if (![sourcePath, generatedPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home serial-contact branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const edited = edit_xgwx_iec_ld_branch_segment(source, 0, 22, 42, 43, 3, true, false);
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(edited).ladder[0];
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[0];
+  assert.deepEqual(generated.iecRows, native.iecRows);
+  assert.deepEqual(generated.iecRecords, native.iecRecords);
+  assert.deepEqual(generated.sourceStrings, native.sourceStrings);
+  assert.deepEqual(parse_xgwx(edited).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  assert.deepEqual(generated.iecRecords.filter((record) => record.groupIndex === 22)
+    .map((record) => record.code ?? null), [6, null, 7, null, 14]);
+});
+
+test("final branch removal preserves a contact adjacent to the branch", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-direct-contact-branch-delete";
+  const generatedPath = path.join(captures, "generated_p3_direct_branch_delete.xgwx");
+  const nativePath = path.join(captures, "native_p3_direct_branch_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_generated_p3_direct_branch_delete.xgwx");
+  if (![sourcePath, generatedPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home adjacent-contact branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const edited = edit_xgwx_iec_ld_branch_segment(
+    fs.readFileSync(sourcePath), 3, 7, 17, 18, 3, true, false,
+  );
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(edited).ladder[3];
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[3];
+  assert.deepEqual(generated.iecRows, native.iecRows);
+  assert.deepEqual(generated.iecRecords, native.iecRecords);
+  assert.deepEqual(generated.sourceStrings, native.sourceStrings);
+  assert.deepEqual(parse_xgwx(edited).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  assert.deepEqual(generated.iecRecords.filter((record) => record.groupIndex === 7)
+    .map((record) => record.code ?? null), [6, 7, null, 14]);
+});
+
+test("final x6 branch removal preserves two leading contacts in both smart home programs", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-x6-branch-delete";
+  const p4Path = path.join(captures, "generated_p4_x6_branch_delete.xgwx");
+  const bothPath = path.join(captures, "generated_p4_p5_x6_branch_delete.xgwx");
+  const nativePath = path.join(captures, "native_p4_x6_branch_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_generated_p4_p5_x6_branch_delete.xgwx");
+  if (![sourcePath, p4Path, bothPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home x6 branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const p4 = edit_xgwx_iec_ld_branch_segment(source, 4, 6, 7, 8, 6, true, false);
+  assert.deepEqual(Buffer.from(p4), fs.readFileSync(p4Path));
+  const both = edit_xgwx_iec_ld_branch_segment(p4, 5, 5, 5, 6, 6, true, false);
+  assert.deepEqual(Buffer.from(both), fs.readFileSync(bothPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[4];
+  const generated = parse_xgwx(p4).ladder[4];
+  assert.deepEqual(generated.iecRows, native.iecRows);
+  assert.deepEqual(generated.iecRecords, native.iecRecords);
+  assert.deepEqual(generated.sourceStrings, native.sourceStrings);
+  assert.deepEqual(parse_xgwx(both).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("short-wire branch removal preserves the smart home curtain and entrance rungs", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-short-wire-branch-delete";
+  const p1Path = path.join(captures, "generated_p1_short_wire_branch_delete.xgwx");
+  const bothPath = path.join(captures, "generated_p1_p2_short_wire_branch_delete.xgwx");
+  const nativePath = path.join(captures, "native_p1_short_wire_branch_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_generated_p1_p2_short_wire_branch_delete.xgwx");
+  if (![sourcePath, p1Path, bothPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home short-wire branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const p1 = edit_xgwx_iec_ld_branch_segment(source, 1, 2, 4, 5, 6, true, false);
+  assert.deepEqual(Buffer.from(p1), fs.readFileSync(p1Path));
+  const both = edit_xgwx_iec_ld_branch_segment(p1, 2, 11, 34, 35, 6, true, false);
+  assert.deepEqual(Buffer.from(both), fs.readFileSync(bothPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[1];
+  const generated = parse_xgwx(p1).ladder[1];
+  assert.deepEqual(generated.iecRows, native.iecRows);
+  assert.deepEqual(generated.iecRecords, native.iecRecords);
+  assert.deepEqual(generated.sourceStrings, native.sourceStrings);
+  assert.deepEqual(parse_xgwx(both).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("output-branch removal preserves both smart home elevator rungs", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-output-branch-delete";
+  const firstPath = path.join(captures, "generated_l52_delete.xgwx");
+  const bothPath = path.join(captures, "generated_both_delete.xgwx");
+  const nativePath = path.join(captures, "native_l52_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_both.xgwx");
+  if (![sourcePath, firstPath, bothPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home output-branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const first = edit_xgwx_iec_ld_branch_segment(source, 3, 18, 51, 52, 24, true, false);
+  assert.deepEqual(Buffer.from(first), fs.readFileSync(firstPath));
+  const both = edit_xgwx_iec_ld_branch_segment(first, 3, 19, 52, 53, 24, true, false);
+  assert.deepEqual(Buffer.from(both), fs.readFileSync(bothPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[3];
+  const generated = parse_xgwx(first).ladder[3];
+  assert.deepEqual(generated.iecRows, native.iecRows);
+  assert.deepEqual(generated.iecRecords, native.iecRecords);
+  assert.deepEqual(parse_xgwx(both).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("terminal contact-branch removal preserves the smart home elevator groups", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-three-row-contact-branch";
+  const firstPath = path.join(captures, "generated_l26_delete.xgwx");
+  const fivePath = path.join(captures, "generated_five_delete.xgwx");
+  const nativePath = path.join(captures, "native_l26_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_five.xgwx");
+  if (![sourcePath, firstPath, fivePath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home terminal contact-branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const first = edit_xgwx_iec_ld_branch_segment(source, 3, 11, 25, 26, 6, true, false);
+  assert.deepEqual(Buffer.from(first), fs.readFileSync(firstPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[3];
+  const generated = parse_xgwx(first).ladder[3];
+  assert.deepEqual(generated.iecRows.filter((row) => row.groupIndex === 11),
+    native.iecRows.filter((row) => row.groupIndex === 11));
+  assert.deepEqual(generated.iecRecords.filter((record) => record.groupIndex === 11),
+    native.iecRecords.filter((record) => record.groupIndex === 11));
+  let five = source;
+  for (const [group, start, end] of [[15, 39, 40], [14, 34, 35], [13, 31, 32],
+    [12, 28, 29], [11, 25, 26]]) {
+    five = edit_xgwx_iec_ld_branch_segment(five, 3, group, start, end, 6, true, false);
+  }
+  assert.deepEqual(Buffer.from(five), fs.readFileSync(fivePath));
+  assert.deepEqual(parse_xgwx(five).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("two-contact terminal branches match XG5000 and survive Save As", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-two-contact-terminal-branch";
+  const firstPath = path.join(captures, "generated_l45_delete.xgwx");
+  const twoPath = path.join(captures, "generated_two_delete.xgwx");
+  const nativePath = path.join(captures, "native_l45_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_two.xgwx");
+  if (![sourcePath, firstPath, twoPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home two-contact terminal capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const first = edit_xgwx_iec_ld_branch_segment(source, 3, 16, 44, 45, 6, true, false);
+  assert.deepEqual(Buffer.from(first), fs.readFileSync(firstPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[3];
+  const generated = parse_xgwx(first).ladder[3];
+  assert.deepEqual(generated.iecRows.filter((row) => row.groupIndex === 16),
+    native.iecRows.filter((row) => row.groupIndex === 16));
+  assert.deepEqual(generated.iecRecords.filter((record) => record.groupIndex === 16),
+    native.iecRecords.filter((record) => record.groupIndex === 16));
+  let two = edit_xgwx_iec_ld_branch_segment(source, 3, 17, 48, 49, 6, true, false);
+  two = edit_xgwx_iec_ld_branch_segment(two, 3, 16, 44, 45, 6, true, false);
+  assert.deepEqual(Buffer.from(two), fs.readFileSync(twoPath));
+  assert.deepEqual(parse_xgwx(two).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("two-contact middle branches match XG5000 and survive Save As", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-middle-contact-branch";
+  const firstPath = path.join(captures, "generated_l44_delete.xgwx");
+  const twoPath = path.join(captures, "generated_two_middle_delete.xgwx");
+  const nativePath = path.join(captures, "native_l44_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_two_middle.xgwx");
+  if (![sourcePath, firstPath, twoPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home middle contact-branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const first = edit_xgwx_iec_ld_branch_segment(source, 3, 16, 43, 44, 6, true, false);
+  assert.deepEqual(Buffer.from(first), fs.readFileSync(firstPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[3];
+  const generated = parse_xgwx(first).ladder[3];
+  assert.deepEqual(generated.iecRows.filter((row) => row.groupIndex === 16),
+    native.iecRows.filter((row) => row.groupIndex === 16));
+  assert.deepEqual(generated.iecRecords.filter((record) => record.groupIndex === 16),
+    native.iecRecords.filter((record) => record.groupIndex === 16));
+  let two = edit_xgwx_iec_ld_branch_segment(source, 3, 17, 47, 48, 6, true, false);
+  two = edit_xgwx_iec_ld_branch_segment(two, 3, 16, 43, 44, 6, true, false);
+  assert.deepEqual(Buffer.from(two), fs.readFileSync(twoPath));
+  assert.deepEqual(parse_xgwx(two).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("first lower contact branches match XG5000 and survive Save As", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-first-lower-contact-branch";
+  const firstPath = path.join(captures, "generated_l25_delete.xgwx");
+  const sevenPath = path.join(captures, "generated_seven_delete.xgwx");
+  const nativePath = path.join(captures, "native_l25_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_seven.xgwx");
+  if (![sourcePath, firstPath, sevenPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home first lower contact-branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const first = edit_xgwx_iec_ld_branch_segment(source, 3, 11, 24, 25, 6, true, false);
+  assert.deepEqual(Buffer.from(first), fs.readFileSync(firstPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[3];
+  const generated = parse_xgwx(first).ladder[3];
+  assert.deepEqual(generated.iecRows.filter((row) => row.groupIndex === 11),
+    native.iecRows.filter((row) => row.groupIndex === 11));
+  assert.deepEqual(generated.iecRecords.filter((record) => record.groupIndex === 11),
+    native.iecRecords.filter((record) => record.groupIndex === 11));
+  let seven = source;
+  for (const [group, start, end] of [
+    [17, 46, 47], [16, 42, 43], [15, 37, 38], [14, 33, 34],
+    [13, 30, 31], [12, 27, 28], [11, 24, 25],
+  ]) {
+    seven = edit_xgwx_iec_ld_branch_segment(seven, 3, group, start, end, 6, true, false);
+  }
+  assert.deepEqual(Buffer.from(seven), fs.readFileSync(sevenPath));
+  assert.deepEqual(parse_xgwx(seven).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("middle short-wire contact branch matches XG5000 and survives Save As", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-middle-shortwire-branch";
+  const generatedPath = path.join(captures, "generated_l39_delete.xgwx");
+  const nativePath = path.join(captures, "native_l39_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_l39.xgwx");
+  if (![sourcePath, generatedPath, nativePath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home middle short-wire branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const edited = edit_xgwx_iec_ld_branch_segment(source, 3, 15, 38, 39, 6, true, false);
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const native = parse_xgwx(fs.readFileSync(nativePath)).ladder[3];
+  const generated = parse_xgwx(edited).ladder[3];
+  assert.deepEqual(generated.iecRows.filter((row) => row.groupIndex === 15),
+    native.iecRows.filter((row) => row.groupIndex === 15));
+  assert.deepEqual(generated.iecRecords.filter((record) => record.groupIndex === 15),
+    native.iecRecords.filter((record) => record.groupIndex === 15));
+  assert.deepEqual(parse_xgwx(edited).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("x3 terminal contact branch matches XG5000 and survives Save As", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-three-row-x3-terminal";
+  const generatedPath = path.join(captures, "generated_p3_l57_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_generated.xgwx");
+  if (![sourcePath, generatedPath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home x3 terminal branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const edited = edit_xgwx_iec_ld_branch_segment(
+    fs.readFileSync(sourcePath), 3, 20, 56, 57, 3, true, false,
+  );
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  assert.deepEqual(parse_xgwx(edited).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("x3 middle contact branch matches XG5000 and survives Save As", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-three-row-x3-middle";
+  const generatedPath = path.join(captures, "generated_p3_l56_delete.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_generated.xgwx");
+  if (![sourcePath, generatedPath, resavedPath].every(fs.existsSync)) {
+    context.skip("smart home x3 middle branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const edited = edit_xgwx_iec_ld_branch_segment(
+    fs.readFileSync(sourcePath), 3, 20, 55, 56, 3, true, false,
+  );
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  assert.deepEqual(parse_xgwx(edited).ladder,
+    parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+});
+
+test("nested middle contact branch rows match native XG5000 deletions", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-output-row";
+  const resavedPath = path.join(captures, "native_resaved_generated_l4.xgwx");
+  const group8ResavedPath = path.join(captures, "native_resaved_generated_g8_l21.xgwx");
+  if (![sourcePath, resavedPath, path.join(captures, "generated_p6_l4.xgwx"),
+    path.join(captures, "generated_p6_l6.xgwx"), group8ResavedPath,
+    path.join(captures, "generated_p6_g8_l21.xgwx"),
+    path.join(captures, "generated_p6_g8_l23.xgwx")].every(fs.existsSync)) {
+    context.skip("smart home nested contact branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => delete_xgwx_iec_ld_nested_contact_branch_row(source, 6, 3, 7));
+  for (const row of [4, 6]) {
+    const edited = delete_xgwx_iec_ld_nested_contact_branch_row(source, 6, 3, row);
+    assert.deepEqual(Buffer.from(edited), fs.readFileSync(path.join(captures, `generated_p6_l${row}.xgwx`)));
+    assert.ok(parse_xgwx(edited).ladder[6].iecCircuitGraph);
+  }
+  for (const row of [21, 23]) {
+    const edited = delete_xgwx_iec_ld_nested_contact_branch_row(source, 6, 8, row);
+    assert.deepEqual(Buffer.from(edited), fs.readFileSync(path.join(captures, `generated_p6_g8_l${row}.xgwx`)));
+    assert.ok(parse_xgwx(edited).ladder[6].iecCircuitGraph);
+  }
+  const generated = parse_xgwx(delete_xgwx_iec_ld_nested_contact_branch_row(source, 6, 3, 4));
+  assert.deepEqual(generated.ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  const group8Generated = parse_xgwx(delete_xgwx_iec_ld_nested_contact_branch_row(source, 6, 8, 21));
+  assert.deepEqual(group8Generated.ladder,
+    parse_xgwx(fs.readFileSync(group8ResavedPath)).ladder);
+});
+
+test("chained middle contact branch row matches native XG5000 deletion", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-output-row";
+  const generatedPaths = [83, 84].map((row) => path.join(captures, `generated_p6_g14_l${row}.xgwx`));
+  const resavedPath = path.join(captures, "native_resaved_generated_g14_l84.xgwx");
+  if (![sourcePath, ...generatedPaths].every(fs.existsSync)) {
+    context.skip("smart home chained branch capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => delete_xgwx_iec_ld_chained_contact_branch_row(source, 6, 14, 80));
+  for (const [index, row] of [83, 84].entries()) {
+    const edited = delete_xgwx_iec_ld_chained_contact_branch_row(source, 6, 14, row);
+    assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPaths[index]));
+    assert.ok(parse_xgwx(edited).ladder[6].iecCircuitGraph);
+  }
+  if (fs.existsSync(resavedPath)) {
+    const editedL84 = delete_xgwx_iec_ld_chained_contact_branch_row(source, 6, 14, 84);
+    assert.deepEqual(parse_xgwx(editedL84).ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  }
+});
+
+test("branch-only middle rows match native XG5000 deletions", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-output-row";
+  const sites = [[7, 21], [8, 28]];
+  const generatedPaths = sites.map(([group, row]) => path.join(captures, `generated_p2_g${group}_l${row}.xgwx`));
+  if (![sourcePath, ...generatedPaths].every(fs.existsSync)) {
+    context.skip("smart home branch-only row captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => delete_xgwx_iec_ld_empty_branch_row(source, 2, 7, 20));
+  for (const [[group, row], generatedPath] of sites.map((site, index) => [site, generatedPaths[index]])) {
+    const edited = delete_xgwx_iec_ld_empty_branch_row(source, 2, group, row);
+    assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+    assert.ok(parse_xgwx(edited).ladder[2].iecCircuitGraph);
+  }
+  const resavedPath = path.join(captures, "native_resaved_generated_p2_g7_l21.xgwx");
+  if (fs.existsSync(resavedPath)) {
+    const editedL21 = delete_xgwx_iec_ld_empty_branch_row(source, 2, 7, 21);
+    assert.deepEqual(parse_xgwx(editedL21).ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  }
+});
+
+test("parallel insertion accepts an existing rising-edge top contact", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const generatedPath = path.join(captures, "generated_rising_parallel.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_rising_parallel.xgwx");
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home fixture or generated rising-edge branch is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const edited = insert_xgwx_iec_ld_parallel_contact_kind(
+    source, 0, 2, "스위치_1", "시작", "NO", "ON",
+  );
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(edited);
+  const top = generated.ladder[0].iecRows.find((row) => row.rowIndex === 2);
+  assert.deepEqual(generated.ladder[0].iecRecords.filter((record) =>
+    record.groupIndex === top.groupIndex).map((record) => record.code ?? null),
+  [0x08, null, null, 0x0e, 0x06, null]);
+  assert.ok(generated.ladder[0].iecCircuitGraph);
+  const restored = parse_xgwx(edit_xgwx_iec_ld_branch_segment(
+    edited, 0, top.groupIndex, 2, 3, 3, true, false,
+  ));
+  const original = parse_xgwx(source);
+  assert.deepEqual(restored.ladder, original.ladder);
+  assert.deepEqual(restored.localVariables, original.localVariables);
+  if (fs.existsSync(resavedPath)) {
+    assert.deepEqual(generated.ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  }
+});
+
+test("cross-program IEC network copy validates destination operands and restores", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const generatedPath = path.join(captures, "generated_cross_program_contact_copy.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_cross_program_contact_copy.xgwx");
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home fixture or generated cross-program copy is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const original = parse_xgwx(source);
+  const group = original.ladder[5].iecRows.find((row) => row.rowIndex === 4).groupIndex;
+  const copied = copy_xgwx_iec_ld_group_to_program(source, 5, group, 4, 6, 8);
+  assert.deepEqual(Buffer.from(copied), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(copied);
+  const inserted = generated.ladder[6].iecRows.find((row) => row.rowIndex === 8);
+  assert.ok(inserted);
+  assert.ok(generated.ladder[6].iecCircuitGraph);
+  assert.deepEqual(generated.ladder.slice(0, 6), original.ladder.slice(0, 6));
+  assert.deepEqual(generated.localVariables, original.localVariables);
+  assert.throws(() => copy_xgwx_iec_ld_group_to_program(source, 5, group, 4, 6, 7));
+  const localGroup = original.ladder[0].iecRows.find((row) => row.rowIndex === 2).groupIndex;
+  assert.throws(() => copy_xgwx_iec_ld_group_to_program(source, 0, localGroup, 2, 6, 8));
+  const restored = parse_xgwx(delete_xgwx_iec_ld_group(copied, 6, inserted.groupIndex, 8));
+  assert.deepEqual(restored.ladder, original.ladder);
+  if (fs.existsSync(resavedPath)) {
+    assert.deepEqual(generated.ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  }
+});
+
+test("bundled WASM copies a typed IEC function network across programs", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-function-copy/generated_p2_word_to_udint_p3_l1.xgwx";
+  const nativePath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-function-copy/native_resaved_cross_function_copy.xgwx";
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home cross-program function copy capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const cleared = delete_xgwx_iec_ld_group(source, 3, 1, 1);
+  assert.throws(() => copy_xgwx_iec_ld_group_to_program(cleared, 0, 14, 20, 3, 1));
+  const copied = copy_xgwx_iec_ld_group_to_program(cleared, 2, 1, 1, 3, 1);
+  assert.deepEqual(Buffer.from(copied), fs.readFileSync(generatedPath));
+  const before = parse_xgwx(source);
+  const after = parse_xgwx(copied);
+  assert.deepEqual(after.ladder.filter((_, index) => index !== 3),
+    before.ladder.filter((_, index) => index !== 3));
+  assert.ok(after.ladder[3].iecFunctions.some((block) => block.name === "WORD_TO_UDINT"));
+  if (fs.existsSync(nativePath)) {
+    const native = parse_xgwx(fs.readFileSync(nativePath));
+    const withoutOffsets = (table) => table.map(({ recordOffset, ...symbol }) => symbol);
+    assert.deepEqual(after.ladder, native.ladder);
+    assert.deepEqual(after.localVariables.map(withoutOffsets), native.localVariables.map(withoutOffsets));
+  }
+});
+
+test("bundled WASM copies cross-program networks with required mapped BOOL locals", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-local-copy";
+  const generatedPath = path.join(captures, "generated_cross_local_copy.xgwx");
+  const nativePath = path.join(captures, "native_resaved_cross_local_copy.xgwx");
+  if (![sourcePath, generatedPath].every(fs.existsSync)) {
+    context.skip("smart home cross-local copy capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  let cleared = source;
+  for (const [group, row] of [[2, 2], [1, 1], [0, 0]]) {
+    cleared = delete_xgwx_iec_ld_group(cleared, 6, group, row);
+  }
+  assert.throws(() => copy_xgwx_iec_ld_group_to_program(cleared, 0, 26, 48, 6, 0));
+  const copied = copy_xgwx_iec_ld_group_to_program_with_locals(cleared, 0, 26, 48, 6, 0);
+  assert.ok(Buffer.from(copied).equals(fs.readFileSync(generatedPath)));
+  const generated = parse_xgwx(copied);
+  assert.equal(generated.localVariables[6].find((item) => item.name === "ON").address, "%MX8");
+  assert.equal(generated.localVariables[6].find((item) => item.name === "OFF").address, "%MX7");
+  assert.ok(generated.ladder[6].iecFunctions.some((block) => block.name === "MOVE"));
+  if (fs.existsSync(nativePath)) {
+    const native = parse_xgwx(fs.readFileSync(nativePath));
+    const withoutOffsets = (table) => table.map(({ recordOffset, ...symbol }) => symbol);
+    assert.deepEqual(generated.ladder, native.ladder);
+    assert.deepEqual(generated.localVariables.map(withoutOffsets), native.localVariables.map(withoutOffsets));
+  }
+});
+
+test("bundled WASM copies a cross-program network with its R_TRIG instance", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-instance-copy";
+  const generatedPath = path.join(captures, "generated_cross_instance_copy.xgwx");
+  const nativePath = path.join(captures, "native_resaved_cross_instance_copy.xgwx");
+  if (![sourcePath, generatedPath].every(fs.existsSync)) {
+    context.skip("smart home cross-instance copy capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const cleared = delete_xgwx_iec_ld_group(source, 4, 14, 22);
+  assert.throws(() => copy_xgwx_iec_ld_group_to_program(cleared, 0, 18, 32, 4, 22));
+  const copied = copy_xgwx_iec_ld_group_to_program_with_locals(cleared, 0, 18, 32, 4, 22);
+  assert.ok(Buffer.from(copied).equals(fs.readFileSync(generatedPath)));
+  const generated = parse_xgwx(copied);
+  const instance = generated.localVariables[4].find((item) => item.name === "INST_사본2");
+  assert.equal(instance.typeReference, "R_TRIG");
+  assert.equal(instance.allocationNumber, 2688);
+  assert.ok(generated.ladder[4].iecFunctions.some((block) => block.name === "R_TRIG"
+    && block.instance === "INST_사본2"));
+  if (fs.existsSync(nativePath)) {
+    const native = parse_xgwx(fs.readFileSync(nativePath));
+    const withoutOffsets = (table) => table.map(({ recordOffset, ...symbol }) => symbol);
+    assert.deepEqual(generated.ladder, native.ladder);
+    assert.deepEqual(generated.localVariables.map(withoutOffsets), native.localVariables.map(withoutOffsets));
+  }
+});
+
+test("bundled WASM atomically replaces a network from another IEC program", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-instance-copy";
+  const generatedPath = path.join(captures, "generated_cross_instance_copy.xgwx");
+  const nativePath = path.join(captures, "native_resaved_cross_instance_copy.xgwx");
+  if (![sourcePath, generatedPath].every(fs.existsSync)) {
+    context.skip("smart home cross-program replacement capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => replace_xgwx_iec_ld_group_from_program(source,
+    0, 18, 32, 4, 14, 22, false));
+  const replaced = replace_xgwx_iec_ld_group_from_program(source,
+    0, 18, 32, 4, 14, 22, true);
+  assert.ok(Buffer.from(replaced).equals(fs.readFileSync(generatedPath)));
+  if (fs.existsSync(nativePath)) {
+    const generated = parse_xgwx(replaced);
+    const native = parse_xgwx(fs.readFileSync(nativePath));
+    assert.deepEqual(generated.ladder, native.ladder);
+    assert.deepEqual(generated.localVariables[4], native.localVariables[4]);
+  }
+});
+
+test("bundled WASM copies a Unicode UDINT local with its function network", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-udint-copy";
+  const generatedPath = path.join(captures, "generated_cross_udint_copy.xgwx");
+  const nativePath = path.join(captures, "native_resaved_cross_udint_copy.xgwx");
+  if (![sourcePath, generatedPath].every(fs.existsSync)) {
+    context.skip("smart home Unicode UDINT copy capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  assert.throws(() => copy_xgwx_iec_ld_group_to_program(source, 2, 1, 1, 4, 26));
+  const copied = copy_xgwx_iec_ld_group_to_program_with_locals(source, 2, 1, 1, 4, 26);
+  assert.ok(Buffer.from(copied).equals(fs.readFileSync(generatedPath)));
+  const generated = parse_xgwx(copied);
+  const local = generated.localVariables[4].find((item) => item.name === "변환");
+  assert.equal(local.dataType, "UDINT");
+  assert.equal(local.storageClass, "A");
+  assert.equal(local.allocationNumber, 2688);
+  assert.equal(local.allocationWidth, 32);
+  assert.ok(generated.ladder[4].iecFunctions.some((block) => block.rowIndex === 26
+    && block.name === "WORD_TO_UDINT"));
+  if (fs.existsSync(nativePath)) {
+    const native = parse_xgwx(fs.readFileSync(nativePath));
+    const withoutOffsets = (table) => table.map(({ recordOffset, ...symbol }) => symbol);
+    assert.deepEqual(generated.ladder, native.ladder);
+    assert.deepEqual(generated.localVariables.map(withoutOffsets), native.localVariables.map(withoutOffsets));
+  }
+});
+
+test("bundled WASM cycles all captured IEC comparison function kinds", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-comparison-cycle";
+  const generatedPath = path.join(captures, "generated_comparison_cycle.xgwx");
+  const nativePath = path.join(captures, "native_resaved_comparison_cycle.xgwx");
+  if (![sourcePath, generatedPath].every(fs.existsSync)) {
+    context.skip("smart home comparison cycle capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const original = parse_xgwx(source);
+  const replacements = [["EQ", "GT"], ["GT", "GE"], ["GE", "LT"], ["LT", "LE"], ["LE", "EQ"]];
+  let edited = source;
+  const sites = [];
+  for (const [expected, replacement] of replacements) {
+    const program = original.ladder.find((item) => item.sourceStrings.some((field) =>
+      field.isIecComparisonFunction && field.value === expected));
+    assert.ok(program);
+    const field = program.sourceStrings.find((item) => item.isIecComparisonFunction && item.value === expected);
+    edited = update_xgwx_iec_ld_comparison_function(edited, program.programIndex,
+      field.offset, expected, replacement);
+    sites.push([program.programIndex, field.offset, expected, replacement]);
+  }
+  assert.ok(Buffer.from(edited).equals(fs.readFileSync(generatedPath)));
+  if (fs.existsSync(nativePath)) {
+    assert.deepEqual(parse_xgwx(edited).ladder, parse_xgwx(fs.readFileSync(nativePath)).ladder);
+  }
+  for (const [programIndex, offset, expected, replacement] of sites) {
+    edited = update_xgwx_iec_ld_comparison_function(edited, programIndex,
+      offset, replacement, expected);
+  }
+  assert.deepEqual(parse_xgwx(edited).ladder, original.ladder);
+});
+
+test("variable-length IEC local address survives native XG5000 Save As", async (context) => {
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-address-length";
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const generatedPath = path.join(captures, "generated_on_mx100.xgwx");
+  const nativePath = path.join(captures, "native_resaved_on_mx100.xgwx");
+  if (![sourcePath, generatedPath, nativePath].every(fs.existsSync)) {
+    context.skip("smart home address-length acceptance captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const edited = update_xgwx_iec_local_symbol_address(source, 0, 5, "ON", "%MX8", "%MX100");
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(edited);
+  const native = parse_xgwx(fs.readFileSync(nativePath));
+  const symbolFields = (symbols) => symbols.map(({ recordOffset, ...fields }) => fields);
+  assert.deepEqual(generated.localVariables.map(symbolFields), native.localVariables.map(symbolFields));
+  assert.equal(native.localVariables[0][5].address, "%MX100");
+  assert.equal(native.localVariables[0][5].allocationNumber, 100);
+  assert.deepEqual(generated.ladder.slice(1), native.ladder.slice(1));
+});
+
+test("mapped IEC BOOL address can be cleared and assigned again", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-address-unmap";
+  const generatedPath = path.join(captures, "generated_unmapped_on.xgwx");
+  const nativePath = path.join(captures, "native_unmapped_on.xgwx");
+  if (![sourcePath, generatedPath, nativePath].every(fs.existsSync)) {
+    context.skip("smart home native unmap captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const original = parse_xgwx(source);
+  const cleared = update_xgwx_iec_local_symbol_address(source, 0, 5, "ON", "%MX8", "");
+  assert.deepEqual(Buffer.from(cleared), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(cleared);
+  const native = parse_xgwx(fs.readFileSync(nativePath));
+  const fields = (table) => table.map(({ recordOffset, ...symbol }) => symbol);
+  assert.deepEqual(generated.localVariables.map(fields), native.localVariables.map(fields));
+  assert.deepEqual(generated.ladder, native.ladder);
+  assert.equal(generated.localVariables[0][5].address, null);
+  assert.equal(generated.localVariables[0][5].storageClass, "");
+  assert.equal(generated.localVariables[0][5].allocationNumber, null);
+  assert.equal(generated.localVariables[0][5].allocationWidth, null);
+  const restored = parse_xgwx(update_xgwx_iec_local_symbol_address(cleared, 0, 5, "ON", "", "%MX8"));
+  assert.deepEqual(restored.localVariables, original.localVariables);
+  const remapped = parse_xgwx(update_xgwx_iec_local_symbol_address(cleared, 0, 5, "ON", "", "%MX100"));
+  assert.equal(remapped.localVariables[0][5].address, "%MX100");
+  assert.equal(remapped.localVariables[0][5].allocationNumber, 100);
+  const retyped = parse_xgwx(update_xgwx_iec_local_symbol_type(cleared, 0, 5, "ON", "BOOL", "WORD"));
+  assert.equal(retyped.localVariables[0][5].dataType, "WORD");
+  assert.throws(() => update_xgwx_iec_local_symbol_address(source, 0, 5, "ON", "", "%MX9"));
+});
+
+test("bundled WASM clears captured IEC input and output mappings", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-address-io-unmap";
+  const generatedPath = path.join(captures, "generated_io_unmapped.xgwx");
+  const nativePath = path.join(captures, "native_resaved_generated_io_unmap.xgwx");
+  if (![sourcePath, generatedPath, nativePath].every(fs.existsSync)) {
+    context.skip("smart home native input/output unmap capture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const outputCleared = update_xgwx_iec_local_symbol_address(source, 0, 12, "조명_1", "%QX10", "");
+  const bothCleared = update_xgwx_iec_local_symbol_address(outputCleared, 1, 3, "커튼_제어", "%IX0.0.7", "");
+  assert.deepEqual(Buffer.from(bothCleared), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(bothCleared);
+  const native = parse_xgwx(fs.readFileSync(nativePath));
+  const fields = (table) => table.map(({ recordOffset, ...symbol }) => symbol);
+  assert.deepEqual(generated.localVariables.map(fields), native.localVariables.map(fields));
+  assert.equal(generated.localVariables[0][12].address, null);
+  assert.equal(generated.localVariables[1][3].address, null);
+  assert.equal(native.localVariables[0][12].allocationNumber, null);
+  assert.equal(native.localVariables[1][3].allocationNumber, null);
+  assert.deepEqual(generated.ladder.slice(1), native.ladder.slice(1));
+});
+
+test("bundled WASM removes and repairs a captured IEC horizontal wire", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-wire-delete/generated_l52_deleted.xgwx";
+  if (![sourcePath, generatedPath].every(fs.existsSync)) {
+    context.skip("smart home wire deletion fixture is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const original = parse_xgwx(source);
+  assert.ok(original.ladder[0].iecHorizontalWireDeletionSites.some(
+    (site) => site.wireOffset === 0x1fd1 && site.rawX === 7,
+  ));
+  const removed = delete_xgwx_iec_ld_horizontal_wire(source, 0, 0x1fd1, 7);
+  assert.deepEqual(Buffer.from(removed), fs.readFileSync(generatedPath));
+  const gap = parse_xgwx(removed);
+  assert.ok(gap.ladder[0].iecHorizontalWireRepairSites.some(
+    (site) => site.insertionOffset === 0x1fd1 && site.rawX === 7,
+  ));
+  const repaired = parse_xgwx(repair_xgwx_iec_ld_horizontal_wire(removed, 0, 0x1fd1, 7));
+  assert.deepEqual(repaired.ladder, original.ladder);
+  assert.throws(() => delete_xgwx_iec_ld_horizontal_wire(source, 0, 0x1fd1, 8));
+});
+
+test("numeric IEC function expressions are type checked and survive native Save As", async (context) => {
+  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const generatedPath = path.join(captures, "probe_expression_0_plus_1.xgwx");
+  const resavedPath = path.join(captures, "native_resaved_expression_0_plus_1.xgwx");
+  if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
+    context.skip("smart home fixture or generated expression is unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(sourcePath);
+  const edited = update_xgwx_iec_ld_function_operand(source, 1, 1422, "0", "0+1");
+  assert.deepEqual(Buffer.from(edited), fs.readFileSync(generatedPath));
+  const generated = parse_xgwx(edited);
+  assert.equal(generated.ladder[1].sourceStrings.find((item) => item.offset === 1422)?.value, "0+1");
+  assert.ok(generated.ladder[1].iecCircuitGraph);
+  assert.throws(() => update_xgwx_iec_ld_function_operand(source, 1, 615, "T#5s", "0+1"));
+  assert.throws(() => update_xgwx_iec_ld_function_operand(source, 1, 1452, "%MW301", "0+1"));
+  assert.throws(() => update_xgwx_iec_ld_function_operand(source, 1, 1422, "0", "0+TRUE"));
+  assert.throws(() => update_xgwx_iec_ld_function_operand(source, 1, 1422, "0", "0+%IWbad"));
+  const nested = parse_xgwx(update_xgwx_iec_ld_function_operand(
+    source, 1, 1422, "0", "(0 + 1) * 2",
+  ));
+  assert.equal(nested.ladder[1].sourceStrings.find((item) => item.offset === 1422)?.value,
+    "(0 + 1) * 2");
+  if (fs.existsSync(resavedPath)) {
+    assert.deepEqual(generated.ladder, parse_xgwx(fs.readFileSync(resavedPath)).ladder);
+  }
+});
+
+test("leading IEC contact insertion restores the native captured branch", async (context) => {
+  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-branched-contact-insert";
+  const deletedPath = path.join(captures, "native-leading-contact-deleted.xgwx");
+  const insertedPath = path.join(captures, "native-leading-contact-inserted.xgwx");
+  if (!fs.existsSync(deletedPath) || !fs.existsSync(insertedPath)) {
+    context.skip("native XG5000 captures are unavailable");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const deleted = fs.readFileSync(deletedPath);
+  const site = parse_xgwx(deleted).ladder[0].iecLeadingContactInsertionSites.find((item) =>
+    item.groupIndex === 3 && item.rowIndex === 3);
+  assert.equal(site.insertionOffset, 339);
+  assert.throws(() => insert_xgwx_iec_ld_leading_contact(deleted, 0, 340, "NO", "시작"));
+  assert.throws(() => insert_xgwx_iec_ld_leading_contact(deleted, 0, 339, "NO", "MISSING_BOOL"));
+  const inserted = insert_xgwx_iec_ld_leading_contact(deleted, 0, 339, "NO", "시작");
+  assert.deepEqual(parse_xgwx(inserted).ladder, parse_xgwx(fs.readFileSync(insertedPath)).ladder);
+  assert.equal(parse_xgwx(inserted).ladder[0].iecLeadingContactInsertionSites.length, 0);
+  const nativeCellDeletePath = path.join(captures, "native-leading-cell-deleted.xgwx");
+  const cellSite = parse_xgwx(inserted).ladder[0].iecNoContactCellDeletionSites.find((item) =>
+    item.groupIndex === 3 && item.rowIndex === 3 && item.rawX === 1);
+  assert.equal(cellSite.contactOffset, 339);
+  assert.throws(() => delete_xgwx_iec_ld_contact_cell(inserted, 0, 339, 1, "NC", "시작"));
+  const cellDeleted = delete_xgwx_iec_ld_contact_cell(inserted, 0, 339, 1, "NO", "시작");
+  assert.deepEqual(parse_xgwx(cellDeleted).ladder,
+    parse_xgwx(fs.readFileSync(nativeCellDeletePath)).ladder);
+  const shortWireSite = parse_xgwx(cellDeleted).ladder[0].iecShortWireContactInsertionSites.find((item) =>
+    item.groupIndex === 3 && item.rowIndex === 3 && item.rawX === 4);
+  assert.equal(shortWireSite.wireOffset, 366);
+  assert.throws(() => insert_xgwx_iec_ld_short_wire_contact(cellDeleted, 0, 366, 7, "NO", "시작"));
+  assert.throws(() => insert_xgwx_iec_ld_short_wire_contact(cellDeleted, 0, 366, 4, "NO", "MISSING_BOOL"));
+  const shortWireInserted = insert_xgwx_iec_ld_short_wire_contact(cellDeleted, 0, 366, 4, "NO", "시작");
+  assert.deepEqual(parse_xgwx(shortWireInserted).ladder,
+    parse_xgwx(fs.readFileSync(path.join(captures, "native-short-wire-contact-inserted.xgwx"))).ladder);
+});
 
 test("bundled WASM parses hardware modules from a real fixture", async (context) => {
   const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
@@ -48,6 +1400,823 @@ test("bundled WASM parses hardware modules from a real fixture", async (context)
   assert.equal(summary.counts.modules, 3);
   assert.equal(summary.hardware.modules[0].inputFilter, "Default");
   assert.match(summary.hardware.modules[0].name, /XGI-D24A\/B/);
+  assert.equal(summary.ladder[0].projectType, 1);
+  assert.ok(summary.ladder[0].sourceStrings.some((item) => item.value === "M00000"));
+});
+
+test("bundled WASM preserves IEC LD text from an optional XGI workspace", async (context) => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture || !fs.existsSync(fixture)) {
+    context.skip("set LIBXGWX_XGI_FIXTURE to an XGI workspace");
+    return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(fixture);
+  const summary = parse_xgwx(source);
+  assert.equal(summary.cpu.model, "XGI-CPUE");
+  assert.equal(summary.ladder.length, 7);
+  assert.ok(summary.ladder[0].iecNoContactDeletionSites.some((site) =>
+    site.groupIndex === 3 && site.rowIndex === 3 && site.contactOffset === 339
+      && site.rawX === 1 && site.contactCode === 6));
+  const leadingContactDeleted = parse_xgwx(delete_xgwx_iec_ld_contact(
+    source, 0, 339, 1, "NO", "시작",
+  ));
+  assert.equal(leadingContactDeleted.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount,
+  summary.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount - 1);
+  assert.throws(() => delete_xgwx_iec_ld_contact(source, 0, 339, 1, "NO", "STALE"));
+  const deletedBranchTop = parse_xgwx(delete_xgwx_iec_ld_branch_top_row(source, 0, 3, 3));
+  assert.equal(deletedBranchTop.ladder[0].iecRows.length, summary.ladder[0].iecRows.length - 1);
+  assert.equal(deletedBranchTop.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3).recordCount, 2);
+  assert.ok(deletedBranchTop.ladder[0].iecCircuitGraph);
+  assert.throws(() => delete_xgwx_iec_ld_branch_top_row(source, 0, 3, 4));
+  const deletedSimpleRowBytes = delete_xgwx_iec_ld_simple_row(
+    source, 0, 2, "RISING", "스위치_1", "OUTPUT", "시작",
+  );
+  const deletedSimpleRow = parse_xgwx(deletedSimpleRowBytes);
+  assert.equal(deletedSimpleRow.ladder[0].iecRows.length, summary.ladder[0].iecRows.length - 1);
+  assert.equal(deletedSimpleRow.ladder[0].iecRows.find((row) => row.groupIndex === 2).rowIndex, 2);
+  assert.throws(() => delete_xgwx_iec_ld_simple_row(
+    source, 0, 2, "RISING", "STALE", "OUTPUT", "시작",
+  ));
+  assert.equal(summary.variables.length, 0);
+  assert.deepEqual(summary.localVariables.map((symbols) => symbols.length), [15, 7, 14, 36, 23, 3, 3]);
+  assert.ok(summary.ladder[2].iecNoContactInsertionSites.some((site) => site.wireOffset === 6856 && site.rowIndex === 40));
+  assert.ok(summary.ladder[2].iecNoContactDeletionSites.some((site) => site.contactOffset === 6825 && site.rawX === 13));
+  assert.ok(summary.ladder[2].iecNoContactCellDeletionSites.some((site) => site.contactOffset === 6825 && site.rawX === 13));
+  const originalContactDeletedBytes = delete_xgwx_iec_ld_no_contact(source, 2, 6825, 13, "현관도어닫힘");
+  const originalContactDeleted = parse_xgwx(originalContactDeletedBytes);
+  assert.equal(originalContactDeleted.ladder[2].iecRows.find((row) => row.rowIndex === 40).recordCount, 4);
+  assert.deepEqual(originalContactDeleted.ladder[2].iecHorizontalWireRepairSites,
+    [{ groupIndex: 14, rowIndex: 40, insertionOffset: 6825, rawX: 13 }]);
+  const originalWireRepaired = parse_xgwx(repair_xgwx_iec_ld_horizontal_wire(
+    originalContactDeletedBytes, 2, 6825, 13,
+  ));
+  assert.equal(originalWireRepaired.ladder[2].iecRows.find((row) => row.rowIndex === 40).recordCount, 5);
+  assert.equal(originalWireRepaired.ladder[2].iecRecords.find((record) =>
+    record.rowIndex === 40 && record.offset === 6825).kind, "Short wire");
+  assert.deepEqual(originalWireRepaired.ladder[2].iecHorizontalWireRepairSites, []);
+  assert.deepEqual(originalContactDeleted.ladder.filter((_, index) => index !== 2), summary.ladder.filter((_, index) => index !== 2));
+  assert.deepEqual(originalWireRepaired.ladder.filter((_, index) => index !== 2), summary.ladder.filter((_, index) => index !== 2));
+  const linearInserted = parse_xgwx(insert_xgwx_iec_ld_no_contact(source, 2, 6856, 19, 16, 91, "도어열림"));
+  assert.equal(linearInserted.ladder[2].iecRows.find((row) => row.rowIndex === 40).recordCount, 7);
+  assert.deepEqual(linearInserted.ladder.filter((_, index) => index !== 2), summary.ladder.filter((_, index) => index !== 2));
+  const added = parse_xgwx(insert_xgwx_iec_local_symbol(source, 0, "TEST_LOCAL", "BOOL", ""));
+  assert.equal(added.localVariables[0].length, 16);
+  assert.equal(added.localVariables[0][6].name, "TEST_LOCAL");
+  assert.equal(added.localVariables[0][6].dataType, "BOOL");
+  assert.equal(added.localVariables[0][6].allocationNumber, null);
+  assert.deepEqual(added.localVariables.slice(1), summary.localVariables.slice(1));
+  assert.deepEqual(added.ladder, summary.ladder);
+  const insertedBytes = insert_xgwx_iec_local_symbol(source, 0, "TEST_LOCAL", "BOOL", "");
+  const deleted = parse_xgwx(delete_xgwx_iec_local_symbol(insertedBytes, 0, 6, "TEST_LOCAL"));
+  assert.deepEqual(deleted.localVariables, summary.localVariables);
+  assert.deepEqual(deleted.ladder, summary.ladder);
+  assert.throws(() => delete_xgwx_iec_local_symbol(insertedBytes, 0, 6, "STALE"));
+  assert.throws(() => delete_xgwx_iec_local_symbol(source, 0, 5, "ON"));
+  assert.throws(() => insert_xgwx_iec_local_symbol(source, 0, "ON", "BOOL", ""));
+  assert.equal(summary.counts.variables, 101);
+  assert.ok(summary.localVariables[0].some((symbol) => symbol.name === "ON" && symbol.address === "%MX8" && symbol.storageClass === "M"));
+  assert.equal(summary.localVariables[4][18].dataType, "INT");
+  assert.equal(summary.localVariables[4][18].allocationWidth, 16);
+  const typeEdited = parse_xgwx(update_xgwx_iec_local_symbol_type(source, 4, 18, "메모리값", "INT", "WORD"));
+  assert.equal(typeEdited.localVariables[4][18].dataType, "WORD");
+  assert.equal(typeEdited.localVariables[4][18].storageClass, "");
+  assert.equal(typeEdited.localVariables[4][18].allocationNumber, null);
+  assert.deepEqual(typeEdited.ladder, summary.ladder);
+  assert.throws(() => update_xgwx_iec_local_symbol_type(source, 0, 5, "ON", "BOOL", "WORD"));
+  assert.ok(summary.localVariables[0].some((symbol) => symbol.name === "INST3" && symbol.typeReference === "R_TRIG" && symbol.isInstance));
+  const onIndex = summary.localVariables[0].findIndex((symbol) => symbol.name === "ON");
+  const descriptionEdit = parse_xgwx(update_xgwx_iec_local_symbol_description(source, 0, onIndex, "ON", "", "Living room switch"));
+  assert.equal(descriptionEdit.localVariables[0][onIndex].description, "Living room switch");
+  assert.deepEqual(descriptionEdit.ladder, summary.ladder);
+  assert.throws(() => update_xgwx_iec_local_symbol_description(source, 0, onIndex, "ON", "stale", "Living room switch"));
+  const localAddressEdit = update_xgwx_iec_local_symbol_address(source, 0, onIndex, "ON", "%MX8", "%MX9");
+  const localAddressSummary = parse_xgwx(localAddressEdit);
+  assert.equal(localAddressSummary.localVariables[0][onIndex].address, "%MX9");
+  assert.deepEqual(localAddressSummary.localVariables.slice(1), summary.localVariables.slice(1));
+  assert.deepEqual(localAddressSummary.ladder, summary.ladder);
+  const longerAddress = update_xgwx_iec_local_symbol_address(source, 0, onIndex, "ON", "%MX8", "%MX100");
+  assert.equal(parse_xgwx(longerAddress).localVariables[0][onIndex].address, "%MX100");
+  const restoredAddress = update_xgwx_iec_local_symbol_address(longerAddress, 0, onIndex, "ON", "%MX100", "%MX8");
+  assert.deepEqual(parse_xgwx(restoredAddress).localVariables, summary.localVariables);
+  assert.deepEqual(parse_xgwx(longerAddress).ladder, summary.ladder);
+  assert.throws(() => update_xgwx_iec_local_symbol_address(source, 0, onIndex, "ON", "%MX8", "%MX08"));
+  assert.throws(() => update_xgwx_iec_local_symbol_address(source, 0, onIndex, "ON", "%MX8", "%IX9"));
+  assert.throws(() => update_xgwx_iec_local_symbol_address(source, 0, onIndex, "ON", "%MX8", "%MX7"));
+  assert.throws(() => update_xgwx_iec_local_symbol_address(source, 0, onIndex, "OFF", "%MX8", "%MX9"));
+  const renamed = parse_xgwx(rename_xgwx_iec_local_symbol(source, 0, onIndex, "ON", "ON2"));
+  assert.equal(renamed.localVariables[0][onIndex].name, "ON2");
+  assert.equal(renamed.ladder[0].sourceStrings.filter((item) => item.value === "ON2").length, 6);
+  assert.equal(renamed.ladder[0].sourceStrings.filter((item) => item.value === "ON").length, 0);
+  assert.deepEqual(renamed.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => rename_xgwx_iec_local_symbol(source, 0, onIndex, "ON", "OFF"));
+  assert.throws(() => rename_xgwx_iec_local_symbol(source, 0, onIndex, "OFF", "ON2"));
+  const lightIndex = summary.localVariables[0].findIndex((symbol) => symbol.name === "조명_1");
+  const unicodeRename = parse_xgwx(rename_xgwx_iec_local_symbol(source, 0, lightIndex, "조명_1", "조명_1A"));
+  assert.equal(unicodeRename.ladder[0].sourceStrings.filter((item) => item.value === "조명_1A").length, 8);
+  const instanceRename = parse_xgwx(rename_xgwx_iec_local_symbol(source, 0, 1, "INST3", "INST4"));
+  assert.equal(instanceRename.localVariables[0][1].name, "INST4");
+  assert.equal(instanceRename.ladder[0].iecFunctions.filter((block) => block.instance === "INST4" && block.name === "R_TRIG").length, 1);
+  assert.equal(instanceRename.ladder[0].iecFunctions.filter((block) => block.instance === "INST3").length, 0);
+  assert.throws(() => rename_xgwx_iec_local_symbol(source, 0, 1, "INST3", "INST_사본1"));
+  assert.ok(summary.ladder.every((program) => program.projectType === 2 && !program.structuralEditing));
+  assert.deepEqual(summary.ladder.map((program) => program.iecRows.length), [86, 13, 40, 77, 41, 46, 80]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecGeometry.horizontal.length), [52, 18, 48, 77, 23, 18, 37]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecGeometry.vertical.length), [27, 6, 12, 34, 4, 23, 86]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecCircuitGraph.edges.length), [153, 47, 101, 239, 69, 76, 212]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecCircuitGraph.occupiedAreas.length), [171, 44, 105, 224, 88, 80, 169]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecCircuitGraph.functionBindings.length), [50, 4, 23, 24, 23, 28, 44]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecCircuitGraph.powerComponents.length), [24, 5, 15, 29, 13, 7, 9]);
+  assert.equal(summary.ladder.reduce((total, program) => total
+    + program.iecCircuitGraph.functionBindings.filter((binding) => binding.expressionRecordOffset != null).length, 0), 176);
+  assert.ok(summary.ladder.every((program) => program.iecCircuitGraph.edges.every((edge) =>
+    edge.start.groupIndex === edge.end.groupIndex
+      && edge.start.x % 3 === 0 && edge.end.x % 3 === 0)));
+  assert.ok(summary.ladder.every((program) => program.iecCircuitGraph.powerComponents
+    .flatMap((component) => component.edgeIndices).sort((a, b) => a - b)
+    .every((edgeIndex, index) => edgeIndex === index)));
+  assert.deepEqual(summary.ladder.map((program) => program.iecRecords.length), [289, 61, 157, 320, 129, 160, 391]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecRecords.filter((record) => record.kind === "Function block").length), [23, 2, 9, 10, 10, 11, 16]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecFunctions.length), [23, 2, 9, 10, 10, 11, 16]);
+  assert.deepEqual(summary.ladder.map((program) =>
+    program.iecTerminalFunctionDeletionSites.length), [1, 0, 0, 5, 0, 0, 0]);
+  assert.deepEqual(summary.ladder.map((program) =>
+    program.iecStandaloneFunctionDeletionSites.length), [0, 0, 1, 0, 0, 0, 0]);
+  assert.deepEqual(summary.ladder[4].iecStandaloneFunctionInsertionSites, [{
+    groupIndex: 15, rowIndex: 26, insertionOffset: 4054, rawX: 4,
+  }]);
+  const smartHomeInsertion = parse_xgwx(insert_xgwx_iec_ld_standalone_function(
+    source, 4, 4054, "WORD_TO_UDINT", "%MW301", "div_값"));
+  assert.equal(smartHomeInsertion.ladder[4].iecRows.length,
+    summary.ladder[4].iecRows.length + 3);
+  assert.ok(smartHomeInsertion.ladder[4].iecFunctions.some((block) =>
+    block.name === "WORD_TO_UDINT" && block.rowIndex === 26));
+  assert.ok(smartHomeInsertion.ladder[4].iecCircuitGraph);
+  assert.deepEqual(summary.ladder.map((program) =>
+    program.iecFunctionCellDeletionSites.length), [1, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(summary.ladder[0].iecConnectedArithmeticDeletionSites, [{
+    groupIndex: 14, rowIndex: 20, blockOffset: 2858, wireOffset: 2839, rawX: 16,
+  }, {
+    groupIndex: 16, rowIndex: 26, blockOffset: 4076, wireOffset: 4057, rawX: 16,
+  }]);
+  assert.deepEqual(summary.ladder.map((program) =>
+    program.iecFunctionCellInsertionSites.length), [0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecFunctionReferences.length), [50, 4, 23, 24, 23, 28, 44]);
+  assert.deepEqual(summary.ladder.map((program) => program.iecFunctionOperandLinks.length), [45, 3, 16, 19, 23, 27, 43]);
+  assert.equal(summary.ladder.reduce((total, program) =>
+    total + program.iecFunctions.reduce((pins, block) => pins + block.pins.length, 0), 0), 192);
+  assert.equal(summary.ladder.reduce((total, program) =>
+    total + program.iecFunctions.reduce((pins, block) => pins + block.pins.filter((pin) => pin.isArray).length, 0), 0), 46);
+  assert.ok(summary.ladder[0].iecNoContactInsertionSites.some((site) =>
+    site.groupIndex === 2 && site.rowIndex === 2 && site.wireOffset === 252 && site.startX === 4 && site.endX === 91));
+  assert.ok(summary.ladder[0].iecNoContactInsertionSites.some((site) =>
+    site.groupIndex === 3 && site.rowIndex === 3 && site.wireOffset === 416 && site.startX === 7 && site.endX === 91));
+  assert.equal(summary.ladder.reduce((sum, program) => sum + program.iecFunctions.filter((block) => block.instance != null).length, 0), 11);
+  for (const program of summary.ladder) {
+    for (const record of program.iecRecords.filter((item) => item.kind === "Short wire")) {
+      const segment = program.iecGeometry.horizontal.find((item) => item.offset === record.offset);
+      assert.ok(segment);
+      assert.equal(segment.endX - segment.startX, 3);
+      assert.equal(segment.rowIndex, record.rowIndex);
+    }
+    assert.equal(program.iecRows[0].rowIndex, 0);
+    assert.equal(program.iecRows.at(-1).end, program.decodedLen);
+    assert.ok(program.sourceStrings.every((item) => item.iecRowIndex != null && item.iecGroupIndex != null));
+    assert.ok(program.sourceStrings.every((item) => item.iecRecordOffset != null && item.iecRecordKind != null));
+    assert.ok(program.sourceStrings.filter((item) => item.iecPosition).every((item) => item.iecPosition[1] / 4 === item.iecRowIndex));
+    assert.equal(program.sourceStrings.filter((item) => item.isIecFunctionName).length, program.iecFunctions.length);
+    for (const block of program.iecFunctions) {
+      const name = program.sourceStrings.find((item) => item.offset === block.nameOffset);
+      assert.equal(name.value, block.name);
+      assert.deepEqual(name.iecPosition, [block.rawX, block.rowIndex * 4]);
+      const links = program.iecFunctionReferences.filter((reference) => reference.targetRecordOffset === block.recordOffset);
+      assert.equal(links.length, block.pinCount);
+      assert.deepEqual(links.map((link) => link.ordinal).sort((a, b) => a - b), Array.from({ length: block.pinCount }, (_, i) => i + 1));
+      assert.equal(links.filter((link) => link.isOutput).length, 1);
+      assert.equal(links.find((link) => link.isOutput).ordinal, block.pinCount);
+      assert.equal(block.controlInput.direction, "input");
+      assert.equal(block.controlOutput.direction, "output");
+      assert.equal(block.controlInput.dataType, "BOOL");
+      assert.equal(block.controlOutput.dataType, "BOOL");
+      assert.ok(block.pins.every((pin) => pin.dataType != null));
+      const referencePins = [block.controlInput, block.controlOutput, ...block.pins]
+        .filter((pin) => pin.referenceOrdinal != null);
+      assert.equal(referencePins.length, block.pinCount);
+      if (block.instanceOffset != null) {
+        assert.equal(program.sourceStrings.find((item) => item.offset === block.instanceOffset).value, block.instance);
+      }
+    }
+    for (const reference of program.iecFunctionReferences) {
+      const target = program.iecFunctions.find((block) => block.recordOffset === reference.targetRecordOffset);
+      assert.ok(target);
+      assert.equal(reference.groupIndex, target.groupIndex);
+      assert.equal(reference.rawX, target.rawX);
+      assert.equal(reference.targetRowIndex, target.rowIndex);
+      assert.ok(reference.rowIndex > reference.targetRowIndex);
+      assert.ok(reference.code === 0x68 || reference.code === 0x69);
+      assert.equal(reference.isOutput, reference.code === 0x69);
+      assert.ok(reference.ordinal > 0);
+      const pin = [target.controlInput, target.controlOutput, ...target.pins]
+        .find((candidate) => candidate.referenceOrdinal === reference.ordinal);
+      assert.ok(pin);
+      assert.equal(reference.pinRowIndex, pin.rowIndex);
+      assert.equal(reference.pinRawX, pin.rawX);
+      assert.equal(reference.dataTypeMask, pin.dataTypeMask);
+      assert.equal(reference.isArray, pin.isArray);
+    }
+    for (const link of program.iecFunctionOperandLinks) {
+      const block = program.iecFunctions.find((candidate) => candidate.recordOffset === link.targetRecordOffset);
+      assert.ok(block);
+      assert.equal(link.groupIndex, block.groupIndex);
+      assert.ok(link.ordinal >= 1 && link.ordinal <= block.pinCount);
+      assert.equal(link.isOutput, link.ordinal === block.pinCount);
+      const record = program.iecRecords.find((candidate) => candidate.offset === link.recordOffset);
+      assert.equal(record.kind, "Function operand");
+      const expression = program.sourceStrings.find((item) => item.offset === record.offset + 15);
+      assert.ok(expression?.isIecFunctionOperand);
+      assert.equal(expression.iecPosition[1], link.rowIndex * 4);
+      assert.equal(expression.iecPosition[0], block.rawX + (link.isOutput ? 3 : -3));
+      assert.equal(link.pinRowIndex, link.rowIndex);
+      assert.equal(link.pinRawX, block.rawX + (link.isOutput ? 3 : 0));
+      assert.ok(link.dataTypeMask > 0);
+    }
+    assert.ok(program.iecGeometry.vertical.every((wire) => wire.endRowIndex > wire.startRowIndex && wire.startOffset < wire.endOffset));
+    for (const row of program.iecRows) {
+      const records = program.iecRecords.filter((record) => record.groupIndex === row.groupIndex && record.rowIndex === row.rowIndex);
+      assert.equal(records.length, row.recordCount);
+      assert.equal(records.at(-1)?.end ?? row.start + 35, row.end);
+    }
+  }
+  assert.equal(summary.ladder.reduce((total, program) => total + program.sourceStrings.filter((item) => item.isIecComment).length, 0), 46);
+  assert.equal(summary.ladder.reduce((total, program) => total + program.sourceStrings.filter((item) => item.isIecRisingContactOperand).length, 0), 9);
+  assert.equal(summary.ladder.reduce((total, program) => total + program.sourceStrings.filter((item) => item.iecElementKind).length, 0), 351);
+  assert.ok(summary.ladder[0].sourceStrings.some((item) => item.iecPosition?.[1] > 255));
+  assert.equal(summary.ladder.reduce((total, program) => total + program.sourceStrings.filter((item) => item.isIecFunctionOperand).length, 0), 176);
+  assert.equal(summary.ladder.reduce((total, program) => total + program.sourceStrings.filter((item) => item.isIecArithmeticFunction).length, 0), 9);
+  assert.equal(summary.ladder.reduce((total, program) => total + program.sourceStrings.filter((item) => item.isIecFixedFunctionBlock).length, 0), 61);
+  assert.equal(summary.ladder.reduce((total, program) => total + program.sourceStrings.filter((item) => item.isIecComparisonFunction).length, 0), 29);
+  const add = summary.ladder.flatMap((program) => program.iecFunctions).find((block) => block.name === "ADD");
+  assert.deepEqual(add.pins.map((pin) => [pin.name, pin.direction, pin.referenceOrdinal, pin.dataType]), [
+    ["IN1", "input", 1, "ANY_NUM"],
+    ["OUT", "output", 3, "ANY_NUM"],
+    ["IN2", "input", 2, "ANY_NUM"],
+  ]);
+  assert.ok(summary.ladder[0].sourceStrings.some((item) => item.value === "조명제어"));
+  const comment = summary.ladder[0].sourceStrings.find((item) => item.value === "조명제어");
+  const symbol = summary.ladder[0].sourceStrings.find((item) => item.value === "스위치_1");
+  assert.equal(comment.isIecComment, true);
+  assert.equal(symbol.isIecComment, false);
+  assert.equal(symbol.isIecRisingContactOperand, true);
+  const updated = update_xgwx_iec_ld_comment(source, 0, comment.offset, comment.value, "조명시험");
+  const parsed = parse_xgwx(updated);
+  assert.equal(parsed.ladder[0].sourceStrings.find((item) => item.offset === comment.offset).value, "조명시험");
+  assert.deepEqual(parsed.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => update_xgwx_iec_ld_comment(source, 0, symbol.offset, symbol.value, "스위치_2"));
+  const contactEdit = update_xgwx_iec_ld_rising_contact_operand(source, 0, symbol.offset, symbol.value, "ON");
+  assert.equal(parse_xgwx(contactEdit).ladder[0].sourceStrings.find((item) => item.offset === symbol.offset).value, "ON");
+  assert.throws(() => update_xgwx_iec_ld_rising_contact_operand(source, 0, symbol.offset, "stale", "ON"));
+  assert.throws(() => update_xgwx_iec_ld_rising_contact_operand(source, 0, symbol.offset, symbol.value, "X".repeat(256)));
+  const normal = summary.ladder[0].sourceStrings.find((item) => item.iecElementKind === "Normally open contact variable" && item.value === "시작");
+  const closed = summary.ladder[0].sourceStrings.find((item) => item.iecElementKind === "Normally closed contact variable" && item.value === "조명_1");
+  const coil = summary.ladder[0].sourceStrings.find((item) => item.iecElementKind === "Output coil variable" && item.value === "조명_1");
+  assert.ok(normal && closed && coil);
+  assert.deepEqual(normal.iecPosition, [1, 12]);
+  assert.deepEqual(closed.iecPosition, [4, 12]);
+  assert.deepEqual(coil.iecPosition, [94, 12]);
+  const moveBlock = summary.ladder[0].sourceStrings.find((item) => item.isIecFixedFunctionBlock && item.value === "MOVE");
+  assert.deepEqual(moveBlock.iecPosition, [4, 88]);
+  const closedContactBytes = update_xgwx_iec_ld_contact_kind(source, 0, normal.offset, "NO", "NC");
+  const changedContact = parse_xgwx(closedContactBytes).ladder[0].sourceStrings.find((item) => item.offset === normal.offset);
+  assert.equal(changedContact.iecElementKind, "Normally closed contact variable");
+  assert.equal(changedContact.value, normal.value);
+  const negatedRisingBytes = update_xgwx_iec_ld_contact_kind(
+    source, 0, symbol.offset, "RISING", "NEGATED_RISING",
+  );
+  const changedRising = parse_xgwx(negatedRisingBytes).ladder[0].sourceStrings.find((item) => item.offset === symbol.offset);
+  assert.equal(changedRising.iecElementKind, "Negated rising-edge contact variable");
+  assert.equal(changedRising.value, symbol.value);
+  const restoredRising = parse_xgwx(update_xgwx_iec_ld_contact_kind(
+    negatedRisingBytes, 0, symbol.offset, "NEGATED_RISING", "RISING",
+  )).ladder[0].sourceStrings.find((item) => item.offset === symbol.offset);
+  assert.equal(restoredRising.iecElementKind, "Rising-edge contact variable");
+  assert.throws(() => update_xgwx_iec_ld_contact_kind(source, 0, normal.offset, "NC", "NO"));
+  assert.throws(() => update_xgwx_iec_ld_contact_kind(source, 0, symbol.offset, "FALLING", "NO"));
+  assert.throws(() => update_xgwx_iec_ld_contact_kind(source, 0, coil.offset, "NO", "NC"));
+  const branch = summary.ladder[6].iecGeometry.vertical.find((segment) =>
+    segment.groupIndex === 3 && segment.startRowIndex === 3
+      && segment.endRowIndex === 4 && segment.x === 6);
+  assert.ok(branch);
+  const removedBranchBytes = edit_xgwx_iec_ld_branch_segment(source, 6, 3, 3, 4, 6, true, false);
+  const removedBranch = parse_xgwx(removedBranchBytes);
+  assert.equal(removedBranch.ladder[6].iecGeometry.vertical.length, 85);
+  assert.ok(!removedBranch.ladder[6].iecGeometry.vertical.some((segment) =>
+    segment.groupIndex === 3 && segment.startRowIndex === 3
+      && segment.endRowIndex === 4 && segment.x === 6));
+  assert.deepEqual(removedBranch.ladder.slice(0, 6), summary.ladder.slice(0, 6));
+  assert.throws(() => edit_xgwx_iec_ld_branch_segment(
+    removedBranchBytes, 6, 3, 3, 4, 6, true, false,
+  ), /changed since selection/);
+  const restoredBranchBytes = edit_xgwx_iec_ld_branch_segment(
+    removedBranchBytes, 6, 3, 3, 4, 6, false, true,
+  );
+  assert.deepEqual(parse_xgwx(restoredBranchBytes).ladder, summary.ladder);
+  const finalBranchRemoved = parse_xgwx(edit_xgwx_iec_ld_branch_segment(
+    source, 0, 3, 3, 4, 6, true, false,
+  ));
+  assert.equal(finalBranchRemoved.ladder[0].iecRows.length, 85);
+  assert.equal(finalBranchRemoved.ladder[0].iecRecords.length, 286);
+  assert.equal(finalBranchRemoved.ladder[0].iecGeometry.vertical.length, 26);
+  assert.deepEqual(finalBranchRemoved.ladder.slice(1), summary.ladder.slice(1));
+  const blankRowBytes = insert_xgwx_iec_ld_blank_row(source, 0, 30);
+  const blankRow = parse_xgwx(blankRowBytes);
+  assert.equal(blankRow.ladder[0].iecRows.length, summary.ladder[0].iecRows.length);
+  for (const before of summary.ladder[0].iecRows) {
+    const after = blankRow.ladder[0].iecRows.find((row) => row.start === before.start);
+    assert.ok(after);
+    assert.equal(after.rowIndex, before.rowIndex + Number(before.rowIndex > 30));
+    assert.equal(after.groupIndex, before.groupIndex);
+    assert.equal(after.recordCount, before.recordCount);
+  }
+  assert.equal(blankRow.ladder[0].iecCircuitGraph.edges.length,
+    summary.ladder[0].iecCircuitGraph.edges.length);
+  assert.equal(blankRow.ladder[0].iecCircuitGraph.functionBindings.length,
+    summary.ladder[0].iecCircuitGraph.functionBindings.length);
+  assert.deepEqual(blankRow.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => insert_xgwx_iec_ld_blank_row(blankRowBytes, 0, 91));
+  const createdRungBytes = insert_xgwx_iec_ld_linear_rung(
+    blankRowBytes, 0, 31, "ON", "OFF",
+  );
+  const createdRung = parse_xgwx(createdRungBytes);
+  const createdRow = createdRung.ladder[0].iecRows.find((row) => row.rowIndex === 31);
+  assert.ok(createdRow);
+  assert.equal(createdRow.groupIndex, 17);
+  assert.equal(createdRow.recordCount, 3);
+  assert.deepEqual(
+    createdRung.ladder[0].iecRecords
+      .filter((record) => record.groupIndex === 17 && record.rowIndex === 31)
+      .map((record) => [record.kind, record.code ?? null]),
+    [["Contact", 6], ["Long wire", null], ["Coil", 14]],
+  );
+  assert.ok(createdRung.ladder[0].iecCircuitGraph.powerComponents.some((component) =>
+    component.groupIndex === 17 && component.touchesLeftRail && component.touchesRightRail));
+  assert.equal(createdRung.ladder[0].iecCircuitGraph.edges.length,
+    summary.ladder[0].iecCircuitGraph.edges.length + 3);
+  assert.deepEqual(createdRung.ladder.slice(1), summary.ladder.slice(1));
+  assert.deepEqual(
+    delete_xgwx_iec_ld_linear_rung(createdRungBytes, 0, 31, "ON", "OFF"),
+    blankRowBytes,
+  );
+  assert.throws(() => delete_xgwx_iec_ld_linear_rung(
+    createdRungBytes, 0, 31, "STALE", "OFF",
+  ));
+  const createdContact = createdRung.ladder[0].sourceStrings.find((item) => (
+    item.iecRowIndex === 31 && item.iecRecordKind === "Contact" && item.value === "ON"
+  ));
+  const createdCoil = createdRung.ladder[0].sourceStrings.find((item) => (
+    item.iecRowIndex === 31 && item.iecRecordKind === "Coil" && item.value === "OFF"
+  ));
+  assert.ok(createdContact);
+  assert.ok(createdCoil);
+  let kindEditedBytes = update_xgwx_iec_ld_contact_kind(
+    createdRungBytes, 0, createdContact.offset, "NO", "FALLING",
+  );
+  kindEditedBytes = update_xgwx_iec_ld_coil_kind(
+    kindEditedBytes, 0, createdCoil.offset, "OUTPUT", "SET",
+  );
+  const kindEdited = parse_xgwx(kindEditedBytes);
+  assert.deepEqual(
+    kindEdited.ladder[0].iecRecords
+      .filter((record) => record.groupIndex === 17 && record.rowIndex === 31)
+      .map((record) => [record.kind, record.code ?? null]),
+    [["Contact", 0x09], ["Long wire", null], ["Coil", 0x10]],
+  );
+  kindEditedBytes = update_xgwx_iec_ld_contact_kind(
+    kindEditedBytes, 0, createdContact.offset, "FALLING", "NO",
+  );
+  kindEditedBytes = update_xgwx_iec_ld_coil_kind(
+    kindEditedBytes, 0, createdCoil.offset, "SET", "OUTPUT",
+  );
+  assert.deepEqual(kindEditedBytes, createdRungBytes);
+  for (const [contactKind, contactCode, coilKind, coilCode] of [
+    ["NC", 0x07, "INVERSE", 0x0f],
+    ["RISING", 0x08, "RISING", 0x12],
+    ["FALLING", 0x09, "SET", 0x10],
+    ["NEGATED_RISING", 0x0a, "FALLING", 0x13],
+    ["NEGATED_FALLING", 0x0b, "RESET", 0x11],
+  ]) {
+    const variantBytes = insert_xgwx_iec_ld_rung(
+      blankRowBytes, 0, 31, contactKind, "ON", coilKind, "OFF",
+    );
+    const variant = parse_xgwx(variantBytes);
+    assert.deepEqual(
+      variant.ladder[0].iecRecords
+        .filter((record) => record.groupIndex === 17 && record.rowIndex === 31)
+        .map((record) => [record.kind, record.code ?? null]),
+      [["Contact", contactCode], ["Long wire", null], ["Coil", coilCode]],
+    );
+    assert.equal(
+      variant.ladder[0].sourceStrings.filter((item) => (
+        item.iecRowIndex === 31
+          && ["Contact", "Coil"].includes(item.iecRecordKind)
+          && item.iecElementKind
+      )).length,
+      2,
+    );
+    assert.deepEqual(
+      delete_xgwx_iec_ld_rung(
+        variantBytes, 0, 31, contactKind, "ON", coilKind, "OFF",
+      ),
+      blankRowBytes,
+    );
+  }
+  assert.throws(() => insert_xgwx_iec_ld_linear_rung(blankRowBytes, 0, 30, "ON", "OFF"));
+  assert.throws(() => insert_xgwx_iec_ld_linear_rung(blankRowBytes, 0, 31, "WW700", "OFF"));
+  assert.throws(() => insert_xgwx_iec_ld_rung(blankRowBytes, 0, 31, "NO", "%MW700", "OUTPUT", "ON"));
+  assert.throws(() => insert_xgwx_iec_ld_rung(blankRowBytes, 0, 31, "NO", "ON", "OUTPUT", "%IX0"));
+  const closedBlankRow = parse_xgwx(delete_xgwx_iec_ld_blank_row(blankRowBytes, 0, 31));
+  assert.deepEqual(
+    closedBlankRow.ladder[0].iecRows.map((row) => [row.groupIndex, row.rowIndex, row.recordCount]),
+    summary.ladder[0].iecRows.map((row) => [row.groupIndex, row.rowIndex, row.recordCount]),
+  );
+  assert.equal(closedBlankRow.ladder[0].iecCircuitGraph.edges.length,
+    summary.ladder[0].iecCircuitGraph.edges.length);
+  assert.deepEqual(closedBlankRow.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => delete_xgwx_iec_ld_blank_row(blankRowBytes, 0, 30));
+  let elementEdit = source;
+  for (const target of [normal, closed, coil]) {
+    const current = parse_xgwx(elementEdit).ladder[0].sourceStrings.find((item) => item.iecElementKind === target.iecElementKind && item.value === target.value);
+    elementEdit = update_xgwx_iec_ld_element_operand(elementEdit, 0, current.offset, current.value, "ON");
+  }
+  const editedElements = parse_xgwx(elementEdit);
+  assert.equal(
+    editedElements.ladder[0].sourceStrings.filter((item) => item.iecElementKind && item.value === "ON").length,
+    summary.ladder[0].sourceStrings.filter((item) => item.iecElementKind && item.value === "ON").length + 3,
+  );
+  assert.deepEqual(editedElements.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => update_xgwx_iec_ld_element_operand(source, 0, comment.offset, comment.value, "ON"));
+  assert.throws(() => update_xgwx_iec_ld_element_operand(source, 0, normal.offset, normal.value, "%MW700"));
+  assert.throws(() => update_xgwx_iec_ld_element_operand(source, 0, normal.offset, normal.value, "%MX"));
+  assert.throws(() => update_xgwx_iec_ld_element_operand(source, 0, coil.offset, coil.value, "%IX0"));
+  assert.ok(update_xgwx_iec_ld_element_operand(source, 0, coil.offset, coil.value, "%MX77").length);
+  const addInput = summary.ladder[0].sourceStrings.find((item) => item.isIecFunctionOperand && item.value === "1");
+  assert.ok(addInput);
+  const functionEdit = update_xgwx_iec_ld_function_operand(source, 0, addInput.offset, "1", "123");
+  const parsedFunctionEdit = parse_xgwx(functionEdit);
+  assert.equal(parsedFunctionEdit.ladder[0].sourceStrings.find((item) => item.offset === addInput.offset).value, "123");
+  assert.equal(parsedFunctionEdit.ladder[0].iecFunctionOperandLinks.length, summary.ladder[0].iecFunctionOperandLinks.length);
+  assert.equal(parsedFunctionEdit.ladder[0].iecFunctionReferences.length, summary.ladder[0].iecFunctionReferences.length);
+  assert.deepEqual(parsedFunctionEdit.ladder.slice(1), summary.ladder.slice(1));
+  const operandSite = (programIndex, blockName, pinName, value) => {
+    const program = summary.ladder[programIndex];
+    for (const link of program.iecFunctionOperandLinks) {
+      const block = program.iecFunctions.find((candidate) => candidate.recordOffset === link.targetRecordOffset);
+      const pin = [block.controlInput, block.controlOutput, ...block.pins]
+        .find((candidate) => candidate.referenceOrdinal === link.ordinal);
+      const item = program.sourceStrings.find((candidate) =>
+        candidate.iecRecordOffset === link.recordOffset && candidate.isIecFunctionOperand);
+      if (block.name === blockName && pin.name === pinName && item.value === value) return item;
+    }
+    throw new Error(`Missing ${blockName}.${pinName}=${value}`);
+  };
+  const addOutput = operandSite(0, "ADD", "OUT", "%MW700");
+  assert.throws(() => update_xgwx_iec_ld_function_operand(source, 0, addOutput.offset, "%MW700", "123"));
+  for (const badAddress of ["%NONSENSE", "%MW", "%MW700.", "%MX700", "%IW0.0.0"]) {
+    assert.throws(() => update_xgwx_iec_ld_function_operand(
+      source, 0, addOutput.offset, "%MW700", badAddress), badAddress);
+  }
+  assert.ok(update_xgwx_iec_ld_function_operand(
+    source, 0, addOutput.offset, "%MW700", "%MW701").length);
+  const addWordInput = operandSite(0, "ADD", "IN1", "%MW700");
+  assert.ok(update_xgwx_iec_ld_function_operand(
+    source, 0, addWordInput.offset, "%MW700", "%IW0.0.0").length);
+  const timerPreset = operandSite(1, "TON", "PT", "T#5s");
+  assert.throws(() => update_xgwx_iec_ld_function_operand(source, 1, timerPreset.offset, "T#5s", "123"));
+  const validTimerEdit = parse_xgwx(update_xgwx_iec_ld_function_operand(
+    source, 1, timerPreset.offset, "T#5s", "T#6s"));
+  assert.equal(validTimerEdit.ladder[1].sourceStrings.find((item) => item.offset === timerPreset.offset).value, "T#6s");
+  const integerConversion = operandSite(4, "INT_TO_UDINT", "IN", "메모리값");
+  assert.throws(() => update_xgwx_iec_ld_function_operand(
+    source, 4, integerConversion.offset, "메모리값", "LED상태"));
+  const terminalFunctionSite = summary.ladder[3].iecTerminalFunctionDeletionSites
+    .find((site) => site.blockOffset === 185);
+  assert.deepEqual(terminalFunctionSite, {
+    groupIndex: 1,
+    rowIndex: 1,
+    blockOffset: 185,
+    wireOffset: 166,
+    rawX: 7,
+    pinCount: 2,
+  });
+  assert.throws(() => delete_xgwx_iec_ld_terminal_function(
+    source, 3, terminalFunctionSite.blockOffset, "ADD"));
+  const terminalFunctionDeletedBytes = delete_xgwx_iec_ld_terminal_function(
+    source, 3, terminalFunctionSite.blockOffset, "MOVE");
+  const terminalFunctionDeleted = parse_xgwx(terminalFunctionDeletedBytes);
+  assert.equal(terminalFunctionDeleted.ladder[3].iecRows.length, 75);
+  assert.equal(terminalFunctionDeleted.ladder[3].iecRecords.length, 314);
+  assert.equal(terminalFunctionDeleted.ladder[3].iecFunctions.length, 9);
+  assert.equal(terminalFunctionDeleted.ladder[3].iecTerminalFunctionDeletionSites.length, 4);
+  assert.deepEqual(terminalFunctionDeleted.ladder[3].iecTerminalFunctionInsertionSites, [{
+    groupIndex: 1, rowIndex: 1, contactOffset: 137, insertionOffset: 166, rawX: 7,
+  }]);
+  assert.throws(() => insert_xgwx_iec_ld_terminal_move(
+    terminalFunctionDeletedBytes, 3, 137, "1", "%MX300"));
+  const terminalMoveRestored = parse_xgwx(insert_xgwx_iec_ld_terminal_move(
+    terminalFunctionDeletedBytes, 3, 137, "1", "%MW300"));
+  assert.equal(terminalMoveRestored.ladder[3].iecFunctions.length, 10);
+  assert.equal(terminalMoveRestored.ladder[3].iecTerminalFunctionInsertionSites.length, 0);
+  assert.ok(terminalMoveRestored.ladder[3].iecCircuitGraph);
+  assert.ok(terminalFunctionDeleted.ladder[3].iecCircuitGraph);
+  const l4DeletedBytes = delete_xgwx_iec_ld_terminal_function(source, 3, 660, "MOVE");
+  const l4Deleted = parse_xgwx(l4DeletedBytes);
+  assert.deepEqual(l4Deleted.ladder[3].iecTerminalFunctionInsertionSites, [{
+    groupIndex: 2, rowIndex: 4, contactOffset: 612, insertionOffset: 641, rawX: 7,
+  }]);
+  const l4Restored = parse_xgwx(insert_xgwx_iec_ld_terminal_move(
+    l4DeletedBytes, 3, 612, "2", "%MW300"));
+  assert.equal(l4Restored.ladder[3].iecFunctions.length, 10);
+  assert.equal(l4Restored.ladder[3].iecTerminalFunctionInsertionSites.length, 0);
+  assert.ok(l4Restored.ladder[3].iecCircuitGraph);
+  const lightingDeletedBytes = delete_xgwx_iec_ld_terminal_function(source, 0, 10289, "MOVE");
+  const lightingDeleted = parse_xgwx(lightingDeletedBytes);
+  assert.deepEqual(lightingDeleted.ladder[0].iecTerminalFunctionInsertionSites, [{
+    groupIndex: 32, rowIndex: 63, contactOffset: 10247, insertionOffset: 10270, rawX: 16,
+  }]);
+  assert.throws(() => insert_xgwx_iec_ld_terminal_move(
+    lightingDeletedBytes, 0, 10247, "0", "UNKNOWN_OUTPUT"));
+  const lightingRestored = parse_xgwx(insert_xgwx_iec_ld_terminal_move(
+    lightingDeletedBytes, 0, 10247, "0", "자기유지2"));
+  assert.equal(lightingRestored.ladder[0].iecFunctions.length, 23);
+  assert.equal(lightingRestored.ladder[0].iecTerminalFunctionInsertionSites.length, 0);
+  assert.ok(lightingRestored.ladder[0].iecCircuitGraph);
+  assert.deepEqual(terminalFunctionDeleted.ladder.filter((_, index) => index !== 3),
+    summary.ladder.filter((_, index) => index !== 3));
+  const standaloneFunctionSite = summary.ladder[2].iecStandaloneFunctionDeletionSites
+    .find((site) => site.blockOffset === 206);
+  assert.deepEqual(standaloneFunctionSite, {
+    groupIndex: 1,
+    rowIndex: 1,
+    blockOffset: 206,
+    wireOffset: 187,
+    rawX: 4,
+    pinCount: 2,
+  });
+  assert.throws(() => delete_xgwx_iec_ld_standalone_function(
+    source, 2, standaloneFunctionSite.blockOffset, "MOVE"));
+  const standaloneFunctionDeletedBytes = delete_xgwx_iec_ld_standalone_function(
+    source, 2, standaloneFunctionSite.blockOffset, "WORD_TO_UDINT");
+  const standaloneFunctionDeleted = parse_xgwx(standaloneFunctionDeletedBytes);
+  assert.equal(standaloneFunctionDeleted.ladder[2].iecRows.length, 37);
+  assert.equal(standaloneFunctionDeleted.ladder[2].iecRecords.length, 151);
+  assert.equal(standaloneFunctionDeleted.ladder[2].iecFunctions.length, 8);
+  assert.equal(standaloneFunctionDeleted.ladder[2].iecStandaloneFunctionDeletionSites.length, 0);
+  assert.deepEqual(standaloneFunctionDeleted.ladder[2].iecStandaloneFunctionInsertionSites, [{
+    groupIndex: 1, rowIndex: 1, insertionOffset: 142, rawX: 4,
+  }]);
+  assert.ok(standaloneFunctionDeleted.ladder[2].iecCircuitGraph);
+  assert.deepEqual(standaloneFunctionDeleted.ladder.filter((_, index) => index !== 2),
+    summary.ladder.filter((_, index) => index !== 2));
+  assert.throws(() => insert_xgwx_iec_ld_standalone_function(
+    standaloneFunctionDeletedBytes, 2, 142, "MOVE", "%MW301", "변환"));
+  assert.throws(() => insert_xgwx_iec_ld_standalone_function(
+    standaloneFunctionDeletedBytes, 2, 142, "WORD_TO_UDINT", "%MX302", "변환"));
+  assert.throws(() => insert_xgwx_iec_ld_standalone_function(
+    standaloneFunctionDeletedBytes, 2, 142, "WORD_TO_UDINT", "%MW302", "missing"));
+  const alternateStandalone = parse_xgwx(insert_xgwx_iec_ld_standalone_function(
+    standaloneFunctionDeletedBytes, 2, 142, "WORD_TO_UDINT", "%MW302", "변환"));
+  assert.ok(alternateStandalone.ladder[2].sourceStrings.some((item) => item.value === "%MW302"));
+  assert.ok(alternateStandalone.ladder[2].iecCircuitGraph);
+  const standaloneFunctionInserted = parse_xgwx(insert_xgwx_iec_ld_standalone_function(
+    standaloneFunctionDeletedBytes, 2, 142, "WORD_TO_UDINT", "%MW301", "변환"));
+  assert.equal(standaloneFunctionInserted.ladder[2].iecRows.length, 40);
+  assert.equal(standaloneFunctionInserted.ladder[2].iecRecords.length, 157);
+  assert.equal(standaloneFunctionInserted.ladder[2].iecFunctions.length, 9);
+  assert.equal(standaloneFunctionInserted.ladder[2].iecStandaloneFunctionInsertionSites.length, 0);
+  assert.ok(standaloneFunctionInserted.ladder[2].iecCircuitGraph);
+  const functionCellDeletionSite = summary.ladder[0].iecFunctionCellDeletionSites
+    .find((site) => site.blockOffset === 1639);
+  assert.deepEqual(functionCellDeletionSite, {
+    groupIndex: 9,
+    rowIndex: 14,
+    blockOffset: 1639,
+    rawX: 4,
+    pinCount: 1,
+  });
+  assert.throws(() => delete_xgwx_iec_ld_function_cell(
+    source, 0, functionCellDeletionSite.blockOffset, "R_TRIG"));
+  const functionCellDeletedBytes = delete_xgwx_iec_ld_function_cell(
+    source, 0, functionCellDeletionSite.blockOffset, "FF");
+  const functionCellDeleted = parse_xgwx(functionCellDeletedBytes);
+  assert.equal(functionCellDeleted.ladder[0].iecRows.length, 86);
+  assert.equal(functionCellDeleted.ladder[0].iecRecords.length, 287);
+  assert.equal(functionCellDeleted.ladder[0].iecFunctions.length, 22);
+  assert.equal(functionCellDeleted.ladder[0].iecFunctionCellDeletionSites.length, 0);
+  assert.deepEqual(functionCellDeleted.ladder[0].iecFunctionCellInsertionSites, [{
+    groupIndex: 9,
+    rowIndex: 14,
+    insertionOffset: 1639,
+    referenceOffset: 1766,
+    rawX: 4,
+  }]);
+  assert.ok(functionCellDeleted.ladder[0].iecCircuitGraph);
+  assert.deepEqual(functionCellDeleted.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => insert_xgwx_iec_ld_function_cell(
+    functionCellDeletedBytes, 0, 1639, "R_TRIG", "FF"));
+  assert.throws(() => insert_xgwx_iec_ld_function_cell(
+    functionCellDeletedBytes, 0, 1639, "FF", "INST3"));
+  const functionCellInserted = parse_xgwx(insert_xgwx_iec_ld_function_cell(
+    functionCellDeletedBytes, 0, 1639, "FF", "FF"));
+  assert.equal(functionCellInserted.ladder[0].iecRows.length, 86);
+  assert.equal(functionCellInserted.ladder[0].iecRecords.length, 289);
+  assert.equal(functionCellInserted.ladder[0].iecFunctions.length, 23);
+  assert.equal(functionCellInserted.ladder[0].iecFunctionReferences.length, 50);
+  assert.equal(functionCellInserted.ladder[0].iecFunctionOperandLinks.length, 45);
+  assert.equal(functionCellInserted.ladder[0].iecFunctionCellInsertionSites.length, 0);
+  assert.equal(functionCellInserted.ladder[0].iecFunctionCellDeletionSites.length, 1);
+  assert.ok(functionCellInserted.ladder[0].iecCircuitGraph);
+  assert.deepEqual(functionCellInserted.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => delete_xgwx_iec_ld_connected_arithmetic(source, 0, 2858, "SUB"));
+  const connectedAddDeletedBytes = delete_xgwx_iec_ld_connected_arithmetic(source, 0, 2858, "ADD");
+  const connectedAddDeleted = parse_xgwx(connectedAddDeletedBytes);
+  assert.equal(connectedAddDeleted.ladder[0].iecRecords.length, 281);
+  assert.equal(connectedAddDeleted.ladder[0].iecFunctions.length, 22);
+  assert.equal(connectedAddDeleted.ladder[0].iecRows.find((row) => row.rowIndex === 22).groupIndex, 15);
+  assert.ok(connectedAddDeleted.ladder[0].iecCircuitGraph);
+  assert.deepEqual(connectedAddDeleted.ladder.slice(1), summary.ladder.slice(1));
+  const connectedSubDeleted = parse_xgwx(delete_xgwx_iec_ld_connected_arithmetic(source, 0, 4076, "SUB"));
+  assert.equal(connectedSubDeleted.ladder[0].iecRecords.length, 281);
+  assert.equal(connectedSubDeleted.ladder[0].iecRows.find((row) => row.rowIndex === 28).groupIndex, 17);
+  assert.ok(connectedSubDeleted.ladder[0].iecCircuitGraph);
+  const insertedContact = insert_xgwx_iec_ld_no_contact(source, 0, 252, 7, 4, 91, "ON");
+  const insertedSummary = parse_xgwx(insertedContact);
+  assert.equal(insertedSummary.ladder[0].iecRecords.length, summary.ladder[0].iecRecords.length + 2);
+  assert.equal(insertedSummary.ladder[0].iecRows.find((row) => row.groupIndex === 2 && row.rowIndex === 2).recordCount, 5);
+  assert.ok(insertedSummary.ladder[0].sourceStrings.some((item) =>
+    item.value === "ON" && item.iecElementKind === "Normally open contact variable" && item.iecPosition?.[0] === 7 && item.iecPosition?.[1] === 8));
+  assert.deepEqual(insertedSummary.ladder.slice(1), summary.ladder.slice(1));
+  const branchedContact = parse_xgwx(insert_xgwx_iec_ld_contact(
+    source, 0, 416, 10, 7, 91, "NO", "ON"));
+  assert.equal(branchedContact.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount,
+  summary.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount + 2);
+  assert.ok(branchedContact.ladder[0].sourceStrings.some((item) =>
+    item.value === "ON" && item.iecRecordOffset === 435 &&
+    item.iecPosition?.[0] === 10 && item.iecPosition?.[1] === 12));
+  assert.ok(branchedContact.ladder[0].iecCircuitGraph);
+  assert.deepEqual(branchedContact.ladder.slice(1), summary.ladder.slice(1));
+  assert.ok(branchedContact.ladder[0].iecNoContactCellDeletionSites.some((site) =>
+    site.groupIndex === 3 && site.rowIndex === 3 && site.contactOffset === 435 && site.rawX === 10));
+  const branchedCellDeleted = parse_xgwx(delete_xgwx_iec_ld_contact_cell(
+    insert_xgwx_iec_ld_contact(source, 0, 416, 10, 7, 91, "NO", "ON"),
+    0, 435, 10, "NO", "ON"));
+  assert.ok(branchedCellDeleted.ladder[0].iecCircuitGraph);
+  assert.equal(branchedCellDeleted.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount,
+  summary.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount + 1);
+  assert.ok(branchedContact.ladder[0].iecNoContactDeletionSites.some((site) =>
+    site.groupIndex === 3 && site.rowIndex === 3 && site.contactOffset === 435 && site.rawX === 10));
+  const branchedDeleted = parse_xgwx(delete_xgwx_iec_ld_contact(
+    insert_xgwx_iec_ld_contact(source, 0, 416, 10, 7, 91, "NO", "ON"),
+    0, 435, 10, "NO", "ON"));
+  assert.ok(branchedDeleted.ladder[0].iecCircuitGraph);
+  assert.equal(branchedDeleted.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount,
+  summary.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount + 1);
+  assert.ok(branchedDeleted.ladder[0].iecHorizontalWireRepairSites.some((site) =>
+    site.groupIndex === 3 && site.rowIndex === 3 && site.insertionOffset === 435 && site.rawX === 10));
+  const branchedRepaired = parse_xgwx(repair_xgwx_iec_ld_horizontal_wire(
+    delete_xgwx_iec_ld_contact(
+      insert_xgwx_iec_ld_contact(source, 0, 416, 10, 7, 91, "NO", "ON"),
+      0, 435, 10, "NO", "ON"),
+    0, 435, 10));
+  assert.ok(branchedRepaired.ladder[0].iecCircuitGraph);
+  assert.equal(branchedRepaired.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount,
+  branchedContact.ladder[0].iecRows.find((row) =>
+    row.groupIndex === 3 && row.rowIndex === 3).recordCount);
+  for (const [kind, label] of [
+    ["NO", "Normally open contact variable"],
+    ["NC", "Normally closed contact variable"],
+    ["RISING", "Rising-edge contact variable"],
+    ["FALLING", "Falling-edge contact variable"],
+    ["NEGATED_RISING", "Negated rising-edge contact variable"],
+    ["NEGATED_FALLING", "Negated falling-edge contact variable"],
+  ]) {
+    const variantBytes = insert_xgwx_iec_ld_contact(source, 0, 252, 7, 4, 91, kind, "ON");
+    const variant = parse_xgwx(variantBytes);
+    assert.ok(variant.ladder[0].sourceStrings.some((item) =>
+      item.value === "ON" && item.iecElementKind === label && item.iecPosition?.[0] === 7));
+    assert.ok(variant.ladder[0].iecCircuitGraph);
+    const variantSite = variant.ladder[0].iecNoContactCellDeletionSites.find((site) =>
+      site.rowIndex === 2 && site.rawX === 7);
+    assert.equal(variantSite.contactCode, {
+      NO: 0x06, NC: 0x07, RISING: 0x08, FALLING: 0x09,
+      NEGATED_RISING: 0x0a, NEGATED_FALLING: 0x0b,
+    }[kind]);
+    assert.throws(() => delete_xgwx_iec_ld_contact_cell(
+      variantBytes, 0, variantSite.contactOffset, variantSite.rawX,
+      kind === "NO" ? "NC" : "NO", "ON",
+    ));
+    const deletedVariant = parse_xgwx(delete_xgwx_iec_ld_contact_cell(
+      variantBytes, 0, variantSite.contactOffset, variantSite.rawX, kind, "ON",
+    ));
+    assert.ok(deletedVariant.ladder[0].iecCircuitGraph);
+    assert.ok(!deletedVariant.ladder[0].sourceStrings.some((item) =>
+      item.iecRecordOffset === variantSite.contactOffset && item.value === "ON"));
+  }
+  assert.throws(() => insert_xgwx_iec_ld_contact(source, 0, 252, 7, 4, 91, "INVALID", "ON"));
+  assert.throws(() => insert_xgwx_iec_ld_contact(source, 0, 252, 7, 4, 91, "NO", "MISSING_BOOL"));
+  const firstSerial = insert_xgwx_iec_ld_contact(source, 0, 252, 25, 4, 91, "NO", "ON");
+  const remaining = parse_xgwx(firstSerial).ladder[0].iecNoContactInsertionSites.find((site) =>
+    site.rowIndex === 2 && site.startX === 28 && site.endX === 91);
+  assert.ok(remaining);
+  const twoSerial = insert_xgwx_iec_ld_contact(
+    firstSerial, 0, remaining.wireOffset, 49, 28, 91, "NC", "스위치_1");
+  const twoSerialSummary = parse_xgwx(twoSerial);
+  assert.ok(twoSerialSummary.ladder[0].iecCircuitGraph);
+  assert.ok(twoSerialSummary.ladder[0].sourceStrings.some((item) =>
+    item.value === "스위치_1" && item.iecPosition?.[0] === 49 && item.iecPosition?.[1] === 8));
+  const twoSerialCapture = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy/G2C.XGWX";
+  if (fs.existsSync(twoSerialCapture)) assert.deepEqual(Buffer.from(twoSerial), fs.readFileSync(twoSerialCapture));
+  const deletionSite = insertedSummary.ladder[0].iecNoContactDeletionSites.find((site) => site.rowIndex === 2);
+  assert.deepEqual({ contactOffset: deletionSite.contactOffset, rawX: deletionSite.rawX }, { contactOffset: 271, rawX: 7 });
+  const deletedContact = delete_xgwx_iec_ld_no_contact(insertedContact, 0, deletionSite.contactOffset, deletionSite.rawX, "ON");
+  const deletedSummary = parse_xgwx(deletedContact);
+  assert.deepEqual(deletedSummary.ladder[0].iecHorizontalWireRepairSites,
+    [{ groupIndex: 2, rowIndex: 2, insertionOffset: 271, rawX: 7 }]);
+  assert.ok(parse_xgwx(repair_xgwx_iec_ld_horizontal_wire(
+    deletedContact, 0, 271, 7)).ladder[0].iecCircuitGraph);
+  assert.equal(deletedSummary.ladder[0].iecRecords.length, summary.ladder[0].iecRecords.length + 1);
+  assert.equal(deletedSummary.ladder[0].iecRows.find((row) => row.groupIndex === 2 && row.rowIndex === 2).recordCount, 4);
+  assert.ok(!deletedSummary.ladder[0].sourceStrings.some((item) => item.iecRecordOffset === deletionSite.contactOffset && item.value === "ON"));
+  assert.throws(() => delete_xgwx_iec_ld_no_contact(insertedContact, 0, deletionSite.contactOffset, deletionSite.rawX, "OFF"));
+  assert.throws(() => delete_xgwx_iec_ld_no_contact(source, 0, deletionSite.contactOffset, deletionSite.rawX, "ON"));
+  assert.throws(() => delete_xgwx_iec_ld_contact(
+    insertedContact, 0, deletionSite.contactOffset, deletionSite.rawX, "NC", "ON"));
+  assert.deepEqual(
+    parse_xgwx(delete_xgwx_iec_ld_contact(
+      insertedContact, 0, deletionSite.contactOffset, deletionSite.rawX, "NO", "ON",
+    )).ladder,
+    deletedSummary.ladder,
+  );
+  assert.deepEqual(deletedSummary.ladder.slice(1), summary.ladder.slice(1));
+  const cellDeletionSite = insertedSummary.ladder[0].iecNoContactCellDeletionSites.find((site) => site.rowIndex === 2);
+  assert.deepEqual({ contactOffset: cellDeletionSite.contactOffset, rawX: cellDeletionSite.rawX }, { contactOffset: 271, rawX: 7 });
+  const cellDeletedSummary = parse_xgwx(delete_xgwx_iec_ld_no_contact_cell(
+    insertedContact, 0, cellDeletionSite.contactOffset, cellDeletionSite.rawX, "ON",
+  ));
+  assert.equal(cellDeletedSummary.ladder[0].iecRows.find((row) => row.groupIndex === 2 && row.rowIndex === 2).recordCount, 4);
+  assert.deepEqual(cellDeletedSummary.ladder[0].iecHorizontalWireRepairSites, []);
+  assert.throws(() => delete_xgwx_iec_ld_no_contact_cell(
+    insertedContact, 0, cellDeletionSite.contactOffset, cellDeletionSite.rawX, "OFF",
+  ));
+  assert.throws(() => insert_xgwx_iec_ld_no_contact(source, 0, 252, 7, 4, 90, "ON"));
+  assert.throws(() => insert_xgwx_iec_ld_no_contact(source, 0, 252, 8, 4, 91, "ON"));
+  const nativeInsertFixture = process.env.LIBXGWX_XGI_NATIVE_INSERT_FIXTURE;
+  if (nativeInsertFixture && fs.existsSync(nativeInsertFixture)) {
+    assert.deepEqual(insertedSummary.ladder, parse_xgwx(fs.readFileSync(nativeInsertFixture)).ladder);
+  }
+  const nativeDeleteFixture = process.env.LIBXGWX_XGI_NATIVE_DELETE_FIXTURE;
+  if (nativeDeleteFixture && fs.existsSync(nativeDeleteFixture)) {
+    // XG5000 Delete also changes seven row geometry bytes outside the edited row.
+    // Those appear only in the legacy horizontalLines summary; the generated
+    // file is independently accepted by XG5000 Check Program.
+    const withoutDisplayWidths = (programs) => programs.map(({ horizontalLines, ...program }) => program);
+    assert.deepEqual(withoutDisplayWidths(deletedSummary.ladder),
+      withoutDisplayWidths(parse_xgwx(fs.readFileSync(nativeDeleteFixture)).ladder));
+  }
+  assert.throws(() => update_xgwx_iec_ld_function_operand(source, 0, comment.offset, comment.value, "123"));
+  const addBlock = summary.ladder[0].sourceStrings.find((item) => item.isIecArithmeticFunction && item.value === "ADD");
+  assert.ok(addBlock);
+  const subBlockBytes = update_xgwx_iec_ld_arithmetic_function(source, 0, addBlock.offset, "ADD", "SUB");
+  const subBlock = parse_xgwx(subBlockBytes).ladder[0].sourceStrings.find((item) => item.offset === addBlock.offset);
+  assert.equal(subBlock.value, "SUB");
+  assert.equal(subBlock.isIecArithmeticFunction, true);
+  const mulBlockBytes = update_xgwx_iec_ld_arithmetic_function(source, 0, addBlock.offset, "ADD", "MUL");
+  assert.equal(parse_xgwx(mulBlockBytes).ladder[0].sourceStrings.find((item) => item.offset === addBlock.offset).value, "MUL");
+  assert.throws(() => update_xgwx_iec_ld_arithmetic_function(source, 0, addBlock.offset, "ADD", "MOVE"));
+  assert.throws(() => update_xgwx_iec_ld_arithmetic_function(source, 0, comment.offset, comment.value, "SUB"));
+  const eqBlock = summary.ladder[0].sourceStrings.find((item) => item.isIecComparisonFunction && item.value === "EQ");
+  const gtBlockBytes = update_xgwx_iec_ld_comparison_function(source, 0, eqBlock.offset, "EQ", "GT");
+  const gtBlock = parse_xgwx(gtBlockBytes).ladder[0].sourceStrings.find((item) => item.offset === eqBlock.offset);
+  assert.equal(gtBlock.value, "GT");
+  assert.equal(gtBlock.isIecComparisonFunction, true);
+  assert.deepEqual(gtBlock.iecPosition, eqBlock.iecPosition);
+  assert.throws(() => update_xgwx_iec_ld_comparison_function(source, 0, eqBlock.offset, "EQ", "ADD"));
+  assert.throws(() => update_xgwx_iec_ld_comparison_function(source, 0, addBlock.offset, "ADD", "GT"));
+  assert.throws(() => update_xgwx_iec_ld_rising_contact_operand(source, 0, comment.offset, comment.value, "ON"));
+  const longer = update_xgwx_iec_ld_comment(source, 0, comment.offset, comment.value, "LIGHT_CONTROL_LONGER");
+  const longerSummary = parse_xgwx(longer);
+  assert.equal(longerSummary.ladder[0].sourceStrings.find((item) => item.offset === comment.offset).value, "LIGHT_CONTROL_LONGER");
+  assert.deepEqual(longerSummary.ladder.slice(1), summary.ladder.slice(1));
+  assert.throws(() => update_xgwx_iec_ld_comment(source, 0, comment.offset, comment.value, "X".repeat(256)));
+  assert.deepEqual(Buffer.from(select_xgwx_cpu(source, "XGI-CPUE")), source);
 });
 
 test("bundled WASM allows XGK CPU changes and rejects cross-family conversion", async (context) => {
@@ -62,6 +2231,8 @@ test("bundled WASM allows XGK CPU changes and rejects cross-family conversion", 
   const catalog = cpu_catalog();
   assert.equal(catalog.find((entry) => entry.model === "XGK-CPUSN")?.typeCode, 17);
   assert.equal(catalog.find((entry) => entry.model === "XGB-XBMS")?.typeCode, 2);
+  assert.equal(catalog.find((entry) => entry.model === "XGI-CPUE")?.typeCode, 106);
+  assert.equal(catalog.find((entry) => entry.model === "XGI-CPUS/P")?.typeCode, 110);
 
   const source = new Uint8Array(fs.readFileSync(fixture));
   const before = parse_xgwx(source);

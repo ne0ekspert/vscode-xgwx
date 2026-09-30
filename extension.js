@@ -74,6 +74,16 @@ class XgwxEditorProvider {
         await load();
       } else if (message?.type === "edit") {
         this.updateDocument(document, message.bytes, message.label, editor);
+      } else if (message?.type === "promptIecContact") {
+        const value = await promptIecContact(message.value, message.suggestions, message.rowIndex);
+        // Let the QuickPick finish closing before returning keyboard focus to the webview.
+        await new Promise((resolve) => setImmediate(resolve));
+        if (this.editors.has(editor) && panel.visible) panel.reveal(undefined, false);
+        await panel.webview.postMessage({
+          type: "iecContactInputResult",
+          requestId: message.requestId,
+          value: value ?? null,
+        });
       } else if (message?.type === "save") {
         await vscode.commands.executeCommand("workbench.action.files.save");
       } else if (message?.type === "showError") {
@@ -198,6 +208,44 @@ class XgwxEditorProvider {
   }
 }
 
+function promptIecContact(currentValue, suggestions, rowIndex) {
+  return new Promise((resolve) => {
+    const picker = vscode.window.createQuickPick();
+    picker.title = `Contact operand · L${rowIndex}`;
+    picker.placeholder = "Enter a contact operand or choose a suggestion";
+    picker.matchOnDescription = false;
+    const names = [...new Set((Array.isArray(suggestions) ? suggestions : [])
+      .filter((name) => typeof name === "string" && name))];
+    const update = (value) => {
+      const typed = value.trim();
+      const matches = names.filter((name) => name.toLocaleLowerCase()
+        .includes(typed.toLocaleLowerCase())).slice(0, 12);
+      picker.items = [
+        ...(typed ? [{ label: typed, description: "Use typed operand", operand: typed }] : []),
+        ...matches.filter((name) => name !== typed)
+          .map((name) => ({ label: name, operand: name })),
+      ];
+    };
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      picker.dispose();
+      resolve(value);
+    };
+    picker.onDidChangeValue(update);
+    picker.onDidAccept(() => {
+      const value = (picker.activeItems[0]?.operand || picker.value).trim();
+      if (!value || value.length > 255 || /[\p{Cc}]/u.test(value)) return;
+      finish(value);
+    });
+    picker.onDidHide(() => finish(undefined));
+    picker.value = String(currentValue || "");
+    update(picker.value);
+    picker.show();
+  });
+}
+
 function createNonce() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let value = "";
@@ -225,4 +273,4 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, XgwxDocument, XgwxEditorProvider, bytesEqual };
+module.exports = { activate, deactivate, XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact };

@@ -27,10 +27,11 @@ test("registers a default editable XGWX custom editor", () => {
   assert.equal(editor.viewType, "xgwx.workspaceViewer");
   assert.equal(editor.priority, "default");
   assert.deepEqual(editor.selector, [{ filenamePattern: "*.xgwx" }]);
+  assert.equal(manifest.capabilities.untrustedWorkspaces.supported, true);
 });
 
 test("ships the parser assets used by the webview", () => {
-  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/ladder-clipboard.js", "media/module-option-groups.js", "media/main.js", "media/main.css"]) {
+  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/ladder-clipboard.js", "media/module-option-groups.js", "media/iec-layout-positions.js", "media/main.js", "media/main.css"]) {
     const stat = fs.statSync(path.join(root, asset));
     assert.ok(stat.size > 0, `${asset} should not be empty`);
   }
@@ -92,7 +93,7 @@ test("renders decoded LD programs in a ten-column ladder canvas", () => {
   assert.match(styles, /\.ld-blank-cell\b/);
   assert.match(styles, /\.ld-cell\b/);
   assert.match(styles, /\.ld-cell\.instruction\.selected/);
-  assert.match(styles, /\.ld-glyph[^}]+background: var\(--vscode-editor-background, #000\)/s);
+  assert.match(styles, /\.ld-glyph[^}]+background: var\(--vscode-editor-background, Canvas\)/s);
   assert.match(styles, /\.ld-value[^}]+background: transparent/s);
   assert.doesNotMatch(styles, /\.ld-cell:not\(\.instruction\) \.ld-glyph::before/);
   assert.doesNotMatch(script, /─\|/);

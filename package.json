@@ -23,6 +23,11 @@
     "ls-electric"
   ],
   "main": "./extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "activationEvents": [
     "onCustomEditor:xgwx.workspaceViewer"
   ],

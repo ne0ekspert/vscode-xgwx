@@ -10,6 +10,36 @@ export const CONTACT_ELEMENT_CHOICES = Object.freeze([
   ["FallingPulse", "Falling-edge pulse (PDN)"],
 ]);
 
+// XGK and the captured IEC LD payload use the same six addressed contact
+// markers. IEC still has its own record envelope and BOOL operand validation.
+const IEC_CONTACT_BY_XGK_KIND = Object.freeze({
+  NormallyOpen: ["NO", "Normally open", "Normally open contact variable", 0x06],
+  NormallyClosed: ["NC", "Normally closed", "Normally closed contact variable", 0x07],
+  AddressedRisingPulse: ["RISING", "Rising edge", "Rising-edge contact variable", 0x08],
+  AddressedFallingPulse: ["FALLING", "Falling edge", "Falling-edge contact variable", 0x09],
+  AddressedRisingPulseNot: ["NEGATED_RISING", "Negated rising edge", "Negated rising-edge contact variable", 0x0a],
+  AddressedFallingPulseNot: ["NEGATED_FALLING", "Negated falling edge", "Negated falling-edge contact variable", 0x0b],
+});
+
+export const IEC_ADDRESSED_CONTACT_CHOICES = Object.freeze(
+  CONTACT_ELEMENT_CHOICES.flatMap(([kind]) => {
+    const choice = IEC_CONTACT_BY_XGK_KIND[kind];
+    return choice ? [Object.freeze([...choice, kind])] : [];
+  }).sort((left, right) => left[3] - right[3]),
+);
+
+const CONTACT_GLYPH_BY_KIND = Object.freeze({
+  NormallyOpen: "| |",
+  NormallyClosed: "|/|",
+  AddressedRisingPulse: "|P|",
+  AddressedFallingPulse: "|N|",
+  AddressedRisingPulseNot: "|P/|",
+  AddressedFallingPulseNot: "|N/|",
+  Inverse: "[¬]",
+  RisingPulse: "[↑]",
+  FallingPulse: "[↓]",
+});
+
 export const COIL_ELEMENT_CHOICES = Object.freeze([
   ["Output", "Output coil"],
   ["InverseOutput", "Inverse output coil"],
@@ -30,6 +60,41 @@ const CONTACT_EDIT_KINDS = Object.freeze({
   PUP: "RisingPulse",
   PDN: "FallingPulse",
 });
+
+const IEC_CONTACT_GLYPH_BY_SOURCE_LABEL = new Map(
+  IEC_ADDRESSED_CONTACT_CHOICES.map(([, , sourceLabel, , kind]) =>
+    [sourceLabel, CONTACT_GLYPH_BY_KIND[kind]]),
+);
+
+const CONTACT_VISUAL_BY_KIND = Object.freeze({
+  NormallyOpen: "no",
+  NormallyClosed: "nc",
+  AddressedRisingPulse: "rising",
+  AddressedFallingPulse: "falling",
+  AddressedRisingPulseNot: "negated-rising",
+  AddressedFallingPulseNot: "negated-falling",
+});
+
+const IEC_CONTACT_VISUAL_BY_SOURCE_LABEL = new Map(
+  IEC_ADDRESSED_CONTACT_CHOICES.map(([, , sourceLabel, , kind]) =>
+    [sourceLabel, CONTACT_VISUAL_BY_KIND[kind]]),
+);
+
+export function xgkContactGlyph(contact) {
+  return CONTACT_GLYPH_BY_KIND[CONTACT_EDIT_KINDS[contact]] || "[ ]";
+}
+
+export function xgkContactVariant(contact) {
+  return CONTACT_VISUAL_BY_KIND[CONTACT_EDIT_KINDS[contact]] || null;
+}
+
+export function iecContactGlyph(sourceLabel) {
+  return IEC_CONTACT_GLYPH_BY_SOURCE_LABEL.get(sourceLabel) || null;
+}
+
+export function iecContactVariant(sourceLabel) {
+  return IEC_CONTACT_VISUAL_BY_SOURCE_LABEL.get(sourceLabel) || null;
+}
 
 const COIL_EDIT_KINDS = Object.freeze({
   Output: "Output",

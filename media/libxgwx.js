@@ -1,7 +1,72 @@
 /* @ts-self-types="./libxgwx.d.ts" */
 
 /**
- * Return the XGK and XGB CPU models available to project configurations.
+ * Copy one complete decoded IEC LD network into an empty row range.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} expected_first_row_index
+ * @param {number} destination_first_row_index
+ * @returns {Uint8Array}
+ */
+export function copy_xgwx_iec_ld_group(bytes, program_index, group_index, expected_first_row_index, destination_first_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.copy_xgwx_iec_ld_group(ptr0, len0, program_index, group_index, expected_first_row_index, destination_first_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Copy a contact/coil IEC network from another program into an empty row range.
+ * @param {Uint8Array} bytes
+ * @param {number} source_program_index
+ * @param {number} group_index
+ * @param {number} expected_first_row_index
+ * @param {number} destination_program_index
+ * @param {number} destination_first_row_index
+ * @returns {Uint8Array}
+ */
+export function copy_xgwx_iec_ld_group_to_program(bytes, source_program_index, group_index, expected_first_row_index, destination_program_index, destination_first_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.copy_xgwx_iec_ld_group_to_program(ptr0, len0, source_program_index, group_index, expected_first_row_index, destination_program_index, destination_first_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Copy an IEC network and its missing supported local declarations.
+ * @param {Uint8Array} bytes
+ * @param {number} source_program_index
+ * @param {number} group_index
+ * @param {number} expected_first_row_index
+ * @param {number} destination_program_index
+ * @param {number} destination_first_row_index
+ * @returns {Uint8Array}
+ */
+export function copy_xgwx_iec_ld_group_to_program_with_locals(bytes, source_program_index, group_index, expected_first_row_index, destination_program_index, destination_first_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.copy_xgwx_iec_ld_group_to_program_with_locals(ptr0, len0, source_program_index, group_index, expected_first_row_index, destination_program_index, destination_first_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Return the cataloged XGK, XGB, and XGI CPU models.
  * @returns {any}
  */
 export function cpu_catalog() {
@@ -10,6 +75,619 @@ export function cpu_catalog() {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Delete one implicit IEC LD blank row, matching XG5000 Ctrl+D coordinate
+ * shifting while rejecting rows referenced by decoded records.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} blank_row_index
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_blank_row(bytes, program_index, blank_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_blank_row(ptr0, len0, program_index, blank_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete the upper line of a captured two-row IEC branch.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} row_index
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_branch_top_row(bytes, program_index, group_index, row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_branch_top_row(ptr0, len0, program_index, group_index, row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete a contact-only middle row in a native-shaped x3 branch chain.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} row_index
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_chained_contact_branch_row(bytes, program_index, group_index, row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_chained_contact_branch_row(ptr0, len0, program_index, group_index, row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete the captured connected ADD while preserving its neighboring circuits.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_connected_arithmetic(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_connected_arithmetic(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete one decoded contact in the captured linear IEC LD shape.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} contact_offset
+ * @param {number} expected_raw_x
+ * @param {string} expected_contact_kind
+ * @param {string} expected_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_contact(bytes, program_index, contact_offset, expected_raw_x, expected_contact_kind, expected_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_contact(ptr0, len0, program_index, contact_offset, expected_raw_x, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Delete one decoded linear-row contact with native XG5000 Cell Delete semantics.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} contact_offset
+ * @param {number} expected_raw_x
+ * @param {string} expected_contact_kind
+ * @param {string} expected_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_contact_cell(bytes, program_index, contact_offset, expected_raw_x, expected_contact_kind, expected_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_contact_cell(ptr0, len0, program_index, contact_offset, expected_raw_x, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Delete a middle IEC row containing only a vertical branch end and start.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} row_index
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_empty_branch_row(bytes, program_index, group_index, row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_empty_branch_row(ptr0, len0, program_index, group_index, row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete the captured head EQ and close its pin-row gap in the comparison chain.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_eq_chain_head(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_eq_chain_head(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete the captured FF branch output line and its connected FF block.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} row_index
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_ff_branch_output_row(bytes, program_index, group_index, row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_ff_branch_output_row(ptr0, len0, program_index, group_index, row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete one captured connected IEC function cell while retaining the other
+ * records in its stored rows.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_function_cell(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_function_cell(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Remove one complete decoded IEC LD network, leaving its rows blank.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} expected_first_row_index
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_group(bytes, program_index, group_index, expected_first_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_group(ptr0, len0, program_index, group_index, expected_first_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete the captured contact-fed L62 comparison and its x6/x12 branches.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_heating_chain_contact_eq(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_heating_chain_contact_eq(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete the native-validated first comparison block in the heating chain.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_heating_chain_head(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_heating_chain_head(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete either native-validated middle EQ block in the heating chain.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_heating_chain_middle(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_heating_chain_middle(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete either captured x15-fed comparison at L66 or L70.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_heating_chain_x15_eq(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_heating_chain_x15_eq(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete the L58 EQ and its dangling feed, yielding a valid circuit.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_heating_chain_x3_eq_repaired(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_heating_chain_x3_eq_repaired(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Remove one captured IEC short wire between two long-wire fragments.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} wire_offset
+ * @param {number} expected_raw_x
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_horizontal_wire(bytes, program_index, wire_offset, expected_raw_x) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_horizontal_wire(ptr0, len0, program_index, wire_offset, expected_raw_x);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete one captured normally-open-contact to output-coil rung and restore
+ * its row to an implicit blank gap.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} row_index
+ * @param {string} expected_contact_variable
+ * @param {string} expected_coil_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_linear_rung(bytes, program_index, row_index, expected_contact_variable, expected_coil_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_linear_rung(ptr0, len0, program_index, row_index, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Delete a native-shaped contact-only middle row in a nested IEC branch.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} row_index
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_nested_contact_branch_row(bytes, program_index, group_index, row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_nested_contact_branch_row(ptr0, len0, program_index, group_index, row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Delete one normally open contact in the captured linear IEC LD shape.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} contact_offset
+ * @param {number} expected_raw_x
+ * @param {string} expected_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_no_contact(bytes, program_index, contact_offset, expected_raw_x, expected_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_no_contact(ptr0, len0, program_index, contact_offset, expected_raw_x, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete one linear-row contact with native XG5000 Cell Delete semantics.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} contact_offset
+ * @param {number} expected_raw_x
+ * @param {string} expected_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_no_contact_cell(bytes, program_index, contact_offset, expected_raw_x, expected_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_no_contact_cell(ptr0, len0, program_index, contact_offset, expected_raw_x, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete one exact addressed-contact to coil rung, restoring an implicit gap.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} row_index
+ * @param {string} expected_contact_kind
+ * @param {string} expected_contact_variable
+ * @param {string} expected_coil_kind
+ * @param {string} expected_coil_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_rung(bytes, program_index, row_index, expected_contact_kind, expected_contact_variable, expected_coil_kind, expected_coil_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(expected_coil_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passStringToWasm0(expected_coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_rung(ptr0, len0, program_index, row_index, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v6;
+}
+
+/**
+ * Delete an occupied simple IEC LD row and shift later lines up.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} row_index
+ * @param {string} expected_contact_kind
+ * @param {string} expected_contact_variable
+ * @param {string} expected_coil_kind
+ * @param {string} expected_coil_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_simple_row(bytes, program_index, row_index, expected_contact_kind, expected_contact_variable, expected_coil_kind, expected_coil_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(expected_coil_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passStringToWasm0(expected_coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_simple_row(ptr0, len0, program_index, row_index, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v6;
+}
+
+/**
+ * Delete one captured standalone IEC function group, leaving its stored rows
+ * as an implicit blank gap.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_standalone_function(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_standalone_function(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Remove the terminal wire and coil from a one-row IEC rung.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} coil_record_offset
+ * @param {string} expected_variable
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_terminal_coil(bytes, program_index, coil_record_offset, expected_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_terminal_coil(ptr0, len0, program_index, coil_record_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Delete one captured terminal IEC function block and its otherwise empty
+ * pin rows while preserving the leading contact.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_terminal_function(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_terminal_function(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Remove an unreferenced IEC program-local symbol.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} symbol_index
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_local_symbol(bytes, program_index, symbol_index, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_local_symbol(ptr0, len0, program_index, symbol_index, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
 }
 
 /**
@@ -45,6 +723,56 @@ export function delete_xgwx_module(bytes, base, slot) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.delete_xgwx_module(ptr0, len0, base, slot);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Give one captured IEC function block a separate local instance.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_instance
+ * @param {string} new_instance
+ * @returns {Uint8Array}
+ */
+export function duplicate_xgwx_iec_ld_function_instance(bytes, program_index, block_offset, expected_instance, new_instance) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_instance, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(new_instance, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.duplicate_xgwx_iec_ld_function_instance(ptr0, len0, program_index, block_offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Add or remove one guarded IEC LD vertical branch segment between adjacent
+ * rows, including the captured contact-only final-branch row shape.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} start_row_index
+ * @param {number} end_row_index
+ * @param {number} x
+ * @param {boolean} expected
+ * @param {boolean} present
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_iec_ld_branch_segment(bytes, program_index, group_index, start_row_index, end_row_index, x, expected, present) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_iec_ld_branch_segment(ptr0, len0, program_index, group_index, start_row_index, end_row_index, x, expected, present);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -111,6 +839,401 @@ export function edit_xgwx_ladder_comment(bytes, program_index, edit) {
 }
 
 /**
+ * Insert one implicit IEC LD blank row after a decoded stored row, matching
+ * XG5000 Ctrl+L coordinate shifting.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} after_row_index
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_blank_row(bytes, program_index, after_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_blank_row(ptr0, len0, program_index, after_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Add a standalone comment to one empty IEC LD row.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} destination_row_index
+ * @param {string} text
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_comment(bytes, program_index, destination_row_index, text) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(text, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_comment(ptr0, len0, program_index, destination_row_index, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Insert one of the four decoded contact kinds into a captured linear IEC LD wire.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} wire_offset
+ * @param {number} raw_x
+ * @param {number} expected_wire_start_x
+ * @param {number} expected_wire_end_x
+ * @param {string} contact_kind
+ * @param {string} variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_contact(bytes, program_index, wire_offset, raw_x, expected_wire_start_x, expected_wire_end_x, contact_kind, variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_contact(ptr0, len0, program_index, wire_offset, raw_x, expected_wire_start_x, expected_wire_end_x, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Insert the captured connected single-output FF function cell.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} insertion_offset
+ * @param {string} function_name
+ * @param {string} instance_name
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_function_cell(bytes, program_index, insertion_offset, function_name, instance_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(function_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(instance_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_function_cell(ptr0, len0, program_index, insertion_offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Insert an addressed contact into a captured upper-branch x1 gap.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} insertion_offset
+ * @param {string} contact_kind
+ * @param {string} variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_leading_contact(bytes, program_index, insertion_offset, contact_kind, variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_leading_contact(ptr0, len0, program_index, insertion_offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Create one native-shaped normally-open-contact to output-coil rung in an
+ * unoccupied implicit IEC LD row.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} blank_row_index
+ * @param {string} contact_variable
+ * @param {string} coil_variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_linear_rung(bytes, program_index, blank_row_index, contact_variable, coil_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_linear_rung(ptr0, len0, program_index, blank_row_index, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Insert one normally open contact into a captured linear IEC LD wire.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} wire_offset
+ * @param {number} raw_x
+ * @param {number} expected_wire_start_x
+ * @param {number} expected_wire_end_x
+ * @param {string} variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_no_contact(bytes, program_index, wire_offset, raw_x, expected_wire_start_x, expected_wire_end_x, variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_no_contact(ptr0, len0, program_index, wire_offset, raw_x, expected_wire_start_x, expected_wire_end_x, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * Add a normally open contact in parallel with a captured simple IEC rung.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} row_index
+ * @param {string} expected_contact_variable
+ * @param {string} expected_coil_variable
+ * @param {string} parallel_variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_parallel_contact(bytes, program_index, row_index, expected_contact_variable, expected_coil_variable, parallel_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(parallel_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_parallel_contact(ptr0, len0, program_index, row_index, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
+ * Add one of the addressed IEC contact kinds on a lower parallel branch.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} row_index
+ * @param {string} expected_contact_variable
+ * @param {string} expected_coil_variable
+ * @param {string} parallel_kind
+ * @param {string} parallel_variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_parallel_contact_kind(bytes, program_index, row_index, expected_contact_variable, expected_coil_variable, parallel_kind, parallel_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(parallel_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passStringToWasm0(parallel_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_parallel_contact_kind(ptr0, len0, program_index, row_index, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v6;
+}
+
+/**
+ * Create one addressed-contact to coil rung using decoded IEC element kinds.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} blank_row_index
+ * @param {string} contact_kind
+ * @param {string} contact_variable
+ * @param {string} coil_kind
+ * @param {string} coil_variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_rung(bytes, program_index, blank_row_index, contact_kind, contact_variable, coil_kind, coil_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(coil_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ptr4 = passStringToWasm0(coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len4 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_rung(ptr0, len0, program_index, blank_row_index, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v6 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v6;
+}
+
+/**
+ * Replace a captured IEC one-cell wire with an addressed contact.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} wire_offset
+ * @param {number} expected_raw_x
+ * @param {string} contact_kind
+ * @param {string} variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_short_wire_contact(bytes, program_index, wire_offset, expected_raw_x, contact_kind, variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(contact_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_short_wire_contact(ptr0, len0, program_index, wire_offset, expected_raw_x, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Restore the captured standalone WORD_TO_UDINT group and operand binding.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} insertion_offset
+ * @param {string} function_name
+ * @param {string} input_operand
+ * @param {string} output_operand
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_standalone_function(bytes, program_index, insertion_offset, function_name, input_operand, output_operand) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(function_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(input_operand, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(output_operand, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_standalone_function(ptr0, len0, program_index, insertion_offset, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
+ * Complete a contact-only one-row IEC rung with a wire and BOOL coil.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} contact_record_offset
+ * @param {string} expected_contact_variable
+ * @param {string} coil_kind
+ * @param {string} coil_variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_terminal_coil(bytes, program_index, contact_record_offset, expected_contact_variable, coil_kind, coil_variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_contact_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(coil_kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(coil_variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_terminal_coil(ptr0, len0, program_index, contact_record_offset, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
+ * Restore the captured terminal MOVE after its retained contact.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} contact_offset
+ * @param {string} input_operand
+ * @param {string} output_operand
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_terminal_move(bytes, program_index, contact_offset, input_operand, output_operand) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(input_operand, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(output_operand, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_terminal_move(ptr0, len0, program_index, contact_offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Insert an unallocated primitive IEC program-local symbol.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {string} name
+ * @param {string} data_type
+ * @param {string} description
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_local_symbol(bytes, program_index, name, data_type, description) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(data_type, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(description, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_local_symbol(ptr0, len0, program_index, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
  * Insert a physical blank row before the selected row.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -164,6 +1287,27 @@ export function known_ladder_mnemonics() {
 }
 
 /**
+ * Move one complete decoded IEC LD network into an empty row range.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} expected_first_row_index
+ * @param {number} destination_first_row_index
+ * @returns {Uint8Array}
+ */
+export function move_xgwx_iec_ld_group(bytes, program_index, group_index, expected_first_row_index, destination_first_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.move_xgwx_iec_ld_group(ptr0, len0, program_index, group_index, expected_first_row_index, destination_first_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Parse `.xgwx` bytes and return a browser-friendly JavaScript summary.
  * @param {Uint8Array} bytes
  * @returns {any}
@@ -176,6 +1320,97 @@ export function parse_xgwx(bytes) {
         throw takeFromExternrefTable0(ret[1]);
     }
     return takeFromExternrefTable0(ret[0]);
+}
+
+/**
+ * Rename a captured IEC local symbol and its classified LD references.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} symbol_index
+ * @param {string} expected_name
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function rename_xgwx_iec_local_symbol(bytes, program_index, symbol_index, expected_name, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.rename_xgwx_iec_local_symbol(ptr0, len0, program_index, symbol_index, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Reconnect the one-cell wire gap left by a captured IEC contact deletion.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} insertion_offset
+ * @param {number} expected_raw_x
+ * @returns {Uint8Array}
+ */
+export function repair_xgwx_iec_ld_horizontal_wire(bytes, program_index, insertion_offset, expected_raw_x) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.repair_xgwx_iec_ld_horizontal_wire(ptr0, len0, program_index, insertion_offset, expected_raw_x);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Replace an occupied IEC LD network with a copy of another in the program.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} source_group_index
+ * @param {number} expected_source_first_row_index
+ * @param {number} destination_group_index
+ * @param {number} expected_destination_first_row_index
+ * @returns {Uint8Array}
+ */
+export function replace_xgwx_iec_ld_group(bytes, program_index, source_group_index, expected_source_first_row_index, destination_group_index, expected_destination_first_row_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.replace_xgwx_iec_ld_group(ptr0, len0, program_index, source_group_index, expected_source_first_row_index, destination_group_index, expected_destination_first_row_index);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Replace a network from another IEC program, optionally copying its missing locals.
+ * @param {Uint8Array} bytes
+ * @param {number} source_program_index
+ * @param {number} source_group_index
+ * @param {number} expected_source_first_row_index
+ * @param {number} destination_program_index
+ * @param {number} destination_group_index
+ * @param {number} expected_destination_first_row_index
+ * @param {boolean} copy_missing_locals
+ * @returns {Uint8Array}
+ */
+export function replace_xgwx_iec_ld_group_from_program(bytes, source_program_index, source_group_index, expected_source_first_row_index, destination_program_index, destination_group_index, expected_destination_first_row_index, copy_missing_locals) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.replace_xgwx_iec_ld_group_from_program(ptr0, len0, source_program_index, source_group_index, expected_source_first_row_index, destination_program_index, destination_group_index, expected_destination_first_row_index, copy_missing_locals);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**
@@ -281,6 +1516,290 @@ export function set_xgwx_module_option(bytes, base, slot, key, index, value) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+}
+
+/**
+ * Change a captured IEC ADD/SUB/MUL/DIV block kind.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_arithmetic_function(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_arithmetic_function(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Change a captured IEC coil among the six decoded coil kinds.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_coil_kind(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_coil_kind(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Replace one verified IEC LD comment with up to 255 UTF-16 units.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_comment(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_comment(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Change a captured IEC comparison block among EQ, GT, GE, LT, and LE.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_comparison_function(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_comparison_function(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Change a captured IEC contact among the six addressed IEC contact kinds.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_contact_kind(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_contact_kind(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Replace a verified IEC LD contact or output coil variable reference.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_element_operand(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_element_operand(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Replace a captured IEC LD function input/output expression.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_function_operand(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_function_operand(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Replace a verified IEC LD rising-edge contact variable reference.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_ld_rising_contact_operand(bytes, program_index, offset, expected, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_ld_rising_contact_operand(ptr0, len0, program_index, offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Change a captured IEC program-local BOOL symbol's mapped address.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} symbol_index
+ * @param {string} expected_name
+ * @param {string} expected_address
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_local_symbol_address(bytes, program_index, symbol_index, expected_name, expected_address, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_address, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_local_symbol_address(ptr0, len0, program_index, symbol_index, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
+ * Change a captured IEC program-local symbol description.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} symbol_index
+ * @param {string} expected_name
+ * @param {string} expected_description
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_local_symbol_description(bytes, program_index, symbol_index, expected_name, expected_description, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_description, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_local_symbol_description(ptr0, len0, program_index, symbol_index, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
+ * Change a captured automatic IEC local variable's primitive type.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} symbol_index
+ * @param {string} expected_name
+ * @param {string} expected_type
+ * @param {string} replacement
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_iec_local_symbol_type(bytes, program_index, symbol_index, expected_name, expected_type, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_type, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_iec_local_symbol_type(ptr0, len0, program_index, symbol_index, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
 }
 
 /**
