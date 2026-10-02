@@ -691,6 +691,28 @@ export function delete_xgwx_iec_local_symbol(bytes, program_index, symbol_index,
 }
 
 /**
+ * Delete a verified XGK comparison contact and its operand references.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_ladder_comparison(bytes, program_index, offset, expected) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_ladder_comparison(ptr0, len0, program_index, offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Delete a supported native rung comment.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -900,6 +922,32 @@ export function insert_xgwx_iec_ld_contact(bytes, program_index, wire_offset, ra
     const ptr2 = passStringToWasm0(variable, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
     const ret = wasm.insert_xgwx_iec_ld_contact(ptr0, len0, program_index, wire_offset, raw_x, expected_wire_start_x, expected_wire_end_x, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Place one verified scalar IEC function with operands in reference order.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} row_index
+ * @param {number} raw_x
+ * @param {string} name
+ * @param {string} operands_json
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_function(bytes, program_index, row_index, raw_x, name, operands_json) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(operands_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_function(ptr0, len0, program_index, row_index, raw_x, ptr1, len1, ptr2, len2);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -1126,6 +1174,35 @@ export function insert_xgwx_iec_ld_short_wire_contact(bytes, program_index, wire
 }
 
 /**
+ * Insert one contact or coil into an empty IEC cell, without adding other elements.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} row_index
+ * @param {number} raw_x
+ * @param {string} category
+ * @param {string} kind
+ * @param {string} operand
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_single_element(bytes, program_index, row_index, raw_x, category, kind, operand) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(category, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(kind, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(operand, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_single_element(ptr0, len0, program_index, row_index, raw_x, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
  * Restore the captured standalone WORD_TO_UDINT group and operand binding.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -1231,6 +1308,57 @@ export function insert_xgwx_iec_local_symbol(bytes, program_index, name, data_ty
     var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v5;
+}
+
+/**
+ * Insert a native comparison contact at an XGK contact position.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} raw_y
+ * @param {number} column
+ * @param {string} mnemonic
+ * @param {string} operands_json
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_ladder_comparison(bytes, program_index, raw_y, column, mnemonic, operands_json) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(mnemonic, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(operands_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_ladder_comparison(ptr0, len0, program_index, raw_y, column, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * Insert a catalog application instruction at an XGK output position.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} raw_y
+ * @param {string} mnemonic
+ * @param {string} operands_json
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_ladder_instruction(bytes, program_index, raw_y, mnemonic, operands_json) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(mnemonic, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(operands_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_ladder_instruction(ptr0, len0, program_index, raw_y, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
 }
 
 /**

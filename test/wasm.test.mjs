@@ -5,6 +5,9 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import init, {
+  insert_xgwx_ladder_instruction,
+  insert_xgwx_ladder_comparison,
+  delete_xgwx_ladder_comparison,
   cpu_catalog,
   copy_xgwx_iec_ld_group,
   copy_xgwx_iec_ld_group_to_program,
@@ -46,6 +49,8 @@ import init, {
   insert_xgwx_iec_ld_short_wire_contact,
   insert_xgwx_iec_ld_leading_contact,
   insert_xgwx_iec_ld_function_cell,
+  insert_xgwx_iec_ld_function,
+  insert_xgwx_iec_ld_single_element,
   insert_xgwx_iec_ld_terminal_move,
   insert_xgwx_iec_ld_standalone_function,
   insert_xgwx_iec_ld_blank_row,
@@ -2825,4 +2830,117 @@ test("base slot counts persist independently and protect occupied slots", async 
   assert.throws(() => set_xgwx_base_slot_count(edited, 1, 4), /occupies 2 slots/);
   assert.throws(() => set_xgwx_base_slot_count(edited, 0, 5), /choose 4, 6, 8, 10 or 12/);
   assert.equal(parse_xgwx(edited).hardware.bases[1].slotCount, 6);
+});
+
+
+test("function placement exports preserve operand metadata and enforce manual device permissions", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const before = Buffer.from(source);
+  const choices = parse_xgwx(source).ladder[0].instructionChoices;
+  assert.deepEqual(choices.find(choice => choice.mnemonic === "MOV").operandRules.map(rule => rule.dataTypes), [["WORD"], ["WORD"]]);
+  assert.deepEqual(choices.find(choice => choice.mnemonic === "I2R").operandRules.map(rule => rule.dataTypes), [["INT"], ["REAL"]]);
+  assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, "MOV", JSON.stringify(["1", "0"])), /constant/);
+  assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, "MOV", JSON.stringify(["M0000A", "D100"])), /bit address/);
+  let bytes = insert_xgwx_ladder_comparison(source, 0, 52, 0, "=", JSON.stringify(["D100", "D102"]));
+  bytes = insert_xgwx_ladder_instruction(bytes, 0, 52, "MOV", JSON.stringify(["1", "D200"]));
+  const cells = parse_xgwx(bytes).ladder[0].cells.filter(cell => cell.rawY === 52);
+  assert.ok(cells.some(cell => cell.value === "=" && cell.kind === "Comparison"));
+  assert.ok(cells.some(cell => cell.value === "MOV" && cell.operands.join() === "1,D200"));
+  const nibble = insert_xgwx_ladder_instruction(source, 0, 52, "MOV4", JSON.stringify(["M0000A", "D100.4"]));
+  assert.deepEqual(parse_xgwx(nibble).ladder[0].cells.find(cell => cell.value === "MOV4").operands, ["M0000A", "D100.4"]);
+  assert.deepEqual(source, before);
+});
+
+
+test("all XGK word comparisons insert and replace as contacts", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const names = ["=", ">", "<", ">=", "<=", "<>"];
+  const choices = parse_xgwx(source).ladder[0].comparisonChoices;
+  assert.deepEqual(choices.map(choice => choice.mnemonic), names);
+  for (const choice of choices) {
+    assert.equal(choice.operandCount, 2);
+    assert.deepEqual(choice.operandRules.map(rule => rule.dataTypes), [["INT"], ["INT"]]);
+    assert.throws(() => insert_xgwx_ladder_comparison(source, 0, 52, 0, choice.mnemonic, JSON.stringify(["D100.1", "D102"])), /not permitted|bit address/);
+    let bytes = insert_xgwx_ladder_comparison(source, 0, 52, 0, choice.mnemonic, JSON.stringify(["D100", "D102"]));
+    for (const replacement of names) {
+      const cell = parse_xgwx(bytes).ladder[0].cells.find(cell => cell.rawY === 52 && cell.kind === "Comparison");
+      assert.equal(cell.instructionTextEditing, true);
+      bytes = update_xgwx_ladder_cell(bytes, 0, cell.offset, cell.sourceText, `${replacement},D100,D102`);
+      const updated = parse_xgwx(bytes).ladder[0].cells.find(cell => cell.rawY === 52 && cell.kind === "Comparison");
+      assert.equal(updated.value, replacement);
+      assert.deepEqual(updated.operands, ["D100", "D102"]);
+    }
+  }
+});
+
+
+test("comparison deletion removes a full contact and rejects stale edits", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  for (const name of ["=", ">", "<", ">=", "<=", "<>"]) {
+    let bytes = insert_xgwx_ladder_comparison(source, 0, 52, 0, name, JSON.stringify(["D100", "D102"]));
+    bytes = insert_xgwx_ladder_instruction(bytes, 0, 52, "MOV", JSON.stringify(["0", "D200"]));
+    const before = parse_xgwx(bytes).ladder[0];
+    const cell = before.cells.find(c => c.rawY === 52 && c.kind === "Comparison");
+    assert.throws(() => delete_xgwx_ladder_comparison(bytes, 0, cell.offset, "stale"), /changed/);
+    const deleted = delete_xgwx_ladder_comparison(bytes, 0, cell.offset, cell.sourceText);
+    const after = parse_xgwx(deleted).ladder[0];
+    assert.equal(after.cells.filter(c => c.kind === "Comparison" && c.rawY === 52).length, 0);
+    assert.ok(after.cells.some(c => c.rawY === 52 && c.sourceText === "MOV,0,D200"));
+    assert.deepEqual(after.cells.filter(c => c.rawY < 52), before.cells.filter(c => c.rawY < 52));
+    const restored = insert_xgwx_ladder_comparison(deleted, 0, 52, 0, name, JSON.stringify(["D100", "D102"]));
+    assert.deepEqual(parse_xgwx(restored).ladder[0], before);
+  }
+});
+
+
+test("IEC consecutive empty-cell insertion preserves rows and guards unverified conversion placement", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture || !fs.existsSync(fixture)) {
+    context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace");
+    return;
+  }
+  await init({module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"))});
+  const source = fs.readFileSync(fixture);
+  const summary = parse_xgwx(source);
+  const body = summary.ladder[0];
+  const row = Math.max(...body.iecRows.map(row => row.rowIndex)) + 1;
+  let bytes = source;
+  for (const [x, category, kind, operand] of [[1,"contact","NO","%MX1000"], [4,"contact","NC","%MX1001"], [94,"coil","OUTPUT","%MX1002"]]) {
+    bytes = insert_xgwx_iec_ld_single_element(bytes, 0, row, x, category, kind, operand);
+  }
+  const changed = parse_xgwx(bytes);
+  assert.equal(changed.ladder[0].iecRows.find(item => item.rowIndex === row).recordCount, 3);
+  assert.throws(() => insert_xgwx_iec_ld_single_element(bytes, 0, row, 4, "contact", "NO", "%MX1003"));
+  assert.throws(() => insert_xgwx_iec_ld_single_element(bytes, 0, row, 7, "coil", "OUTPUT", "%IX0"));
+  for (let index=1; index<summary.ladder.length; index++) {
+    assert.deepEqual(changed.ladder[index], summary.ladder[index]);
+  }
+  const conversionProgram = summary.localVariables.findIndex(symbols => symbols.some(symbol => symbol.dataType === "UDINT" && !symbol.isInstance));
+  assert.ok(conversionProgram >= 0);
+  const destination = summary.localVariables[conversionProgram].find(symbol => symbol.dataType === "UDINT" && !symbol.isInstance).name;
+  const conversionRow = Math.max(...summary.ladder[conversionProgram].iecRows.map(row => row.rowIndex)) + 1;
+  assert.throws(() => insert_xgwx_iec_ld_function(source, conversionProgram, conversionRow, 10, "WORD_TO_UDINT", JSON.stringify(["%MX100",destination])));
+  assert.throws(() => insert_xgwx_iec_ld_function(source, conversionProgram, conversionRow, 10, "WORD_TO_UDINT", JSON.stringify(["%MW100",destination])), /not native-validated/);
+});
+
+
+test("IEC terminal feed deletion reports open endpoints and cleans up without losing functions", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"))});
+  const source = fs.readFileSync(fixture);
+  const before = parse_xgwx(source);
+  const deleted = edit_xgwx_iec_ld_branch_segment(source, 2, 8, 28, 29, 18, true, false);
+  const intermediate = parse_xgwx(deleted);
+  assert.deepEqual(intermediate.ladder[2].iecCircuitGraph.openBranchEndpoints, [{groupIndex:8,rowIndex:28,x:18}]);
+  assert.equal(intermediate.ladder[2].iecFunctions.length, before.ladder[2].iecFunctions.length);
+  assert.throws(() => edit_xgwx_iec_ld_branch_segment(deleted, 2, 8, 25, 26, 18, true, false));
+  const repaired = parse_xgwx(edit_xgwx_iec_ld_branch_segment(deleted, 2, 8, 27, 28, 18, true, false));
+  assert.deepEqual(repaired.ladder[2].iecCircuitGraph.openBranchEndpoints, []);
+  assert.equal(repaired.ladder[2].iecFunctions.length, before.ladder[2].iecFunctions.length);
+  assert.equal(repaired.ladder[2].iecGeometry.vertical.some(branch => branch.groupIndex === 8), false);
+  for (let p=0; p<before.ladder.length; p++) if (p !== 2) assert.deepEqual(repaired.ladder[p], before.ladder[p]);
 });

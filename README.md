@@ -30,9 +30,9 @@ powered by the sibling `libxgwx` project during development.
   positions, comments, contacts, coils, horizontal wires, vertical branches,
   and function blocks with decoded body geometry, control/data port labels,
   reference ordinals, and IEC types. Contacts and coils appear as ladder
-  symbols on their wires; clicking one opens its source element for editing.
+  symbols on their wires; double-click or Enter opens their instruction editor.
   Function expressions appear at their
-  stored positions; selecting one opens its source editor. The source table displays
+  stored positions; double-click or Enter opens the owning block’s instruction editor. The source table displays
   Unicode text fragments in file order with search. Captured IEC LD comments, contact/output-coil variables, and
   function operand expressions can be edited up to 255 UTF-16 units. Contact
   and coil edits and insertions check known BOOL symbols and direct bit addresses; coil edits
@@ -44,6 +44,16 @@ powered by the sibling `libxgwx` project during development.
   signs, and parentheses. The program 1 `MOVE.IN=0+1` webview edit matched the
   generated project byte-for-byte; XG5000 rendered it, checked all programs
   with 0 errors, and preserved all seven ProgramData payloads on Save As.
+  Double-click a blank IEC cell or press Enter to use the native command
+  input: MOVE, ADD/SUB/MUL/DIV, and EQ/GT/GE/LT/LE. Enter space-separated scalar
+  inputs followed by the writable output. Placement needs room for the pin rows
+  and adjacent operand cells, and rejects overlaps. The ten-function native
+  acceptance project compiled with 0 errors and retained every program payload
+  byte-for-byte on Save As.
+  XGK blank contact cells offer the captured `=`, `>`, `<`, `>=`, `<=`, and `<>` comparisons; the output
+  column offers application instructions including MOV and I2R. The command input uses
+  spaces between operands; the source inspector retains comma-separated text. Complete the rung's input condition
+  before running XG5000 Check Program.
   Function blocks support ADD/SUB/MUL/DIV and EQ/GT/GE/LT/LE replacement. The source
   editor can change existing elements among all six addressed contact kinds
   and all six coil kinds while preserving their operands and positions. The IEC
@@ -421,6 +431,13 @@ changes; other IEC
 text and topology remain guarded. Keep a
 backup and validate edited workspaces in the target XG5000 version.
 
+Blank ladder cells use VS Code's native insertion picker and text inputs.
+Double-click a blank cell or press Enter after selecting it, choose the element,
+and enter its operands. This applies to XGK cells and supported IEC contacts,
+single contacts or coils on empty rows, comments, and captured function insertion sites. Canceling
+returns focus to the selected cell; Enter opens the picker again. The sidebar
+shows the selection without an element insertion form.
+
 ## Development
 
 The extension uses plain JavaScript and requires no compile step:
@@ -448,11 +465,15 @@ XGWX Workspace Editor** if the file opens in VS Code's text editor. In VS Code
 startup; opening it in a running window with `code --reuse-window FILE.xgwx`
 selects the custom editor.
 
-The debug launch task starts an Extension Development Host paused on inspector
-port `9230`, then attaches the Node debugger directly to `127.0.0.1`. This avoids
-the bundled JavaScript debugger's failing IPv4/IPv6 discovery during
-`extensionHost` launches. Close the previous Development Host before starting
-another session; the inspector port can serve only one host at a time.
+The debug configuration launches a development host in a separate temporary
+VS Code profile and attaches to its inspector through `127.0.0.1:9230`.
+This avoids the bundled debugger's IPv6 localhost discovery failure. The
+launcher keeps the host process alive and closes it on Stop or Restart;
+Restart launches this checkout again. Close an older development host before
+starting a session if it still uses port 9230. The host starts without waiting
+for a debugger, so Run Without Debugging also opens the editor. The prelaunch
+task checks JavaScript syntax. Use **Developer: Open Webview Developer Tools**
+in the development host to inspect the ladder webview.
 
 ## Packaging
 
@@ -485,3 +506,68 @@ For XGK hardware, select a base in the explorer, choose **Slot count** (4, 6, 8,
 10 or 12), then **Apply slot count**. Each base retains its own count. Shrinking
 past an installed module, including a two-slot module, is rejected. The edit
 uses the normal Save, Undo and Redo flow. Compact XGB base sizes remain protected.
+
+Function insertion uses one native VS Code command picker, for example `MOV D100 D200`
+or `MOVE 1 Target`. The title and variable suggestions follow the final operand
+as you type. Selecting a suggestion fills that operand; Enter on “Insert instruction”
+confirms the complete command. Source/destination hints are provided for moves,
+I2R, arithmetic, and comparisons. Other catalog instructions show operand numbers.
+The built-in picker does not report caret position, so hints follow the last token
+when editing earlier text too. Operands containing whitespace are not supported
+in this command field. Existing Source text editing still uses commas.
+
+XGK command operand hints and symbol suggestions use type and device permissions
+from the V3.5 instruction help manual (714 matching instruction entries).
+For example, MOV suggests WORD symbols, DMOV suggests DWORD symbols, and I2R
+switches from WORD/INT sources to REAL destinations. Invalid constants in device
+operands and disallowed device areas are rejected by both the picker and writer.
+Raw word devices can address multiword storage. Shared manual type unions remain
+unions except reviewed variants; undocumented instructions retain existing behavior.
+Numeric ranges, alignment, indexed addresses and CPU-specific availability still
+need native Check Program validation.
+
+XGK comparison contacts open the native instruction prompt with double-click or
+Enter, prefilled with the current operator and operands. Delete removes the
+complete comparison contact and its operand references, leaving a three-cell
+wiring gap. Cancellation returns focus so Enter can reopen the prompt.
+
+### Direct ladder command input
+
+Single-click selects a cell. Double-click or Enter immediately opens the VS Code
+native command prompt, without an action chooser. Empty cells start blank;
+existing contacts, coils, comparisons, and functions are prefilled. Input and
+output expressions follow pin order, with outputs last and EN/ENO wiring omitted.
+
+- Contacts: `NO` (`A`), `NC` (`B`), `P`, `P/`, `N`, `N/`.
+- Coils: `OUT`, `OUT/`, `SET`, `RST` (`RESET`), `OUTP`, `OUTN`.
+  `P`/`N` are coil aliases when editing a coil or using an XGK output cell.
+- XGK operandless commands: `INV`, `PUP`, `PDN`.
+- Comparisons/functions retain their native mnemonics, e.g. `>= D100 D102`,
+  `MOV D100 D200`, or IEC `ADD Temperature 1 Result`.
+
+Commands are case-insensitive. IEC variable spelling is preserved. Autocomplete
+and hints follow the current operand type. Placement and writer errors keep the
+prompt open; kind and operand changes apply as one undoable edit. Existing
+elements can change within their supported family. Cancel returns focus so Enter
+can reopen the prompt. Structural row/comment operations remain separate.
+
+New IEC contacts advance the cursor one cell to the right after a successful
+insertion. Press Enter to continue entering contacts on the same row. Empty
+cells on existing rows accept a single contact or coil without adding a rung or
+wire. Existing wires use the supported contact-replacement operations.
+
+`WORD_TO_UDINT Source Destination` is available at previously verified
+standalone insertion sites. General conversion placement remains disabled
+because its generated project has not passed native open acceptance.
+XGK instruction constants are checked against the decoded operand type ranges;
+full device spans, indexed-device syntax and CPU restrictions still require
+native XG5000 Check Program.
+
+
+### Terminal IEC branch feeds
+
+In **IEC operations**, choose the last segment of a supported terminal contact
+feed and select **Remove terminal feed and tail**. The feed row and open tail
+are removed as one undoable edit while function blocks remain in place. Native
+incomplete circuits stay visible; an existing open terminal tail can be removed
+through its final segment. Forked tails and function-reference rows remain guarded.

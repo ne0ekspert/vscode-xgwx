@@ -1,0 +1,36 @@
+// Native XGK device operands may reinterpret word storage at several widths.
+// Symbol suggestions have declared types; raw addresses have device permissions.
+function typeMatches(rule, type) {
+  if (!rule?.dataTypes?.length || !type) return true;
+  const normalize = value => ({ BOOL: 'BIT', INT: 'WORD', UINT: 'WORD',
+    DINT: 'DWORD', UDINT: 'DWORD', LINT: 'LWORD', ULINT: 'LWORD' }[value] || value);
+  return rule.dataTypes.some(expected => normalize(expected) === normalize(type.toUpperCase()));
+}
+
+function operandError(rule, value) {
+  if (!rule || !value) return undefined;
+  const text = value.toUpperCase();
+  const number = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:E[+-]?\d+)?$/.test(text);
+  const constant = number || /^H[0-9A-F]+$/.test(text) || /^B[01]+$/.test(text);
+  if (constant && rule.allowsConstant === false) return `${rule.label}: use a device, not a constant`;
+  if (number && /[.E]/.test(text) && rule.dataTypes?.length && !rule.dataTypes.some(t => ['REAL', 'LREAL'].includes(t))) {
+    return `${rule.label}: expected ${rule.dataTypes.join('/')}, not a real constant`;
+  }
+  const device = /^([PMKFLTCSZUNDR])([0-9A-F.]+)$/.exec(text);
+  if (device && /^[PMKFL]$/.test(device[1]) && /^[0-9A-F]+$/.test(device[2])
+      && /[A-F]/.test(device[2]) && !rule.dataTypes.some(t => ['BIT', 'NIBBLE', 'BYTE'].includes(t))) {
+    return `${rule.label}: a bit address cannot be used as a word device`;
+  }
+  if (device && rule.deviceAreas) {
+    const area = device[1];
+    const key = ['D', 'R'].includes(area) && device[2].includes('.') ? `${area}.x`
+      : ['P', 'M', 'K'].includes(area) ? 'PMK' : area;
+    if (!rule.deviceAreas.includes(key)) return `${rule.label}: ${key} devices are not permitted`;
+  }
+  return undefined;
+}
+
+function suggestionMatches(rule, suggestion) {
+  return typeMatches(rule, suggestion.dataType) && !operandError(rule, suggestion.value);
+}
+module.exports = { typeMatches, operandError, suggestionMatches };

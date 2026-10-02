@@ -1872,3 +1872,13 @@ form.iec-rung-creation {
   background: var(--vscode-input-background);
 }
 .hardware-toolbar button { white-space: nowrap; }
+
+
+.ld-cell.instruction.comparison .ld-operands {
+  max-width: 100%;
+  overflow: visible;
+  font-size: 11px;
+}
+.ld-cell.instruction.comparison .ld-glyph {
+  min-width: 32px;
+}

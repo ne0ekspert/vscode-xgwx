@@ -1,9 +1,11 @@
+import { elementCommands, iecPinRule, scalarIecCommands } from "./ladder-commands.js";
 import init, {
   cpu_catalog,
   copy_xgwx_iec_ld_group,
   copy_xgwx_iec_ld_group_to_program_with_locals,
   duplicate_xgwx_iec_ld_function_instance,
   delete_xgwx_ladder_rung_comment,
+  delete_xgwx_ladder_comparison,
   delete_xgwx_iec_ld_blank_row,
   delete_xgwx_iec_ld_branch_top_row,
   delete_xgwx_iec_ld_nested_contact_branch_row,
@@ -42,9 +44,13 @@ import init, {
   insert_xgwx_iec_ld_blank_row,
   insert_xgwx_iec_ld_parallel_contact_kind,
   insert_xgwx_iec_ld_rung,
+  insert_xgwx_iec_ld_single_element,
   insert_xgwx_iec_ld_terminal_coil,
   insert_xgwx_iec_local_symbol,
   insert_xgwx_ladder_row,
+  insert_xgwx_ladder_instruction,
+  insert_xgwx_ladder_comparison,
+  insert_xgwx_iec_ld_function,
   insert_xgwx_module,
   move_xgwx_iec_ld_group,
   parse_xgwx,
@@ -162,12 +168,22 @@ let nextContactPromptId = 0;
 const pendingContactPrompts = new Map();
 
 window.addEventListener("message", async ({ data }) => {
+  if (data?.type === "validateLadderInstruction") {
+    let error;
+    try {
+      const pending = pendingContactPrompts.get(data.requestId);
+      if (!pending?.validate) throw new Error("Instruction editor is no longer active");
+      pending.validate(data.value);
+    } catch (failure) { error = String(failure); }
+    vscode.postMessage({ type: "ladderInstructionValidationResult", validationId: data.validationId, error: error || null });
+    return;
+  }
   if (data?.type === "iecContactInputResult") {
     const pending = pendingContactPrompts.get(data.requestId);
     if (pending) {
       pendingContactPrompts.delete(data.requestId);
       pending.resolve(data.value);
-      requestAnimationFrame(() => {
+      if (pending.restoreFocus !== false) requestAnimationFrame(() => {
         if (current?.file.uri !== pending.fileUri
           || selectedProgramIndex !== pending.programIndex) return;
         document.querySelector(pending.focusSelector)?.focus({ preventScroll: true });
@@ -876,29 +892,6 @@ function renderProgramsEditor(canvas, inspector, programs) {
   const selected = programs[selectedProgramIndex] || null;
   const ladder = (current.summary.ladder || []).find((item) => item.programIndex === selectedProgramIndex) || null;
 
-  canvas.append(editorHeader("Programs", `${programs.length} program records · program metadata is editable`));
-  const table = createTable(["Name", "Task", "Language", "Kind", "Version", "Comment"]);
-  programs.forEach((program, index) => {
-    const row = table.tBodies[0].insertRow();
-    row.className = selectedProgramIndex === index ? "selected" : "";
-    row.tabIndex = 0;
-    const body = (current.summary.ladder || []).find((item) => item.programIndex === index);
-    appendCells(row, [program.name || `Program ${index + 1}`, program.task, programLanguage(body), program.kind, program.version, program.comment]);
-    const select = () => {
-      selectedProgramIndex = index;
-      resetLadderSelection();
-      selectedIecElement = null;
-      selectedIecInsertion = null;
-      selectedIecBlank = null;
-      renderWorkspace();
-    };
-    row.addEventListener("click", select);
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") select();
-    });
-  });
-  canvas.append(tableContainer(table, programs.length));
-
   if (ladder?.projectType === 2) {
     const editableCount = (ladder.sourceStrings || []).filter((item) => item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction).length;
     canvas.append(editorHeader(
@@ -1007,16 +1000,16 @@ function renderProgramsEditor(canvas, inspector, programs) {
     const deleteSelection = async (label = null) => {
       const selection = currentLadderSelection(ladder);
       if (!ladder.structuralEditing || !selection.decodedCells.length
-        || selection.decodedCells.some((cell) => !structuralElement(cell))) return false;
-      const editableCells = selection.decodedCells;
+        || selection.decodedCells.some((cell) => !structuralElement(cell) && !isEditableComparison(cell, ladder))) return false;
+      const editableCells = [...selection.decodedCells].sort((a, b) => b.offset - a.offset);
       const activeKey = selectedLadderFocus ? ladderPositionKey(selectedLadderFocus) : null;
       const edited = await applyEdit(
-        () => editableCells.reduce((bytes, cell) => edit_xgwx_ladder_cell(
-          bytes, selectedProgramIndex, {
+        () => editableCells.reduce((bytes, cell) => isEditableComparison(cell, ladder)
+          ? delete_xgwx_ladder_comparison(bytes, selectedProgramIndex, cell.offset, cell.sourceText)
+          : edit_xgwx_ladder_cell(bytes, selectedProgramIndex, {
             rawY: cell.rawY, column: ldCellColumn(cell.rawX),
             expected: structuralElement(cell), replacement: null,
-          },
-        ), current.file.bytes),
+          }), current.file.bytes),
         label || `Delete ${editableCells.length} ladder element${editableCells.length === 1 ? "" : "s"}`,
       );
       if (edited && activeKey) {
@@ -1070,7 +1063,7 @@ function iecContactInsertionSiteAt(body, rowIndex, rawX) {
   if (short) return { ...short, type: "short" };
   const long = (body.iecNoContactInsertionSites || [])
     .find((site) => site.rowIndex === rowIndex
-      && rawX >= site.startX + 3 && rawX + 3 <= site.endX
+      && rawX >= site.startX && rawX + 3 <= site.endX
       && (rawX - site.startX) % 3 === 0);
   return long ? { ...long, type: "long" } : null;
 }
@@ -1079,7 +1072,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const section = element("section", "iec-layout");
   section.append(element("h3", "", "IEC ladder layout"));
   section.append(element("p", "muted",
-    "Select a row label, then Ctrl+C to copy its network. Select an empty row and Ctrl+V to paste, including missing local variables. Click an empty cell to inspect it, or select a contact, coil, or + insertion point to edit."));
+    "Single-click selects cells. Double-click or Enter opens the instruction editor. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
   const rows = body.iecRows || [];
   if (!rows.length) {
     section.append(emptyState("No decoded IEC rows."));
@@ -1145,6 +1138,15 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     label.classList.toggle("selected", selectedIecRow?.programIndex === selectedProgramIndex
       && selectedIecRow.rowIndex === rowIndex);
     label.setAttribute("aria-label", `${isEmpty ? "Empty row" : "IEC row"} L${rowIndex}`);
+    if (isEmpty) {
+      const open = () => showIecBlankInput(body, { rowIndex, rawX: 1 },
+        `.iec-layout-row[data-row-index="${rowIndex}"]`);
+      label.addEventListener("dblclick", (event) => { event.preventDefault(); void open(); });
+      label.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+        event.preventDefault(); event.stopPropagation(); void open();
+      });
+    }
     label.style.top = `${y(rowIndex) - 9}px`;
     board.append(label);
   }
@@ -1203,7 +1205,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     ...(body.iecShortWireContactInsertionSites || []).map((site) => ({ ...site, type: "short" })),
   ];
   for (const site of insertionSites) {
-    const position = site.type === "short" ? site.rawX : site.startX + 3;
+    const position = site.type === "short" ? site.rawX : site.startX;
     const control = button("+", "iec-layout-insert", () => {
       selectRow(site.rowIndex);
       selectInsertion(site, control);
@@ -1211,6 +1213,14 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     control.textContent = "+";
     control.style.left = `${visualX(site.rowIndex, position)}px`;
     control.style.top = `${y(site.rowIndex)}px`;
+    control.dataset.wireOffset = String(site.wireOffset);
+    const openInsertion = () => showIecBlankInput(body, { rowIndex: site.rowIndex,
+      rawX: position }, `.iec-layout-insert[data-wire-offset="${site.wireOffset}"]`);
+    control.addEventListener("dblclick", (event) => { event.preventDefault(); void openInsertion(); });
+    control.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      event.preventDefault(); event.stopPropagation(); void openInsertion();
+    });
     control.setAttribute("aria-label", `Insert contact at L${site.rowIndex} x${position}`);
     control.title = `Insert IEC contact at L${site.rowIndex}`;
     control.classList.toggle("inspected", selectedIecInsertion?.programIndex === selectedProgramIndex
@@ -1260,18 +1270,18 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       }
       selectRow(item.iecRowIndex);
       if (kind === "contact" || kind === "coil" || kind === "comment") selectElement(item, marker);
-      if (kind !== "contact" && kind !== "coil" && kind !== "comment") focusText(item);
+      if (kind === "unknown") focusText(item);
     });
-    if (kind === "contact") {
+    if (["contact", "coil", "function", "operand"].includes(kind)) {
       marker.addEventListener("dblclick", (event) => {
         event.preventDefault();
-        void showIecContactInput(item, body);
+        void showIecElementInput(item, body);
       });
       marker.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
         event.preventDefault();
         event.stopPropagation();
-        void showIecContactInput(item, body);
+        void showIecElementInput(item, body);
       });
     }
     if (kind === "contact" || kind === "coil") {
@@ -1295,7 +1305,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     const description = owner ? `${owner.name}.${linkedPin?.name || `pin ${link.ordinal}`} · ${linkedPin?.direction || (link.isOutput ? "output" : "input")} · ${functionPinType(linkedPin)}`
       : item.iecElementKind || (isComment ? "Comment" : isFunction ? "Function block" : "Function operand");
     marker.title = `${description} · L${item.iecRowIndex} · byte ${item.offset}`
-      + (kind === "contact" ? " · Double-click or Enter to edit operand" : "");
+      + (["contact", "coil", "function", "operand"].includes(kind) ? " · Double-click or Enter to edit instruction" : "");
     marker.dataset.iecOffset = String(item.offset);
     marker.classList.toggle("inspected", selectedIecElement?.programIndex === selectedProgramIndex
       && selectedIecElement.offset === item.offset);
@@ -1405,6 +1415,12 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     showBlank(selectedIecBlank);
   }
   blankIndicator.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      event.preventDefault(); event.stopPropagation();
+      void showIecBlankInput(body, { rowIndex: Number(blankIndicator.dataset.rowIndex),
+        rawX: Number(blankIndicator.dataset.rawX) });
+      return;
+    }
     const step = {
       ArrowLeft: [0, -3], ArrowRight: [0, 3],
       ArrowUp: [-1, 0], ArrowDown: [1, 0],
@@ -1431,6 +1447,14 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
         < Math.abs(visualX(rowIndex, closest) + 36 - localX) ? candidate : closest, 1);
     return { rowIndex, rawX };
   };
+  board.addEventListener("dblclick", (event) => {
+    if (event.target.closest(".iec-layout-marker, .iec-layout-insert, .iec-layout-row")) return;
+    event.preventDefault();
+    const position = cellAtPoint(event.clientX, event.clientY);
+    if (iecOccupiedCell(body, position.rowIndex, position.rawX)) return;
+    selectBlankPosition(position);
+    void showIecBlankInput(body, position);
+  });
   const selectDragRange = (anchor, focus) => {
     clearDragBlankCells();
     const minRow = Math.min(anchor.rowIndex, focus.rowIndex);
@@ -1492,63 +1516,197 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   return section;
 }
 
-async function showIecContactInput(item, body) {
-  const programIndex = selectedProgramIndex;
-  const fileUri = current.file.uri;
-  const names = [...new Set([
-    ...(current.summary.localVariables?.[programIndex] || [])
-      .filter((symbol) => symbol.dataType === "BOOL" && !symbol.isInstance)
-      .map((symbol) => symbol.name),
-    ...(body.sourceStrings || [])
-      .filter((source) => iecContactGlyph(source.iecElementKind))
-      .map((source) => source.value),
-  ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const value = await requestContactOperand(item.value, item.iecRowIndex, names,
-    `.iec-layout-marker[data-iec-offset="${item.offset}"]`);
-  if (typeof value !== "string" || current?.file.uri !== fileUri
-    || selectedProgramIndex !== programIndex || value.trim() === item.value) return;
-  await applyEdit(() => update_xgwx_iec_ld_element_operand(current.file.bytes,
-    programIndex, item.offset, item.value, value.trim()),
-  `Edit IEC contact at L${item.iecRowIndex}`);
+let instructionPromptOpen = false;
+
+function instructionSuggestions(iec) {
+  const locals = iec ? current.summary.localVariables?.[selectedProgramIndex] || [] : [];
+  return [...locals, ...(current.summary.variables || [])].filter(symbol => !symbol.isInstance)
+    .map(symbol => ({ value: iec ? symbol.name : symbol.address, dataType: symbol.dataType,
+      description: [symbol.name, symbol.dataType, symbol.comment].filter(Boolean).join(" · ") }))
+    .filter(symbol => symbol.value);
 }
 
-function requestContactOperand(currentValue, rowIndex, suggestions, focusSelector) {
-  const requestId = ++nextContactPromptId;
-  return new Promise((resolve) => {
-    pendingContactPrompts.set(requestId, {
-      resolve, focusSelector, fileUri: current.file.uri,
-      programIndex: selectedProgramIndex,
+async function requestLadderInstruction({ choices, value = "", title, mode, iec, focusSelector, build, afterInsert }) {
+  if (instructionPromptOpen) return;
+  const fileUri = current.file.uri;
+  const programIndex = selectedProgramIndex;
+  const source = current.file.bytes;
+  instructionPromptOpen = true;
+  try {
+    const requestId = ++nextContactPromptId;
+    const validate = result => {
+      if (current?.file.uri !== fileUri || selectedProgramIndex !== programIndex || current.file.bytes !== source) {
+        throw new Error("The program changed while the editor was open. Reopen the instruction editor.");
+      }
+      const choice = choices.find(item => item.mnemonic === result?.command);
+      if (!choice || !Array.isArray(result.operands) || result.operands.length !== choice.operandCount
+        || result.operands.some(operand => typeof operand !== "string" || !operand || /[\p{Cc},]/u.test(operand))) {
+        throw new Error("Unknown command or incorrect operands");
+      }
+      return build(choice, result.operands, source, programIndex);
+    };
+    const result = await new Promise(resolve => {
+      pendingContactPrompts.set(requestId, { resolve, focusSelector, fileUri, programIndex, validate, restoreFocus: false });
+      vscode.postMessage({ type: "promptLadderInstruction", requestId, title,
+        instruction: { choices, value, mode, suggestions: [...instructionSuggestions(iec), ...choices.flatMap(choice => choice.suggestions || [])] } });
     });
-    vscode.postMessage({ type: "promptIecContact", requestId,
-      value: currentValue, rowIndex, suggestions });
-  });
+    if (result) await applyEdit(() => validate(result), `${mode === "edit" ? "Edit" : "Insert"} ${result.command}`, () => {
+      if (afterInsert) focusSelector = afterInsert(choices.find(choice => choice.mnemonic === result.command)) || focusSelector;
+    });
+  } finally {
+    instructionPromptOpen = false;
+    requestAnimationFrame(() => {
+      if (current?.file.uri === fileUri && selectedProgramIndex === programIndex) document.querySelector(focusSelector)?.focus({ preventScroll: true });
+    });
+  }
 }
 
-async function showXgkContactInput(cell, ladder) {
+function showXgkBlankInput(ladder, position) {
+  const choices = position.column === 9
+    ? [...elementCommands("coil", false, true), ...(ladder.instructionChoices || []).map(choice => ({ ...choice, category: "function" }))]
+    : [...elementCommands("contact"), ...(position.column <= 6 ? (ladder.comparisonChoices || []).map(choice => ({ ...choice, category: "comparison" })) : [])];
+  return requestLadderInstruction({ choices, title: `Insert · L${position.rawY} column ${position.column + 1}`, mode: "insert", iec: false,
+    focusSelector: `[data-ladder-key="${ladderPositionKey(position)}"]`,
+    afterInsert: choice => {
+      if (!["contact", "comparison"].includes(choice.category)) return;
+      const next = { ...position, column: Math.min(9, position.column + (choice.category === "comparison" ? 3 : 1)) };
+      selectedLadderComment = null;
+      selectedLadderAnchor = selectedLadderFocus = next;
+      return `[data-ladder-key="${ladderPositionKey(next)}"]`;
+    },
+    build: (choice, operands, bytes, program) => {
+      if (!ladder.structuralEditing) throw new Error("This program layout does not support structural editing");
+      if (choice.category === "comparison") return insert_xgwx_ladder_comparison(bytes, program, position.rawY, position.column, choice.mnemonic, JSON.stringify(operands));
+      if (choice.category === "function") return insert_xgwx_ladder_instruction(bytes, program, position.rawY, choice.mnemonic, JSON.stringify(operands));
+      return edit_xgwx_ladder_cell(bytes, program, { rawY: position.rawY, column: position.column, expected: null,
+        replacement: { kind: choice.kind, operand: operands[0]?.toUpperCase() || "" } });
+    } });
+}
+
+function showXgkElementInput(cell, ladder) {
   const expected = structuralElement(cell);
-  if (!expected || !elementKindHasOperand(expected.kind)) return;
-  const programIndex = selectedProgramIndex;
-  const fileUri = current.file.uri;
-  const suggestions = [...new Set([
-    ...(current.summary.variables || [])
-      .filter((variable) => variable.dataType === "BIT")
-      .map((variable) => variable.address),
-    ...(ladder.cells || [])
-      .filter((source) => (source.contact || source.coil) && source.sourceText)
-      .map((source) => source.sourceText),
-  ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const value = await requestContactOperand(cell.sourceText, cell.rawY, suggestions,
-    `[data-ladder-key="${cell.rawY}:${ldCellColumn(cell.rawX)}"]`);
-  if (typeof value !== "string" || current?.file.uri !== fileUri
-    || selectedProgramIndex !== programIndex || value.trim() === cell.sourceText) return;
-  await applyEdit(() => ladder.structuralEditing
-    ? edit_xgwx_ladder_cell(current.file.bytes, programIndex, {
-      rawY: cell.rawY, column: ldCellColumn(cell.rawX),
-      expected, replacement: { ...expected, operand: value.trim() },
-    })
-    : update_xgwx_ladder_cell(current.file.bytes, programIndex,
-      cell.offset, cell.sourceText, value.trim()),
-  `Edit XGK contact at ${cell.rawX}:${cell.rawY}`);
+  const comparison = cell.kind === "Comparison";
+  let choices;
+  if (expected) choices = elementCommands(cell.coil ? "coil" : "contact", false, Boolean(cell.coil));
+  else choices = (comparison ? ladder.comparisonChoices : ladder.instructionChoices) || [];
+  const selected = expected ? choices.find(choice => choice.kind === expected.kind) : choices.find(choice => choice.mnemonic === cell.value);
+  const value = [selected?.mnemonic || cell.value, ...(expected ? expected.operand ? [expected.operand] : [] : cell.operands || [])].join(" ");
+  return requestLadderInstruction({ choices, value, mode: "edit", iec: false, title: `Edit · L${cell.rawY}`,
+    focusSelector: `[data-cell-offset="${cell.offset}"]`,
+    build: (choice, operands, bytes, program) => {
+      if (expected) {
+        const replacement = { kind: choice.kind, operand: operands[0]?.toUpperCase() || "" };
+        if (!ladder.structuralEditing) {
+          if (choice.kind !== expected.kind) throw new Error("This layout does not support changing element kind");
+          return update_xgwx_ladder_cell(bytes, program, cell.offset, cell.sourceText, replacement.operand);
+        }
+        return edit_xgwx_ladder_cell(bytes, program, { rawY: cell.rawY, column: ldCellColumn(cell.rawX), expected, replacement });
+      }
+      if (!cell.instructionTextEditing || !selected) throw new Error("This instruction is read only");
+      return update_xgwx_ladder_cell(bytes, program, cell.offset, cell.sourceText, [choice.mnemonic, ...operands].join(","));
+    } });
+}
+
+function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-cell") {
+  const site = iecContactInsertionSiteAt(body, position.rowIndex, position.rawX);
+  const newRow = !(body.iecRows || []).some(row => row.rowIndex === position.rowIndex);
+  const choices = [
+    ...elementCommands("contact", true),
+    ...(!site ? elementCommands("coil", true) : []),
+    ...(position.rawX >= 4 && position.rawX <= 91 ? scalarIecCommands() : []),
+  ];
+  const atPosition = sites => (sites || []).find(site => site.rowIndex === position.rowIndex && site.rawX === position.rawX);
+  const terminal = atPosition(body.iecTerminalFunctionInsertionSites);
+  const standalone = atPosition(body.iecStandaloneFunctionInsertionSites);
+  const ff = atPosition(body.iecFunctionCellInsertionSites);
+  if (terminal) {
+    const index = choices.findIndex(choice => choice.mnemonic === "MOVE");
+    if (index >= 0) choices.splice(index, 1);
+    choices.push({ ...scalarIecCommands().find(choice => choice.mnemonic === "MOVE"), category: "terminal" });
+  }
+  if (standalone) {
+    const conversionIndex = choices.findIndex(choice => choice.mnemonic === "WORD_TO_UDINT");
+    if (conversionIndex >= 0) choices.splice(conversionIndex, 1);
+    choices.push({ mnemonic: "WORD_TO_UDINT", category: "standalone", operandCount: 2,
+    operandRules: [{label:"Source",dataTypes:["WORD"]},{label:"Destination",dataTypes:["UDINT"],allowsConstant:false}] });
+  }
+  if (ff) choices.push({ mnemonic: "FF", category: "instance", operandCount: 1,
+    operandRules: [{label:"Instance",dataTypes:["FF"],allowsConstant:false}],
+    suggestions: (current.summary.localVariables?.[selectedProgramIndex] || []).filter(symbol => symbol.isInstance && symbol.typeReference === "FF")
+      .map(symbol => ({value:symbol.name,dataType:"FF",description:"FF instance"})) });
+  return requestLadderInstruction({ choices, mode: "insert", iec: true, title: `Insert · L${position.rowIndex}`, focusSelector,
+    afterInsert: choice => {
+      if (choice.category !== "contact") return;
+      const next = { rowIndex: position.rowIndex, rawX: Math.min(94, position.rawX + 3) };
+      const updated = current.summary.ladder.find(body => body.programIndex === selectedProgramIndex);
+      const element = (updated.sourceStrings || []).find(item => item.iecRowIndex === next.rowIndex
+        && item.iecPosition?.[0] === next.rawX && (item.iecElementKind || item.isIecFunctionName));
+      selectedIecRow = { programIndex: selectedProgramIndex, rowIndex: next.rowIndex };
+      selectedIecInsertion = null;
+      selectedIecElement = element ? { programIndex: selectedProgramIndex, offset: element.offset } : null;
+      selectedIecBlank = element ? null : { programIndex: selectedProgramIndex, ...next };
+      return element ? `.iec-layout-marker[data-iec-offset="${element.offset}"]` : ".iec-layout-blank-cell";
+    },
+    build: (choice, operands, bytes, program) => {
+      if (choice.category === "terminal") return insert_xgwx_iec_ld_terminal_move(bytes, program, terminal.contactOffset, operands[0], operands[1]);
+      if (choice.category === "standalone") return insert_xgwx_iec_ld_standalone_function(bytes, program, standalone.insertionOffset, choice.mnemonic, operands[0], operands[1]);
+      if (choice.category === "instance") return insert_xgwx_iec_ld_function_cell(bytes, program, ff.insertionOffset, choice.mnemonic, operands[0]);
+      if (choice.category === "function") return insert_xgwx_iec_ld_function(bytes, program, position.rowIndex, position.rawX, choice.mnemonic, JSON.stringify(operands));
+      if (newRow || !site) return insert_xgwx_iec_ld_single_element(bytes, program, position.rowIndex,
+        position.rawX, choice.category, choice.iecKind, operands[0]);
+      if (site.type === "leading") return insert_xgwx_iec_ld_leading_contact(bytes, program, site.insertionOffset, choice.iecKind, operands[0]);
+      if (site.type === "short") return insert_xgwx_iec_ld_short_wire_contact(bytes, program, site.wireOffset, site.rawX, choice.iecKind, operands[0]);
+      return insert_xgwx_iec_ld_contact(bytes, program, site.wireOffset, position.rawX, site.startX, site.endX, choice.iecKind, operands[0]);
+    } });
+}
+
+function showIecElementInput(item, body) {
+  const contact = IEC_CONTACT_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
+  const coil = IEC_COIL_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
+  if (!contact && !coil) return showIecFunctionInput(item, body);
+  const choices = elementCommands(contact ? "contact" : "coil", true, Boolean(coil));
+  const expectedKind = contact || coil;
+  const selected = choices.find(choice => choice.iecKind === expectedKind);
+  return requestLadderInstruction({ choices, value: `${selected.mnemonic} ${item.value}`, mode: "edit", iec: true,
+    title: `Edit · L${item.iecRowIndex}`, focusSelector: `.iec-layout-marker[data-iec-offset="${item.offset}"]`,
+    build: (choice, operands, bytes, program) => {
+      let candidate = bytes;
+      if (choice.iecKind !== expectedKind) candidate = (contact ? update_xgwx_iec_ld_contact_kind : update_xgwx_iec_ld_coil_kind)(candidate, program, item.offset, expectedKind, choice.iecKind);
+      if (operands[0] !== item.value) candidate = update_xgwx_iec_ld_element_operand(candidate, program, item.offset, item.value, operands[0]);
+      return candidate;
+    } });
+}
+
+function showIecFunctionInput(item, body) {
+  const link = (body.iecFunctionOperandLinks || []).find(link => link.recordOffset === item.iecRecordOffset);
+  const block = (body.iecFunctions || []).find(block => block.nameOffset === item.offset || block.recordOffset === link?.targetRecordOffset);
+  if (!block) { vscode.postMessage({ type: "showError", message: "This function has no decoded editing metadata" }); return; }
+  const fields = (block.pins || []).filter(pin => !pin.isControl)
+    .sort((a, b) => Number(a.direction === "output") - Number(b.direction === "output")
+      || (a.referenceOrdinal ?? 0) - (b.referenceOrdinal ?? 0)).map(pin => {
+    const link = (body.iecFunctionOperandLinks || []).find(link => link.targetRecordOffset === block.recordOffset && link.ordinal === pin.referenceOrdinal);
+    const source = link && (body.sourceStrings || []).find(source => source.iecRecordOffset === link.recordOffset && source.isIecFunctionOperand);
+    return source ? { pin, source } : null;
+  }).filter(Boolean);
+  const family = ["ADD", "SUB", "MUL", "DIV"].includes(block.name) ? ["ADD", "SUB", "MUL", "DIV"]
+    : ["EQ", "GT", "GE", "LT", "LE"].includes(block.name) ? ["EQ", "GT", "GE", "LT", "LE"] : [block.name];
+  const choices = family.map(mnemonic => ({ mnemonic, operandCount: fields.length,
+    operandRules: fields.map(({pin}) => iecPinRule(pin)) }));
+  return requestLadderInstruction({ choices, value: [block.name, ...fields.map(field => field.source.value)].join(" "), mode: "edit", iec: true,
+    title: `Edit ${block.name}${block.instance ? ` · ${block.instance}` : ""}`, focusSelector: `.iec-layout-marker[data-iec-offset="${block.nameOffset}"]`,
+    build: (choice, operands, bytes, program) => {
+      if (!fields.length) throw new Error("This function's operands are read only");
+      let candidate = bytes;
+      if (choice.mnemonic !== block.name) candidate = (family[0] === "ADD" ? update_xgwx_iec_ld_arithmetic_function : update_xgwx_iec_ld_comparison_function)(candidate, program, block.nameOffset, block.name, choice.mnemonic);
+      const edits = fields.map((field, index) => ({ ...field.source, replacement: operands[index] })).sort((a,b) => b.offset - a.offset);
+      for (const edit of edits) if (edit.replacement !== edit.value) candidate = update_xgwx_iec_ld_function_operand(candidate, program, edit.offset, edit.value, edit.replacement);
+      return candidate;
+    } });
+}
+
+function isEditableComparison(cell, ladder) {
+  return cell?.kind === "Comparison" && cell.instructionTextEditing
+    && ladder.comparisonChoices?.some(choice => choice.mnemonic === cell.value);
 }
 
 function functionPins(block) {
@@ -2665,7 +2823,7 @@ function renderIecBlankRowInsertion(body) {
     { value: "RISING", code: 0x12, label: "Rising edge" },
     { value: "FALLING", code: 0x13, label: "Falling edge" },
   ];
-  renderIecRungCreation(section, body, [...gaps, Math.max(...rows.map((row) => row.rowIndex)) + 1]);
+
   const simpleRungs = rows.flatMap((row) => {
     const groupRows = rows.filter((candidate) => candidate.groupIndex === row.groupIndex);
     const records = (body.iecRecords || []).filter((record) => (
@@ -2978,7 +3136,7 @@ function renderIecNoContactInsertion(body) {
   const update = () => {
     const site = sites[Number(siteSelect.value)];
     positionSelect.replaceChildren();
-    for (let x = site.startX + 3; x + 3 <= site.endX; x += 3) {
+    for (let x = site.startX; x + 3 <= site.endX; x += 3) {
       const option = document.createElement("option");
       option.value = String(x);
       option.textContent = `x ${x}`;
@@ -3265,6 +3423,24 @@ function renderIecHorizontalWireDeletion(body) {
   return section;
 }
 
+function planIecBranchRemoval(body, segment) {
+  let bytes = edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
+    segment.groupIndex, segment.startRowIndex, segment.endRowIndex, segment.x, true, false);
+  const updated = parse_xgwx(bytes).ladder.find(program => program.programIndex === selectedProgramIndex);
+  const endpoints = updated?.iecCircuitGraph?.openBranchEndpoints || [];
+  const wasOpen = (body.iecCircuitGraph?.openBranchEndpoints || []).length > 0;
+  if (!wasOpen && endpoints.length === 1) {
+    const point = endpoints[0];
+    const tail = updated.iecGeometry.vertical.find(branch => branch.groupIndex === point.groupIndex
+      && branch.endRowIndex === point.rowIndex && branch.x === point.x);
+    if (!tail) throw new Error("The deleted feed has no decoded terminal branch to remove.");
+    bytes = edit_xgwx_iec_ld_branch_segment(bytes, selectedProgramIndex,
+      tail.groupIndex, tail.startRowIndex, tail.endRowIndex, tail.x, true, false);
+    return { bytes, removedFeedAndTail: true, removedOpenTail: false };
+  }
+  return { bytes, removedFeedAndTail: false, removedOpenTail: wasOpen };
+}
+
 function renderIecBranchEditing(body) {
   const rows = body.iecRows || [];
   const records = body.iecRecords || [];
@@ -3494,14 +3670,19 @@ function renderIecBranchEditing(body) {
   const validateRemove = () => {
     const segment = segments[Number(existing.value)];
     try {
-      edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
-        segment.groupIndex, segment.startRowIndex, segment.endRowIndex, segment.x, true, false);
+      const plan = planIecBranchRemoval(body, segment);
+      remove.textContent = plan.removedFeedAndTail ? "Remove terminal feed and tail"
+        : plan.removedOpenTail ? "Remove open branch tail" : "Remove branch segment";
+      remove.setAttribute("aria-label", remove.textContent);
       remove.disabled = false;
       const parallelCount = segments.filter((candidate) =>
         candidate.groupIndex === segment.groupIndex
           && candidate.startRowIndex === segment.startRowIndex
           && candidate.endRowIndex === segment.endRowIndex).length;
-      removeStatus.textContent = parallelCount > 1
+      removeStatus.textContent = plan.removedFeedAndTail
+        ? "Deletes the terminal contact feed and its open vertical tail as one edit. Function blocks stay in place."
+        : plan.removedOpenTail ? "Removes the open vertical tail back to its first horizontal connection. Function blocks stay in place."
+        : parallelCount > 1
         ? "Another parallel segment keeps these rows in the same native group."
         : "Removing this final segment also removes its captured contact-only branch row and shifts later rows, matching XG5000.";
     } catch (error) {
@@ -3514,10 +3695,7 @@ function renderIecBranchEditing(body) {
     event.preventDefault();
     if (remove.disabled) return;
     const segment = segments[Number(existing.value)];
-    await applyEdit(() => edit_xgwx_iec_ld_branch_segment(
-      current.file.bytes, selectedProgramIndex, segment.groupIndex,
-      segment.startRowIndex, segment.endRowIndex, segment.x, true, false,
-    ), `Remove IEC branch at x ${segment.x} between L${segment.startRowIndex} and L${segment.endRowIndex}`);
+    await applyEdit(() => planIecBranchRemoval(body, segment).bytes, `Remove IEC branch at x ${segment.x} between L${segment.startRowIndex} and L${segment.endRowIndex}`);
   });
   removeForm.append(existingLabel, remove);
 
@@ -3584,7 +3762,7 @@ function renderIecBranchEditing(body) {
   validateRemove();
   validateAdd();
   section.append(removeForm, removeStatus, addForm, addStatus,
-    element("p", "muted", "Final-segment removal is limited to a captured two-row group whose lower row contains contacts only. Addition is limited to decoded contact, coil, and wire rows in one native group."));
+    element("p", "muted", "Removal supports validated lower contact rows and terminal contact feeds. Open terminal tails are removed through their last segment. Addition is limited to decoded contact, coil, and wire rows in one native group."));
   return section;
 }
 
@@ -3708,7 +3886,16 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
       }
       showLadderContextMenu(event.clientX, event.clientY, ladder, position, deleteSelection);
     });
+    node.addEventListener("dblclick", (event) => {
+      if (ladderCellAtPosition(ladder, position)) return;
+      event.preventDefault(); void showXgkBlankInput(ladder, position);
+    });
     node.addEventListener("keydown", async (event) => {
+      if (event.key === "Enter" && !event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey
+        && !ladderCellAtPosition(ladder, position)) {
+        event.preventDefault(); event.stopPropagation();
+        void showXgkBlankInput(ladder, position); return;
+      }
       if ((event.ctrlKey || event.metaKey) && !event.altKey
         && ["c", "x", "v"].includes(event.key.toLowerCase())) {
         event.preventDefault();
@@ -3900,31 +4087,36 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
         return;
       }
     });
-    if (cell.contact && cell.sourceText) {
+    if (structuralElement(cell) || cell.instructionTextEditing) {
       node.addEventListener("dblclick", (event) => {
         event.preventDefault();
-        void showXgkContactInput(cell, ladder);
+        void showXgkElementInput(cell, ladder);
       });
       node.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
         event.preventDefault();
         event.stopPropagation();
-        void showXgkContactInput(cell, ladder);
+        void showXgkElementInput(cell, ladder);
       });
     }
     node.style.left = `${ldCellX(ldCellColumn(cell.rawX))}px`;
+    if (cell.kind === "Comparison" && ladder.comparisonChoices?.some(choice => choice.mnemonic === cell.value)) {
+      node.classList.add("comparison");
+      node.style.width = `${3 * (LD_RIGHT_RAIL - LD_LEFT_RAIL) / LD_COLUMN_COUNT - 10}px`;
+      node.style.left = `${ldCellX(ldCellColumn(cell.rawX) + 1)}px`;
+    }
     node.style.top = `${ldRowY(rowIndex)}px`;
     node.title = cell.contact && cell.sourceText
       ? `${cell.sourceText} · Double-click or Enter to edit operand`
       : cell.sourceText || cell.value || cell.contact || cell.coil || cell.kind;
     const value = element("span", "ld-value", cell.value || ldMarkerLabel(cell));
-    const contactVariant = cell.kind !== "Instruction" && !cell.coil
+    const contactVariant = cell.kind !== "Instruction" && !cell.instructionTextEditing && !cell.coil
       ? xgkContactVariant(cell.contact) : null;
     if (contactVariant) node.dataset.contactVariant = contactVariant;
     const glyph = element("span", "ld-glyph", contactVariant
       ? contactVariant.includes("rising") ? "P" : contactVariant.includes("falling") ? "N" : ""
       : ldCellGlyph(cell));
-    if (cell.kind === "Instruction") node.append(glyph);
+    if (cell.kind === "Instruction" || cell.instructionTextEditing) node.append(glyph);
     else node.append(value, glyph);
     if (cell.operands?.length) node.append(element("span", "ld-operands", cell.operands.join(" ")));
     board.append(node);
@@ -4247,7 +4439,7 @@ function ldBoundaryX(rawX) {
 
 function ldCellClass(cell) {
   if (cell.coil) return "coil";
-  if (cell.kind === "Instruction") return "instruction";
+  if (cell.kind === "Instruction" || cell.instructionTextEditing) return "instruction";
   return "contact";
 }
 
@@ -4258,7 +4450,7 @@ function ldCellGlyph(cell) {
       P_COIL: "(P)", N_COIL: "(N)",
     }[cell.coil] || "( )";
   }
-  if (cell.kind === "Instruction") return cell.value || "FN";
+  if (cell.kind === "Instruction" || cell.instructionTextEditing) return cell.value || "FN";
   return xgkContactGlyph(cell.contact);
 }
 
@@ -4406,7 +4598,7 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     cellSection.append(element("h3", "", cell || insertion || iecBlankCell ? "Ladder cell" : "Ladder row"));
     if (cell?.isIecComment) renderIecCommentCell(cellSection, cell);
     else if (cell?.iecElementKind) renderIecLadderCell(cellSection, ladder, cell);
-    else if (insertion) renderIecContactInsertion(cellSection, insertion);
+    else if (insertion) cellSection.append(element("p", "muted", "Double-click the insertion point or press Enter to insert."));
     else if (iecBlankCell) renderIecBlankCell(cellSection, ladder, iecBlankCell);
     else if (iecRowIndex !== null) renderIecRowInspector(cellSection, ladder, iecRowIndex);
     else cellSection.append(element("p", "muted", "Select a row, contact, coil, comment, or insertion point in the IEC diagram."));
@@ -4422,7 +4614,9 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
       `${selection.total} grid cells selected · ${selection.decodedCells.length} elements`,
     ));
   }
-  if (ladder?.structuralEditing && (blankCell || structuralElement(cell))) {
+  if (ladder?.structuralEditing && blankCell) {
+    cellSection.append(element("p", "muted", "Double-click the blank cell or press Enter to insert."));
+  } else if (ladder?.structuralEditing && structuralElement(cell)) {
     renderStructuralCell(cellSection, cell, blankCell || {
       rawY: cell.rawY, column: ldCellColumn(cell.rawX),
     });
@@ -4442,7 +4636,7 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
       field.append(element("span", "property-label", "Instruction"));
       instructionSelect = document.createElement("select");
       instructionSelect.setAttribute("aria-label", "Instruction");
-      const choices = ladder.instructionChoices || [];
+      const choices = (cell.kind === "Comparison" ? ladder.comparisonChoices : ladder.instructionChoices) || [];
       if (!choices.some(choice => choice.mnemonic === cell.value)) {
         const option = element("option", "", cell.value);
         option.value = cell.value; instructionSelect.append(option);
@@ -4485,7 +4679,7 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     };
     if (instructionSelect) {
       instructionSelect.addEventListener("change", () => {
-        const choice = ladder.instructionChoices.find(item => item.mnemonic === instructionSelect.value);
+        const choice = [...(ladder.instructionChoices || []), ...(ladder.comparisonChoices || [])].find(item => item.mnemonic === instructionSelect.value);
         if (!choice) return;
         const currentParts = source.value.split(",").slice(1).map(value => value.trim());
         const operands = Array.from({ length: choice.operandCount }, (_, index) => currentParts[index] || "0");
@@ -4630,31 +4824,7 @@ function renderIecRowInspector(section, body, rowIndex) {
   section.append(element("div", "blank-cell-position", `L${rowIndex}`));
   const row = (body.iecRows || []).find((candidate) => candidate.rowIndex === rowIndex);
   if (!row) {
-    section.append(element("p", "muted", "Empty row. Create a rung, paste a copied network with Ctrl+V, or add a comment."));
-    renderIecRungCreation(section, body, [rowIndex]);
-    const comment = property(section, "New comment", "", false);
-    comment.setAttribute("aria-label", `New IEC comment at L${rowIndex}`);
-    const status = element("div", "length-counter");
-    const insert = button("Insert IEC comment", "primary-button", async () => {
-      if (insert.disabled) return;
-      await applyEdit(() => insert_xgwx_iec_ld_comment(current.file.bytes,
-        selectedProgramIndex, rowIndex, comment.value.trim()),
-      `Insert IEC comment at L${rowIndex}`);
-    });
-    insert.textContent = "Insert comment";
-    const validate = () => {
-      let error = "";
-      try {
-        insert_xgwx_iec_ld_comment(current.file.bytes,
-          selectedProgramIndex, rowIndex, comment.value.trim());
-      } catch (failure) { error = String(failure); }
-      status.textContent = error || "Ready to insert comment";
-      status.classList.toggle("invalid", Boolean(error));
-      insert.disabled = Boolean(error);
-    };
-    comment.addEventListener("input", validate);
-    validate();
-    section.append(status, insert);
+    section.append(element("p", "muted", "Double-click a blank cell or press Enter to insert. Ctrl+V pastes a copied network."));
     return;
   }
 
@@ -4678,19 +4848,7 @@ function renderIecRowInspector(section, body, rowIndex) {
       section.append(remove);
     }
   }
-  let canInsertRow = false;
-  try {
-    insert_xgwx_iec_ld_blank_row(current.file.bytes, selectedProgramIndex, rowIndex);
-    canInsertRow = true;
-  } catch { /* A branch or layout may prevent row insertion here. */ }
-  if (canInsertRow) {
-    const insertRow = button("Insert blank IEC row after selection", "secondary-button", async () => {
-      await applyEdit(() => insert_xgwx_iec_ld_blank_row(current.file.bytes,
-        selectedProgramIndex, rowIndex), `Insert blank IEC row after L${rowIndex}`);
-    });
-    insertRow.textContent = "Insert row after";
-    section.append(insertRow);
-  }
+
 }
 
 function renderIecActionsDialog(inspector, body) {
@@ -4704,11 +4862,9 @@ function renderIecActionsDialog(inspector, body) {
     if (!dialog.dataset.built) {
       const actions = [
         renderIecNetworkRelocation, renderIecNetworkReplacement,
-        renderIecCrossProgramReplacement, renderIecTerminalMoveInsertion,
-        renderIecStandaloneFunctionInsertion, renderIecFunctionCellInsertion,
-        renderIecLeadingContactInsertion, renderIecHorizontalWireRepair,
+        renderIecCrossProgramReplacement, renderIecHorizontalWireRepair,
         renderIecHorizontalWireDeletion, renderIecBranchEditing,
-        renderIecBlankRowInsertion,
+        renderIecBlankRowInsertion, renderIecCommentInsertion,
       ].map((render) => render(body)).filter(Boolean);
       dialog.append(...actions);
       dialog.dataset.built = "true";
@@ -4726,10 +4882,7 @@ function renderIecBlankCell(section, body, position) {
     renderIecRowInspector(section, body, position.rowIndex);
     return;
   }
-  const site = iecContactInsertionSiteAt(body, position.rowIndex, position.rawX);
-  if (site) renderIecContactInsertion(section, site, position.rawX);
-  else section.append(element("p", "muted",
-    "This cell can be selected, but its layout has no verified contact insertion."));
+  section.append(element("p", "muted", "Double-click the blank cell or press Enter to insert."));
 }
 
 function insertIecContactAtSite(site, rawX, kind, name) {
@@ -4751,7 +4904,7 @@ function renderIecContactInsertion(section, site, initialX = null) {
     option.textContent = `x ${option.value}`;
     position.append(option);
   } else {
-    for (let x = site.startX + 3; x + 3 <= site.endX; x += 3) {
+    for (let x = site.startX; x + 3 <= site.endX; x += 3) {
       const option = document.createElement("option");
       option.value = String(x);
       option.textContent = `x ${x}`;
@@ -4800,7 +4953,7 @@ function renderIecContactInsertion(section, site, initialX = null) {
   section.append(status, insert);
 }
 
-async function applyEdit(update, label) {
+async function applyEdit(update, label, beforeRender) {
   try {
     const editorPane = app.querySelector(".editor-canvas");
     const iecViewport = app.querySelector(".iec-layout-viewport");
@@ -4820,6 +4973,7 @@ async function applyEdit(update, label) {
         (module) => module.base === selectedModuleKey.base && module.slot === selectedModuleKey.slot,
       ) || null;
     }
+    beforeRender?.();
     dirty = true;
     vscode.postMessage({ type: "edit", label, bytes: Array.from(bytes) });
     renderWorkspace();

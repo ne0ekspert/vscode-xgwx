@@ -1,5 +1,6 @@
 const path = require("node:path");
 const vscode = require("vscode");
+const { operandError, suggestionMatches } = require("./media/ladder-operand-rules.cjs");
 
 const VIEW_TYPE = "xgwx.workspaceViewer";
 
@@ -39,8 +40,6 @@ class XgwxEditorProvider {
       enableScripts: true,
       localResourceRoots: [mediaRoot],
     };
-    panel.webview.html = this.getHtml(panel.webview);
-
     const editor = { document, panel, ready: false };
     this.editors.add(editor);
 
@@ -66,16 +65,33 @@ class XgwxEditorProvider {
       }
     };
 
+    const validations = new Map();
+    let nextValidationId = 0;
     const messages = panel.webview.onDidReceiveMessage(async (message) => {
       if (message?.type === "ready") {
         editor.ready = true;
         await load();
       } else if (message?.type === "refresh") {
         await load();
+      } else if (message?.type === "ladderInstructionValidationResult") {
+        const resolve = validations.get(message.validationId);
+        if (resolve) { validations.delete(message.validationId); resolve(message.error || undefined); }
+      } else if (message?.type === "promptLadderInstruction") {
+        const validate = value => new Promise(resolve => {
+          const validationId = ++nextValidationId;
+          validations.set(validationId, resolve);
+          panel.webview.postMessage({ type: "validateLadderInstruction", requestId: message.requestId, validationId, value });
+        });
+        const value = await promptInstruction({ ...message.instruction, structuredResult: true }, message.title, validate);
+        await new Promise(resolve => setImmediate(resolve));
+        if (this.editors.has(editor) && panel.visible) panel.reveal(undefined, false);
+        await panel.webview.postMessage({ type: "iecContactInputResult", requestId: message.requestId, value: value ?? null });
       } else if (message?.type === "edit") {
         this.updateDocument(document, message.bytes, message.label, editor);
-      } else if (message?.type === "promptIecContact") {
-        const value = await promptIecContact(message.value, message.suggestions, message.rowIndex);
+      } else if (message?.type === "promptIecContact" || message?.type === "promptLadderInsertion") {
+        const value = message.type === "promptLadderInsertion"
+          ? await promptLadderInsertion(message.actions, message.title)
+          : await promptIecContact(message.value, message.suggestions, message.rowIndex);
         // Let the QuickPick finish closing before returning keyboard focus to the webview.
         await new Promise((resolve) => setImmediate(resolve));
         if (this.editors.has(editor) && panel.visible) panel.reveal(undefined, false);
@@ -94,7 +110,13 @@ class XgwxEditorProvider {
     panel.onDidDispose(() => {
       this.editors.delete(editor);
       messages.dispose();
+      for (const resolve of validations.values()) resolve("Editor closed");
+      validations.clear();
     });
+
+    // Register the ready handler before starting the webview. A fast webview
+    // (or a paused debugger) can otherwise send ready before we are listening.
+    panel.webview.html = this.getHtml(panel.webview);
   }
 
   updateDocument(document, bytes, label, sourceEditor = null) {
@@ -246,6 +268,146 @@ function promptIecContact(currentValue, suggestions, rowIndex) {
   });
 }
 
+// QuickPick exposes text changes, but no caret position: context follows the final token.
+function promptInstruction(instruction, title, validate) {
+  return new Promise((resolve) => {
+    const picker = vscode.window.createQuickPick();
+    picker.ignoreFocusOut = true;
+    picker.matchOnDescription = false;
+    picker.sortByLabel = false;
+    const choices = instruction.choices || [];
+    const suggestions = [...new Map((instruction.suggestions || [])
+      .filter(item => typeof item.value === "string" && item.value && !/\s/.test(item.value))
+      .map(item => [`${item.value}:${item.dataType || ""}`, item])).values()];
+    let settled = false;
+    let checking = false;
+    let validationError;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      picker.dispose();
+      resolve(value);
+    };
+    const parse = value => {
+      const tokens = value.trim().split(/\s+/).filter(Boolean);
+      const choice = choices.find(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase() === tokens[0]?.toUpperCase()));
+      const operands = tokens.slice(1);
+      const error = validationError || (!choice && tokens.length && !choices.some(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase().startsWith(tokens[0].toUpperCase()))) ? "Unknown or unavailable command" : undefined)
+        || (choice && operands.length > choice.operandCount ? `Expected ${choice.operandCount} operands` : undefined)
+        || operands.map((operand, index) => operandError(choice?.operandRules?.[index], operand)).find(Boolean);
+      const complete = !error && choice && operands.length === choice.operandCount
+        && value.length <= 255 && !/[\p{Cc},]/u.test(value);
+      return { tokens, choice, operands, complete, error };
+    };
+    const update = value => {
+      const { tokens, choice, operands, complete, error } = parse(value);
+      const last = /\s$/.test(value) ? "" : (tokens.at(-1) || "");
+      let hint = "Instruction";
+      let completions;
+      if (!choice || tokens.length === 1 && !/\s$/.test(value)) {
+        completions = choices.filter(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase().startsWith(value.trim().toUpperCase())))
+          .slice(0, 50).map(item => ({ value: `${item.mnemonic} `,
+            description: `${item.operandCount} operands` }));
+      } else {
+        const index = Math.max(0, operands.length - (last ? 1 : 0));
+        const name = choice.mnemonic.toUpperCase();
+        const roles = ["MOV", "MOVE", "I2R"].includes(name) ? ["Source operand", "Destination operand"]
+          : ["ADD", "SUB", "MUL", "DIV", "EQ", "GT", "GE", "LT", "LE"].includes(name)
+            ? ["First source operand", "Second source operand", "Destination operand"]
+            : ["=", ">", "<", ">=", "<=", "<>"].includes(name) ? ["First source operand", "Second source operand"] : [];
+        hint = index >= choice.operandCount ? "Ready to insert"
+          : roles[index] || `Operand ${index + 1} of ${choice.operandCount}`;
+        const rule = choice.operandRules?.[index];
+        if (rule) {
+          const label = rule.label === "S" ? "Source operand" : rule.label === "D" ? "Destination operand"
+            : /^S\d+$/.test(rule.label) ? `Source operand ${rule.label.slice(1)}` : rule.label;
+          hint = `${label} · ${rule.dataTypes.join("/")}`;
+        }
+        const prefix = last ? value.slice(0, -last.length) : value;
+        completions = index >= choice.operandCount ? [] : suggestions
+          .filter(item => suggestionMatches(rule, item)
+            && item.value.toLocaleLowerCase().includes(last.toLocaleLowerCase()))
+          .slice(0, 30).map(item => ({ value: prefix + item.value
+            + (index + 1 < choice.operandCount ? " " : ""), description: item.description }));
+      }
+      picker.title = `${title} · ${error || hint}`;
+      picker.placeholder = `${hint} · separate operands with spaces`;
+      picker.items = [
+        ...(complete ? [{ label: value.trim(), description: instruction.mode === "edit" ? "Apply instruction" : "Insert instruction", insert: true }] : []),
+        ...(error ? [{ label: value.trim(), description: error, invalid: true }] : []),
+        ...completions.filter(item => item.value !== value)
+          .map(item => ({ label: item.value.trimEnd(), description: item.description, completion: item.value })),
+      ];
+      picker.activeItems = picker.items.slice(0, 1);
+    };
+    picker.onDidChangeValue(value => { validationError = undefined; update(value); });
+    picker.onDidAccept(async () => {
+      if (checking || settled) return;
+      const selected = picker.activeItems[0];
+      if (selected?.invalid) return;
+      if (selected?.completion !== undefined) {
+        picker.value = selected.completion;
+        return;
+      }
+      const { choice, operands, complete } = parse(picker.value);
+      if (!complete) return;
+      const result = { command: choice.mnemonic, operands };
+      if (validate) {
+        checking = true; picker.busy = true;
+        const value = picker.value;
+        let error;
+        try { error = await validate(result); } catch (failure) { error = String(failure); }
+        checking = false;
+        if (settled) return;
+        picker.busy = false;
+        if (picker.value !== value) return;
+        if (error) { validationError = error; update(value); return; }
+      }
+      finish(instruction.structuredResult ? result : [choice.mnemonic, operands.join(", ")]);
+    });
+    picker.onDidHide(() => finish(undefined));
+    picker.value = String(instruction.value || "");
+    update(picker.value);
+    picker.show();
+  });
+}
+
+async function promptLadderInsertion(actions, title) {
+  if (!Array.isArray(actions) || !actions.length) return undefined;
+  const action = await vscode.window.showQuickPick(actions.map((item, index) => ({
+    label: item.label, index,
+  })), { title, placeHolder: "Choose an element to insert", ignoreFocusOut: true });
+  if (!action) return undefined;
+  if (actions[action.index].instruction) {
+    const values = await promptInstruction(actions[action.index].instruction, `${title} · ${action.label}`);
+    return values ? { actionIndex: action.index, values } : undefined;
+  }
+  const fields = actions[action.index].fields;
+  const values = [];
+  for (const [index, field] of fields.entries()) {
+    const options = { title: `${title} · ${action.label}`, step: index + 1, totalSteps: fields.length,
+      ignoreFocusOut: true };
+    let value;
+    if (field.choices) {
+      if (field.choices.length === 1) value = field.choices[0].value;
+      else {
+        const choice = await vscode.window.showQuickPick(field.choices.map((item) => ({
+          label: item.label, value: item.value,
+        })), { ...options, placeHolder: field.label });
+        value = choice?.value;
+      }
+    } else {
+      value = await vscode.window.showInputBox({ ...options, prompt: field.label,
+        value: field.value, valueSelection: [0, field.value.length],
+        validateInput: (text) => text.length > 255 || /[\p{Cc}]/u.test(text)
+          ? "Use at most 255 characters without control characters" : undefined });
+    }
+    if (value === undefined) return undefined;
+    values.push(value);
+  }
+  return { actionIndex: action.index, values };
+}
+
 function createNonce() {
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let value = "";
@@ -273,4 +435,4 @@ function activate(context) {
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact };
+module.exports = { activate, deactivate, XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact, promptLadderInsertion, promptInstruction };
