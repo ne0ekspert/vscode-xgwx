@@ -4503,7 +4503,7 @@ function renderStructuralCell(section, cell, position) {
     const value = operand.value.trim().toUpperCase();
     const hasOperand = elementKindHasOperand(kind.value);
     operand.closest(".property-field").hidden = !hasOperand;
-    apply.disabled = (hasOperand && !/^[PMKFLTC][0-9]{1,31}$/.test(value))
+    apply.disabled = (hasOperand && !(value.length <= 32 && /^(?:[PMKFLTC][0-9]+|D[0-9]+\.[0-9A-F])$/.test(value)))
       || (expected?.kind === kind.value && expected?.operand === (hasOperand ? value : ""));
   };
   kind.addEventListener("change", validate); operand.addEventListener("input", validate);

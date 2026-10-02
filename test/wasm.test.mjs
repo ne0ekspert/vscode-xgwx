@@ -2944,3 +2944,19 @@ test("IEC terminal feed deletion reports open endpoints and cleans up without lo
   assert.equal(repaired.ladder[2].iecGeometry.vertical.some(branch => branch.groupIndex === 8), false);
   for (let p=0; p<before.ladder.length; p++) if (p !== 2) assert.deepEqual(repaired.ladder[p], before.ladder[p]);
 });
+
+
+test("XGK contacts and coils store D register bit operands", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/empty.xgwx")));
+  for (const [kind, column] of [["NormallyOpen", 0], ["NormallyClosed", 1], ["Output", 9]]) {
+    for (const bit of '0123456789ABCDEF') {
+      const operand = `D0000.${bit}`;
+      const bytes = edit_xgwx_ladder_cell(source, 0, { rawY: 0, column, expected: null, replacement: { kind, operand } });
+      assert.ok(parse_xgwx(bytes).ladder[0].cells.some(cell => cell.value === operand || cell.sourceText === operand), operand);
+    }
+  }
+  for (const operand of ['D0000', 'D0000.10', 'D0000.G', 'D.0']) {
+    assert.throws(() => edit_xgwx_ladder_cell(source, 0, { rawY: 0, column: 0, expected: null, replacement: { kind: 'NormallyOpen', operand } }));
+  }
+});

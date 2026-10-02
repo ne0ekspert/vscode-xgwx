@@ -35,3 +35,13 @@ test('nibble and byte instructions accept bit-position device addresses', () => 
     }
   }
 });
+
+
+test('D register bit indices accept 0 through F and reject whole-word use', () => {
+  const bit = { label: 'Contact', dataTypes: ['BIT'], allowsConstant: false };
+  for (const index of '0123456789ABCDEF') assert.equal(operandError(bit, `D0000.${index}`), undefined);
+  assert.equal(operandError(bit, 'd0000.f'), undefined);
+  for (const value of ['D0000.10', 'D0000.G', 'D.0', 'DA.0', 'D0000..0']) assert.ok(operandError(bit, value), value);
+  assert.ok(operandError({ label: 'S', dataTypes: ['WORD'] }, 'D0000.F'));
+  assert.equal(operandError({ label: 'S', dataTypes: ['WORD'], deviceAreas: ['D.x'] }, 'D0000.F'), undefined);
+});

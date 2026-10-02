@@ -17,6 +17,12 @@ function operandError(rule, value) {
     return `${rule.label}: expected ${rule.dataTypes.join('/')}, not a real constant`;
   }
   const device = /^([PMKFLTCSZUNDR])([0-9A-F.]+)$/.exec(text);
+  if (/^D[^ ]*\./.test(text)) {
+    if (text.length > 32 || !/^D[0-9]+\.[0-9A-F]$/.test(text)) return `${rule.label}: use D0000.0 through D0000.F`;
+    if (!rule.deviceAreas?.includes('D.x') && rule.dataTypes?.length && !rule.dataTypes.some(t => ['BIT', 'BOOL', 'NIBBLE', 'BYTE'].includes(t))) {
+      return `${rule.label}: a bit address cannot be used as a word device`;
+    }
+  }
   if (device && /^[PMKFL]$/.test(device[1]) && /^[0-9A-F]+$/.test(device[2])
       && /[A-F]/.test(device[2]) && !rule.dataTypes.some(t => ['BIT', 'NIBBLE', 'BYTE'].includes(t))) {
     return `${rule.label}: a bit address cannot be used as a word device`;
