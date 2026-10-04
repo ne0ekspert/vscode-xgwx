@@ -8,6 +8,7 @@ import init, {
   insert_xgwx_ladder_instruction,
   insert_xgwx_ladder_comparison,
   delete_xgwx_ladder_comparison,
+  delete_xgwx_ladder_instruction,
   cpu_catalog,
   copy_xgwx_iec_ld_group,
   copy_xgwx_iec_ld_group_to_program,
@@ -24,6 +25,7 @@ import init, {
   delete_xgwx_iec_ld_contact,
   delete_xgwx_iec_ld_contact_cell,
   delete_xgwx_iec_ld_connected_arithmetic,
+  delete_xgwx_iec_ld_branched_arithmetic,
   delete_xgwx_iec_ld_eq_chain_head,
   delete_xgwx_iec_ld_heating_chain_head,
   delete_xgwx_iec_ld_heating_chain_middle,
@@ -41,6 +43,9 @@ import init, {
   delete_xgwx_iec_ld_terminal_function,
   delete_xgwx_module,
   edit_xgwx_iec_ld_branch_segment,
+  edit_xgwx_iec_ld_vertical_wire,
+  connect_xgwx_iec_ld_groups,
+  split_xgwx_iec_ld_group,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
   edit_xgwx_ladder_comment,
@@ -1368,7 +1373,11 @@ test("leading IEC contact insertion restores the native captured branch", async 
     item.groupIndex === 3 && item.rowIndex === 3);
   assert.equal(site.insertionOffset, 339);
   assert.throws(() => insert_xgwx_iec_ld_leading_contact(deleted, 0, 340, "NO", "시작"));
-  assert.throws(() => insert_xgwx_iec_ld_leading_contact(deleted, 0, 339, "NO", "MISSING_BOOL"));
+  assert.throws(() => insert_xgwx_iec_ld_leading_contact(deleted, 0, 339, "NO", "MISSING_BOOL + 1"));
+  const unresolved = insert_xgwx_iec_ld_leading_contact(deleted, 0, 339, "NO", "MISSING_BOOL");
+  const declarations = parse_xgwx(deleted).localVariables;
+  assert.ok(declarations[0].length > 0);
+  assert.deepEqual(parse_xgwx(unresolved).localVariables, declarations);
   const inserted = insert_xgwx_iec_ld_leading_contact(deleted, 0, 339, "NO", "시작");
   assert.deepEqual(parse_xgwx(inserted).ladder, parse_xgwx(fs.readFileSync(insertedPath)).ladder);
   assert.equal(parse_xgwx(inserted).ladder[0].iecLeadingContactInsertionSites.length, 0);
@@ -1384,7 +1393,7 @@ test("leading IEC contact insertion restores the native captured branch", async 
     item.groupIndex === 3 && item.rowIndex === 3 && item.rawX === 4);
   assert.equal(shortWireSite.wireOffset, 366);
   assert.throws(() => insert_xgwx_iec_ld_short_wire_contact(cellDeleted, 0, 366, 7, "NO", "시작"));
-  assert.throws(() => insert_xgwx_iec_ld_short_wire_contact(cellDeleted, 0, 366, 4, "NO", "MISSING_BOOL"));
+  assert.throws(() => insert_xgwx_iec_ld_short_wire_contact(cellDeleted, 0, 366, 4, "NO", "MISSING_BOOL + 1"));
   const shortWireInserted = insert_xgwx_iec_ld_short_wire_contact(cellDeleted, 0, 366, 4, "NO", "시작");
   assert.deepEqual(parse_xgwx(shortWireInserted).ladder,
     parse_xgwx(fs.readFileSync(path.join(captures, "native-short-wire-contact-inserted.xgwx"))).ladder);
@@ -1547,9 +1556,9 @@ test("bundled WASM preserves IEC LD text from an optional XGI workspace", async 
   assert.deepEqual(summary.ladder.map((program) => program.iecRecords.filter((record) => record.kind === "Function block").length), [23, 2, 9, 10, 10, 11, 16]);
   assert.deepEqual(summary.ladder.map((program) => program.iecFunctions.length), [23, 2, 9, 10, 10, 11, 16]);
   assert.deepEqual(summary.ladder.map((program) =>
-    program.iecTerminalFunctionDeletionSites.length), [1, 0, 0, 5, 0, 0, 0]);
+    program.iecTerminalFunctionDeletionSites.length), [1, 0, 0, 5, 1, 0, 0]);
   assert.deepEqual(summary.ladder.map((program) =>
-    program.iecStandaloneFunctionDeletionSites.length), [0, 0, 1, 0, 0, 0, 0]);
+    program.iecStandaloneFunctionDeletionSites.length), [0, 0, 1, 0, 1, 0, 0]);
   assert.deepEqual(summary.ladder[4].iecStandaloneFunctionInsertionSites, [{
     groupIndex: 15, rowIndex: 26, insertionOffset: 4054, rawX: 4,
   }]);
@@ -1561,7 +1570,7 @@ test("bundled WASM preserves IEC LD text from an optional XGI workspace", async 
     block.name === "WORD_TO_UDINT" && block.rowIndex === 26));
   assert.ok(smartHomeInsertion.ladder[4].iecCircuitGraph);
   assert.deepEqual(summary.ladder.map((program) =>
-    program.iecFunctionCellDeletionSites.length), [1, 0, 0, 0, 0, 0, 0]);
+    program.iecFunctionCellDeletionSites.length), [4, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(summary.ladder[0].iecConnectedArithmeticDeletionSites, [{
     groupIndex: 14, rowIndex: 20, blockOffset: 2858, wireOffset: 2839, rawX: 16,
   }, {
@@ -2018,13 +2027,14 @@ test("bundled WASM preserves IEC LD text from an optional XGI workspace", async 
   assert.equal(functionCellDeleted.ladder[0].iecRows.length, 86);
   assert.equal(functionCellDeleted.ladder[0].iecRecords.length, 287);
   assert.equal(functionCellDeleted.ladder[0].iecFunctions.length, 22);
-  assert.equal(functionCellDeleted.ladder[0].iecFunctionCellDeletionSites.length, 0);
+  assert.equal(functionCellDeleted.ladder[0].iecFunctionCellDeletionSites.length, 3);
   assert.deepEqual(functionCellDeleted.ladder[0].iecFunctionCellInsertionSites, [{
     groupIndex: 9,
     rowIndex: 14,
     insertionOffset: 1639,
     referenceOffset: 1766,
     rawX: 4,
+    functionName: "FF",
   }]);
   assert.ok(functionCellDeleted.ladder[0].iecCircuitGraph);
   assert.deepEqual(functionCellDeleted.ladder.slice(1), summary.ladder.slice(1));
@@ -2040,7 +2050,7 @@ test("bundled WASM preserves IEC LD text from an optional XGI workspace", async 
   assert.equal(functionCellInserted.ladder[0].iecFunctionReferences.length, 50);
   assert.equal(functionCellInserted.ladder[0].iecFunctionOperandLinks.length, 45);
   assert.equal(functionCellInserted.ladder[0].iecFunctionCellInsertionSites.length, 0);
-  assert.equal(functionCellInserted.ladder[0].iecFunctionCellDeletionSites.length, 1);
+  assert.equal(functionCellInserted.ladder[0].iecFunctionCellDeletionSites.length, 4);
   assert.ok(functionCellInserted.ladder[0].iecCircuitGraph);
   assert.deepEqual(functionCellInserted.ladder.slice(1), summary.ladder.slice(1));
   assert.throws(() => delete_xgwx_iec_ld_connected_arithmetic(source, 0, 2858, "SUB"));
@@ -2838,8 +2848,25 @@ test("function placement exports preserve operand metadata and enforce manual de
   const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
   const before = Buffer.from(source);
   const choices = parse_xgwx(source).ladder[0].instructionChoices;
+  for (const choice of choices.filter(choice => choice.operandRules.length)) {
+    assert.equal(choice.operandRules.length, choice.operandCount, choice.mnemonic);
+  }
   assert.deepEqual(choices.find(choice => choice.mnemonic === "MOV").operandRules.map(rule => rule.dataTypes), [["WORD"], ["WORD"]]);
   assert.deepEqual(choices.find(choice => choice.mnemonic === "I2R").operandRules.map(rule => rule.dataTypes), [["INT"], ["REAL"]]);
+  assert.deepEqual(choices.find(choice => choice.mnemonic === "CMP8").operandRules.map(rule => rule.dataTypes), [["BYTE"], ["BYTE"]]);
+  assert.deepEqual(choices.find(choice => choice.mnemonic === "XTRUN").operandRules.map(rule => rule.dataTypes), [["WORD"], ["WORD"], ["WORD"], ["LREAL"], ["LREAL"], ["LREAL"], ["LREAL"]]);
+  assert.deepEqual(choices.find(choice => choice.mnemonic === "SCAL").operandRules.map(rule => rule.label), ["S1", "S2", "S3", "D"]);
+  assert.deepEqual(choices.find(choice => choice.mnemonic === "RSCAL").operandRules.map(rule => rule.dataTypes), [["REAL"], ["REAL"], ["REAL"], ["REAL"]]);
+  for (const mnemonic of ["XORGEX", "XDSTEX", "XGEARIPEX"]) {
+    const choice = choices.find(choice => choice.mnemonic === mnemonic);
+    assert.equal(choice.operandRules.length, choice.operandCount);
+  }
+  const pid = choices.find(choice => choice.mnemonic === "PIDINIT");
+  assert.deepEqual(pid.operandRules[0].deviceAreas, []);
+  assert.equal(pid.operandRules[0].allowsConstant, true);
+  assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, "PIDINIT", JSON.stringify(["D100"])), /constant/);
+  const pidBytes = insert_xgwx_ladder_instruction(source, 0, 52, "PIDINIT", JSON.stringify(["0"]));
+  assert.deepEqual(parse_xgwx(pidBytes).ladder[0].cells.find(cell => cell.value === "PIDINIT").operands, ["0"]);
   assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, "MOV", JSON.stringify(["1", "0"])), /constant/);
   assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, "MOV", JSON.stringify(["M0000A", "D100"])), /bit address/);
   let bytes = insert_xgwx_ladder_comparison(source, 0, 52, 0, "=", JSON.stringify(["D100", "D102"]));
@@ -2857,7 +2884,7 @@ test("all XGK word comparisons insert and replace as contacts", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
   const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
   const names = ["=", ">", "<", ">=", "<=", "<>"];
-  const choices = parse_xgwx(source).ladder[0].comparisonChoices;
+  const choices = parse_xgwx(source).ladder[0].comparisonChoices.filter(choice => names.includes(choice.mnemonic));
   assert.deepEqual(choices.map(choice => choice.mnemonic), names);
   for (const choice of choices) {
     assert.equal(choice.operandCount, 2);
@@ -2873,6 +2900,92 @@ test("all XGK word comparisons insert and replace as contacts", async () => {
       assert.deepEqual(updated.operands, ["D100", "D102"]);
     }
   }
+});
+
+test("operandless XGK applications insert and resize through the editor WASM exports", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const choices = parse_xgwx(source).ladder[0].instructionChoices;
+  assert.equal(choices.filter(choice => choice.operandCount === 0).length, 15);
+  for (const name of ["STOP", "WDT", "CLC", "EI", "INIT_DONE"]) {
+    const inserted = insert_xgwx_ladder_instruction(source, 0, 52, name, "[]");
+    const cell = parse_xgwx(inserted).ladder[0].cells.find(cell => cell.rawY === 52 && cell.value === name);
+    assert.equal(cell.instructionTextEditing, true);
+    assert.deepEqual(cell.operands, []);
+    const enlarged = update_xgwx_ladder_cell(inserted, 0, cell.offset, cell.sourceText, "MOV,1,D200");
+    const moved = parse_xgwx(enlarged).ladder[0].cells.find(cell => cell.rawY === 52 && cell.value === "MOV");
+    const restored = update_xgwx_ladder_cell(enlarged, 0, moved.offset, moved.sourceText, name);
+    assert.deepEqual(restored, inserted);
+    assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, name, '["1"]'), /operand count/);
+  }
+});
+
+test("XGK application deletion clears its feed and BRST uses manual BIT and WORD operands", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const choices = parse_xgwx(source).ladder[0].instructionChoices;
+  for (const name of ["BRST", "BRSTP"]) {
+    const choice = choices.find(c => c.mnemonic === name);
+    assert.deepEqual(choice.operandRules.map(r => r.dataTypes), [["BIT"], ["WORD"]]);
+    const inserted = insert_xgwx_ladder_instruction(source, 0, 52, name, '["M00020","8"]');
+    const cell = parse_xgwx(inserted).ladder[0].cells.find(c => c.rawY === 52 && c.value === name);
+    assert.equal(cell.instructionDeletion, true);
+    const deleted = delete_xgwx_ladder_instruction(inserted, 0, cell.offset, cell.sourceText);
+    assert.equal(parse_xgwx(deleted).ladder[0].cells.some(c => c.rawY === 52 && c.value === name), false);
+    assert.deepEqual(insert_xgwx_ladder_instruction(deleted, 0, 52, name, '["M00020","8"]'), inserted);
+    assert.throws(() => delete_xgwx_ladder_instruction(inserted, 0, cell.offset, "stale"), /changed/);
+    assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, name, '["D100","8"]'), /device area is not permitted/);
+  }
+  assert.throws(() => delete_xgwx_ladder_instruction(source, 0, 0, "END"), /record not found/);
+});
+
+test("all XGK comparison families expose types, reserve their spans and restore after deletion", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const choices = parse_xgwx(source).ladder[0].comparisonChoices.filter(choice => !["B", "BN"].includes(choice.mnemonic));
+  assert.equal(choices.length, 78);
+  const types = { "": "INT", D: "DINT", R: "REAL", L: "LREAL", "$": "STRING",
+    G: "INT", DG: "DINT", "4": "NIBBLE", "8": "BYTE", U: "UINT", UD: "UDINT" };
+  for (const choice of choices) {
+    const prefix = choice.mnemonic.split(/[<>=]/)[0];
+    assert.deepEqual(choice.operandRules[0].dataTypes, [types[prefix]]);
+    assert.equal(choice.operandRules.length, choice.operandCount);
+    const operands = ["4", "8"].includes(prefix) ? ["D100.0", "D104.0"] : ["D100", "D104"];
+    if (choice.operandCount === 3) operands.push(["G", "DG"].includes(prefix) ? "1" : "D108");
+    const values = JSON.stringify(operands);
+    const inserted = insert_xgwx_ladder_comparison(source, 0, 52, 2, choice.mnemonic, values);
+    const cell = parse_xgwx(inserted).ladder[0].cells.find(cell => cell.rawY === 52 && cell.value === choice.mnemonic);
+    assert.equal(cell.kind, "Comparison");
+    assert.equal(cell.instructionTextEditing, true);
+    assert.deepEqual(cell.operands, operands);
+    const deleted = delete_xgwx_ladder_comparison(inserted, 0, cell.offset, cell.sourceText);
+    assert.deepEqual(insert_xgwx_ladder_comparison(deleted, 0, 52, 2, choice.mnemonic, values), inserted);
+    assert.throws(() => insert_xgwx_ladder_comparison(source, 0, 52, 9 - choice.operandCount, choice.mnemonic, values), /fit before/);
+  }
+});
+
+test("XGK indexed-bit inputs and FF use manual types and guarded edit records", async () => {
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  for (const name of ["B", "BN"]) {
+    const choice = parse_xgwx(source).ladder[0].comparisonChoices.find(c => c.mnemonic === name);
+    assert.deepEqual(choice.operandRules.map(r => r.dataTypes), [["WORD"], ["WORD"]]);
+    const inserted = insert_xgwx_ladder_comparison(source, 0, 52, 0, name, '["D100","4"]');
+    const cell = parse_xgwx(inserted).ladder[0].cells.find(c => c.rawY === 52 && c.value === name);
+    assert.equal(cell.kind, "Comparison");
+    assert.equal(cell.instructionTextEditing, true);
+    const changed = update_xgwx_ladder_cell(inserted, 0, cell.offset, cell.sourceText, `${name},D100,D108`);
+    assert.deepEqual(parse_xgwx(changed).ladder[0].cells.find(c => c.rawY === 52 && c.value === name).operands, ["D100", "D108"]);
+    assert.throws(() => insert_xgwx_ladder_comparison(source, 0, 52, 0, name, '["4","4"]'), /constant/);
+    assert.throws(() => insert_xgwx_ladder_comparison(source, 0, 52, 0, name, '["D100.0","4"]'), /bit address/);
+    const deleted = delete_xgwx_ladder_comparison(inserted, 0, cell.offset, cell.sourceText);
+    assert.deepEqual(insert_xgwx_ladder_comparison(deleted, 0, 52, 0, name, '["D100","4"]'), inserted);
+  }
+  const inserted = insert_xgwx_ladder_instruction(source, 0, 52, "FF", '["M00030"]');
+  const cell = parse_xgwx(inserted).ladder[0].cells.find(c => c.rawY === 52 && c.value === "FF");
+  assert.equal(cell.instructionDeletion, true);
+  assert.deepEqual(parse_xgwx(inserted).ladder[0].instructionChoices.find(c => c.mnemonic === "FF").operandRules[0].dataTypes, ["BIT"]);
+  assert.throws(() => insert_xgwx_ladder_instruction(source, 0, 52, "FF", '["D100"]'), /device area/);
 });
 
 
@@ -2958,5 +3071,1476 @@ test("XGK contacts and coils store D register bit operands", async () => {
   }
   for (const operand of ['D0000', 'D0000.10', 'D0000.G', 'D.0']) {
     assert.throws(() => edit_xgwx_ladder_cell(source, 0, { rawY: 0, column: 0, expected: null, replacement: { kind: 'NormallyOpen', operand } }));
+  }
+});
+
+
+test("IEC terminal feed cleanup preserves function continuation references", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"))});
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  for (const [g, start, end, x] of [[24,72,73,18], [23,66,67,21]]) {
+    const deleted = edit_xgwx_iec_ld_branch_segment(source, 3, g, start, end, x, true, false);
+    const intermediate = parse_xgwx(deleted);
+    assert.deepEqual(intermediate.ladder[3].iecCircuitGraph.openBranchEndpoints, [{groupIndex:g,rowIndex:start,x}]);
+    const repaired = parse_xgwx(edit_xgwx_iec_ld_branch_segment(deleted, 3, g, start-1, start, x, true, false));
+    assert.deepEqual(repaired.ladder[3].iecCircuitGraph.openBranchEndpoints, []);
+    assert.equal(repaired.ladder[3].iecFunctions.length, before.ladder[3].iecFunctions.length);
+    assert.equal(repaired.ladder[3].iecGeometry.vertical.some(branch => branch.groupIndex === g), false);
+    for (let p=0; p<before.ladder.length; p++) if (p !== 3) assert.deepEqual(repaired.ladder[p], before.ladder[p]);
+  }
+});
+
+
+test("IEC arithmetic deletion preserves an external branch spine", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"))});
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  for (const [p, row] of [[5,15],[6,30]]) {
+    const block = before.ladder[p].iecFunctions.find(b => b.rowIndex === row && b.name === 'ADD');
+    assert.ok(block);
+    assert.throws(() => delete_xgwx_iec_ld_branched_arithmetic(source,p,block.recordOffset,'SUB'));
+    const result = parse_xgwx(delete_xgwx_iec_ld_branched_arithmetic(source,p,block.recordOffset,'ADD'));
+    assert.equal(result.ladder[p].iecFunctions.length+1,before.ladder[p].iecFunctions.length);
+    assert.equal(result.ladder[p].iecGeometry.vertical.length+1,before.ladder[p].iecGeometry.vertical.length);
+    assert.deepEqual(result.ladder[p].iecCircuitGraph.openBranchEndpoints,[]);
+    for(let other=0;other<7;other++) if(other!==p) assert.deepEqual(result.ladder[other],before.ladder[other]);
+  }
+});
+
+
+test("IEC branch selection reuses native chained-row deletion", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm"))});
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  for (const [p,g,start,end,x,contact] of [[2,7,20,21,21,false], [2,8,27,28,18,false],
+      [6,14,82,83,3,true], [6,14,83,84,3,true]]) {
+    const bytes = edit_xgwx_iec_ld_branch_segment(source,p,g,start,end,x,true,false);
+    const direct = (contact ? delete_xgwx_iec_ld_chained_contact_branch_row
+      : delete_xgwx_iec_ld_empty_branch_row)(source,p,g,end);
+    assert.deepEqual(Buffer.from(bytes),Buffer.from(direct));
+    const after = parse_xgwx(bytes);
+    assert.equal(after.ladder[p].iecGeometry.vertical.length+1,before.ladder[p].iecGeometry.vertical.length);
+    assert.equal(after.ladder[p].iecFunctions.length,before.ladder[p].iecFunctions.length);
+    assert.deepEqual(after.ladder[p].iecCircuitGraph.openBranchEndpoints,[]);
+    for (let other=0;other<7;other++) if(other!==p) assert.deepEqual(after.ladder[other],before.ladder[other]);
+  }
+});
+
+
+test("IEC connected trigger deletion exposes a repairable gap", async context => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!fixture){context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const source=fs.readFileSync(fixture),before=parse_xgwx(source);
+  for(const row of [20,26,32]) {
+    const block=before.ladder[0].iecFunctions.find(b=>b.rowIndex===row&&b.name==='R_TRIG');
+    assert.throws(()=>delete_xgwx_iec_ld_function_cell(source,0,block.recordOffset,'F_TRIG'));
+    const bytes=delete_xgwx_iec_ld_function_cell(source,0,block.recordOffset,'R_TRIG');
+    const deleted=parse_xgwx(bytes);
+    assert.equal(deleted.ladder[0].iecFunctions.length+1,before.ladder[0].iecFunctions.length);
+    assert.equal(deleted.ladder[0].iecRows.length,before.ladder[0].iecRows.length);
+    const site=deleted.ladder[0].iecFunctionCellInsertionSites.find(s=>s.functionName==='R_TRIG'&&s.rowIndex===row);
+    assert.ok(site);
+    assert.throws(()=>insert_xgwx_iec_ld_function_cell(bytes,0,site.insertionOffset,'R_TRIG','Missing_Instance'));
+    const restored=parse_xgwx(insert_xgwx_iec_ld_function_cell(bytes,0,site.insertionOffset,'R_TRIG',block.instance));
+    assert.deepEqual(restored.ladder,before.ladder);
+    const gap=deleted.ladder[0].iecHorizontalWireRepairSites.find(g=>g.rowIndex===row&&g.rawX===block.rawX);
+    assert.ok(gap);
+    const repaired=parse_xgwx(repair_xgwx_iec_ld_horizontal_wire(bytes,0,gap.insertionOffset,gap.rawX));
+    assert.deepEqual(repaired.ladder[0].iecCircuitGraph.openBranchEndpoints,[]);
+    assert.ok(before.localVariables[0].length > 0);
+    assert.deepEqual(repaired.localVariables,before.localVariables);
+    for(let p=1;p<7;p++) assert.deepEqual(repaired.ladder[p],before.ladder[p]);
+  }
+});
+
+
+test("IEC compound operands rejected by native checking cannot be serialized", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture || !fs.existsSync(fixture)) {
+    context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const bytes = fs.readFileSync(fixture);
+  const original = Buffer.from(bytes);
+  const program = parse_xgwx(bytes).ladder[3];
+  for (const [row, expression] of [[1, "%MW0 MOD 7 + 1"], [4, "%MW0 >= 2"],
+    [7, "%MX0 OR NOT %MX1 AND (%MW2 >= 2)"],
+    [10, "%MW0 XOR (%MW1 AND NOT %MW2)"], [13, "TRUE XOR FALSE"]]) {
+    const block = program.iecFunctions.find(item => item.name === "MOVE" && item.rowIndex === row);
+    const link = program.iecFunctionOperandLinks.find(item => item.targetRecordOffset === block.recordOffset && !item.isOutput);
+    const operand = program.sourceStrings.find(item => item.iecRecordOffset === link.recordOffset && item.isIecFunctionOperand);
+    assert.throws(() => update_xgwx_iec_ld_function_operand(bytes, 3, operand.offset, operand.value, expression),
+      /native-valid expression construction/);
+    assert.deepEqual(bytes, original);
+  }
+});
+
+
+test("IEC vertical wire deletion preserves shared function rows and reconnects exactly", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture || !fs.existsSync(fixture)) {
+    context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(fixture);
+  const before = parse_xgwx(source);
+  const deleted = edit_xgwx_iec_ld_vertical_wire(source, 0, 33, 69, 70, 12, true, false);
+  const after = parse_xgwx(deleted);
+  assert.equal(after.ladder[0].iecRows.length, before.ladder[0].iecRows.length);
+  assert.equal(after.ladder[0].iecFunctions.length, before.ladder[0].iecFunctions.length);
+  assert.deepEqual(after.ladder[0].iecCircuitGraph.openBranchEndpoints,
+    [{groupIndex:33,rowIndex:69,x:12},{groupIndex:33,rowIndex:70,x:12}]);
+  assert.throws(() => edit_xgwx_iec_ld_vertical_wire(deleted, 0, 33, 69, 70, 12, true, false));
+  assert.throws(() => edit_xgwx_iec_ld_vertical_wire(deleted, 0, 33, 69, 70, 15, false, true));
+  const restored = edit_xgwx_iec_ld_vertical_wire(deleted, 0, 33, 69, 70, 12, false, true);
+  assert.deepEqual(parse_xgwx(restored).ladder, before.ladder);
+});
+
+test("IEC operand and operator edits preserve exposed endpoints", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture || !fs.existsSync(fixture)) {
+    context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return;
+  }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(fixture);
+  const gap = edit_xgwx_iec_ld_vertical_wire(source, 0, 33, 69, 70, 12, true, false);
+  const before = parse_xgwx(gap);
+  const operand = before.ladder[0].sourceStrings.find(s => s.isIecFunctionOperand && s.value === "0");
+  const edited = update_xgwx_iec_ld_function_operand(gap, 0, operand.offset, "0", "123");
+  assert.throws(() => update_xgwx_iec_ld_function_operand(edited, 0, operand.offset, "0", "2"));
+  assert.throws(() => update_xgwx_iec_ld_function_operand(edited, 0, operand.offset, "123", "%MWbad"));
+  const after = parse_xgwx(edited);
+  assert.deepEqual(after.ladder[0].iecCircuitGraph.openBranchEndpoints, before.ladder[0].iecCircuitGraph.openBranchEndpoints);
+  const block = after.ladder[0].iecFunctions.find(b => b.groupIndex === 33 && b.name === "EQ");
+  const operatorEdit = update_xgwx_iec_ld_comparison_function(edited, 0, block.nameOffset, "EQ", "GE");
+  assert.equal(parse_xgwx(operatorEdit).ladder[0].iecFunctions.find(b => b.groupIndex === 33).name, "GE");
+  const repaired = edit_xgwx_iec_ld_vertical_wire(operatorEdit, 0, 33, 69, 70, 12, false, true);
+  const repairedSummary = parse_xgwx(repaired);
+  assert.deepEqual(repairedSummary.ladder[0].iecCircuitGraph.openBranchEndpoints, []);
+  assert.ok(repairedSummary.ladder[0].sourceStrings.some(s => s.offset === operand.offset && s.value === "123"));
+  assert.deepEqual(repairedSummary.ladder.slice(1), before.ladder.slice(1));
+});
+
+
+test("IEC adjacent networks join and split while retaining functions and exact payloads", async context => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture || !fs.existsSync(fixture)) { context.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const source = fs.readFileSync(fixture);
+  const before = parse_xgwx(source);
+  for (const [p, upper, start, lower, end, x] of [[0,2,2,3,3,3],[3,7,18,8,19,3]]) {
+    const joined = connect_xgwx_iec_ld_groups(source,p,upper,start,lower,end,x);
+    const after = parse_xgwx(joined);
+    assert.equal(after.ladder[p].iecRows.length, before.ladder[p].iecRows.length);
+    assert.equal(after.ladder[p].iecFunctions.length, before.ladder[p].iecFunctions.length);
+    assert.equal(after.ladder[p].iecCircuitGraph.functionBindings.length, before.ladder[p].iecCircuitGraph.functionBindings.length);
+    assert.equal(after.ladder[p].iecGeometry.vertical.length, before.ladder[p].iecGeometry.vertical.length+1);
+    assert.throws(() => split_xgwx_iec_ld_group(joined,p,upper,start,end));
+    assert.throws(() => connect_xgwx_iec_ld_groups(joined,p,upper,start,lower,end,x));
+    const gap = edit_xgwx_iec_ld_vertical_wire(joined,p,upper,start,end,x,true,false);
+    const split = split_xgwx_iec_ld_group(gap,p,upper,start,end);
+    assert.deepEqual(parse_xgwx(split).ladder,before.ladder);
+  }
+  assert.throws(() => connect_xgwx_iec_ld_groups(source,2,7,22,8,23,3), /function body/);
+  const contact = insert_xgwx_iec_ld_single_element(source,0,66,1,"contact","NO","ON");
+  const joinedFunction = connect_xgwx_iec_ld_groups(contact,0,33,66,34,67,3);
+  assert.equal(parse_xgwx(joinedFunction).ladder[0].iecFunctions.length,before.ladder[0].iecFunctions.length);
+  const functionUnwired = edit_xgwx_iec_ld_vertical_wire(joinedFunction,0,33,66,67,3,true,false);
+  const functionSplit = split_xgwx_iec_ld_group(functionUnwired,0,33,66,67);
+  assert.deepEqual(parse_xgwx(functionSplit).ladder[0].iecFunctions,parse_xgwx(contact).ladder[0].iecFunctions);
+  const functionGap = edit_xgwx_iec_ld_vertical_wire(source,0,33,69,70,12,true,false);
+  assert.throws(() => split_xgwx_iec_ld_group(functionGap,0,33,69,70));
+  assert.throws(() => connect_xgwx_iec_ld_groups(source,0,2,2,3,3,2));
+});
+
+
+test("IEC F6 extension materializes a blank row and deletes it without changing neighbors", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { extend_xgwx_iec_ld_vertical_wire } = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture);
+  const before = parse_xgwx(source);
+  const extended = extend_xgwx_iec_ld_vertical_wire(source, 0, 3, 4, 3);
+  const after = parse_xgwx(extended);
+  assert.equal(after.ladder[0].iecRows.length, before.ladder[0].iecRows.length + 1);
+  assert.equal(after.ladder[0].iecRows.find(row => row.rowIndex === 5).recordCount, 1);
+  assert.ok(after.ladder[0].iecCircuitGraph.openBranchEndpoints.some(point => point.rowIndex === 5 && point.x === 3));
+  assert.deepEqual(after.ladder.slice(1), before.ladder.slice(1));
+  assert.throws(() => extend_xgwx_iec_ld_vertical_wire(extended, 0, 3, 4, 3));
+  assert.throws(() => extend_xgwx_iec_ld_vertical_wire(source, 0, 2, 2, 3));
+  const restored = edit_xgwx_iec_ld_branch_segment(extended, 0, 3, 4, 5, 3, true, false);
+  assert.deepEqual(parse_xgwx(restored).ladder, before.ladder);
+});
+
+test("IEC contact insertion fills an open branch-only row and Delete retains its wire", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { extend_xgwx_iec_ld_vertical_wire } = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture);
+  const wire = extend_xgwx_iec_ld_vertical_wire(source, 0, 3, 4, 3);
+  const before = parse_xgwx(wire);
+  const inserted = insert_xgwx_iec_ld_single_element(wire, 0, 5, 1, "contact", "NO", "ON");
+  const after = parse_xgwx(inserted);
+  assert.equal(after.ladder[0].iecRows.find(row => row.rowIndex === 5).recordCount, 2);
+  assert.deepEqual(after.ladder[0].iecCircuitGraph.openBranchEndpoints, []);
+  assert.deepEqual(after.ladder.slice(1), before.ladder.slice(1));
+  const site = after.ladder[0].iecNoContactDeletionSites.find(site => site.rowIndex === 5);
+  assert.ok(site);
+  assert.throws(() => delete_xgwx_iec_ld_contact(inserted,0,site.contactOffset,1,"NO","OFF"));
+  const restored = delete_xgwx_iec_ld_contact(inserted,0,site.contactOffset,1,"NO","ON");
+  assert.deepEqual(parse_xgwx(restored).ladder, before.ladder);
+  assert.throws(() => insert_xgwx_iec_ld_single_element(wire,0,5,1,"contact","NO","%MW10"));
+});
+
+test("IEC coil insertion connects a branch-only row and Delete retains its endpoint", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { extend_xgwx_iec_ld_vertical_wire, delete_xgwx_iec_ld_terminal_coil } = await import("../media/libxgwx.js");
+  const wire = extend_xgwx_iec_ld_vertical_wire(fs.readFileSync(fixture), 0, 3, 4, 3);
+  const before = parse_xgwx(wire);
+  const inserted = insert_xgwx_iec_ld_single_element(wire,0,5,4,"coil","OUTPUT","%MX0");
+  const after = parse_xgwx(inserted);
+  assert.equal(after.ladder[0].iecRows.find(row => row.rowIndex === 5).recordCount,3);
+  assert.deepEqual(after.ladder[0].iecCircuitGraph.openBranchEndpoints,[]);
+  const coil = after.ladder[0].sourceStrings.find(item => item.iecRowIndex === 5 && item.value === "%MX0");
+  assert.ok(coil);
+  assert.equal(coil.iecPosition[0],94);
+  assert.throws(() => delete_xgwx_iec_ld_terminal_coil(inserted,0,coil.iecRecordOffset,"%MX1"));
+  const restored = delete_xgwx_iec_ld_terminal_coil(inserted,0,coil.iecRecordOffset,"%MX0");
+  assert.deepEqual(parse_xgwx(restored).ladder,before.ladder);
+  assert.throws(() => insert_xgwx_iec_ld_single_element(wire,0,5,7,"coil","OUTPUT","%MW10"));
+});
+
+test("IEC wider coils can fill and reopen a row while another branch remains open", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { extend_xgwx_iec_ld_vertical_wire, delete_xgwx_iec_ld_terminal_coil } = await import("../media/libxgwx.js");
+  let bytes=extend_xgwx_iec_ld_vertical_wire(fs.readFileSync(fixture),0,3,4,6);
+  bytes=extend_xgwx_iec_ld_vertical_wire(bytes,0,8,12,24);
+  const before=parse_xgwx(bytes);
+  bytes=insert_xgwx_iec_ld_single_element(bytes,0,5,7,"coil","OUTPUT","%MX0");
+  assert.equal(parse_xgwx(bytes).ladder[0].iecCircuitGraph.openBranchEndpoints.length,1);
+  bytes=insert_xgwx_iec_ld_single_element(bytes,0,13,25,"coil","OUTPUT","%MX1");
+  assert.deepEqual(parse_xgwx(bytes).ladder[0].iecCircuitGraph.openBranchEndpoints,[]);
+  for (const [row,operand] of [[5,"%MX0"],[13,"%MX1"]]) {
+    const coil=parse_xgwx(bytes).ladder[0].sourceStrings.find(item=>item.iecRowIndex===row && item.value===operand);
+    bytes=delete_xgwx_iec_ld_terminal_coil(bytes,0,coil.iecRecordOffset,operand);
+  }
+  assert.deepEqual(parse_xgwx(bytes).ladder,before.ladder);
+  let contactWire=extend_xgwx_iec_ld_vertical_wire(fs.readFileSync(fixture),0,3,4,3);
+  contactWire=extend_xgwx_iec_ld_vertical_wire(contactWire,0,8,12,24);
+  assert.throws(()=>insert_xgwx_iec_ld_single_element(contactWire,0,5,1,"contact","NO","ON"));
+});
+
+test("IEC scalar blocks make room below a branch row and retain later networks", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { extend_xgwx_iec_ld_vertical_wire, insert_xgwx_iec_ld_function, delete_xgwx_iec_ld_branch_function, replace_xgwx_iec_ld_branch_function } = await import("../media/libxgwx.js");
+  const wire = extend_xgwx_iec_ld_vertical_wire(fs.readFileSync(fixture),0,3,4,3);
+  const before = parse_xgwx(wire);
+  for (const [name, operands] of [["MOVE",["1","%MW100"]],["ADD",["1","2","%MW100"]],["EQ",["1","2","%MX100"]]]) {
+    const bytes = insert_xgwx_iec_ld_function(wire,0,5,7,name,JSON.stringify(operands));
+    const after = parse_xgwx(bytes);
+    assert.deepEqual(after.ladder.slice(1),before.ladder.slice(1));
+    assert.deepEqual(after.localVariables,before.localVariables);
+    assert.ok(after.ladder[0].sourceStrings.some(item=>item.isIecFunctionName && item.value===name && item.iecRowIndex===5));
+    assert.ok(after.ladder[0].sourceStrings.some(item=>item.value===operands.at(-1) && item.iecRowIndex===6));
+    assert.equal(after.ladder[0].iecCircuitGraph.openBranchEndpoints[0].rowIndex,5+operands.length);
+    assert.equal(after.ladder[0].iecRows.find(row=>row.rowIndex===6+operands.length).recordCount,
+      before.ladder[0].iecRows.find(row=>row.rowIndex===6).recordCount);
+    assert.throws(()=>insert_xgwx_iec_ld_function(bytes,0,5,7,name,JSON.stringify(operands)));
+    const block=after.ladder[0].iecFunctions.find(block=>block.rowIndex===5 && block.rawX===7);
+    assert.throws(()=>delete_xgwx_iec_ld_branch_function(bytes,0,block.recordOffset,"UNKNOWN"));
+    const deleted=delete_xgwx_iec_ld_branch_function(bytes,0,block.recordOffset,name);
+    const removed=parse_xgwx(deleted);
+    assert.deepEqual(removed.ladder[0].iecCircuitGraph.openBranchEndpoints,after.ladder[0].iecCircuitGraph.openBranchEndpoints);
+    assert.equal(removed.ladder[0].iecRows.find(row=>row.rowIndex===5).recordCount,2);
+    const restored=insert_xgwx_iec_ld_function(deleted,0,5,7,name,JSON.stringify(operands));
+    assert.deepEqual(restored,bytes);
+    const replacementName=name==="MOVE"?"ADD":"MOVE";
+    const replacementOperands=name==="MOVE"?["1","2","%MW100"]:["1","%MW100"];
+    const replacement=insert_xgwx_iec_ld_function(deleted,0,5,7,replacementName,JSON.stringify(replacementOperands));
+    const atomic=replace_xgwx_iec_ld_branch_function(bytes,0,block.recordOffset,name,replacementName,JSON.stringify(replacementOperands));
+    assert.deepEqual(atomic,replacement);
+    assert.throws(()=>replace_xgwx_iec_ld_branch_function(bytes,0,block.recordOffset,"UNKNOWN",replacementName,JSON.stringify(replacementOperands)));
+    assert.throws(()=>replace_xgwx_iec_ld_branch_function(bytes,0,block.recordOffset,name,"ADD",JSON.stringify(["1","2","%IW100"])));
+    const replaced=parse_xgwx(replacement);
+    assert.equal(replaced.ladder[0].iecCircuitGraph.openBranchEndpoints[0].rowIndex,8);
+    assert.deepEqual(replaced.ladder.slice(1),before.ladder.slice(1));
+    assert.deepEqual(replaced.localVariables,before.localVariables);
+    const replacementBlock=replaced.ladder[0].iecFunctions.find(block=>block.rowIndex===5 && block.rawX===7);
+    const replacementDeleted=delete_xgwx_iec_ld_branch_function(replacement,0,replacementBlock.recordOffset,replacementName);
+    assert.deepEqual(insert_xgwx_iec_ld_function(replacementDeleted,0,5,7,replacementName,JSON.stringify(replacementOperands)),replacement);
+  }
+  assert.throws(()=>insert_xgwx_iec_ld_function(wire,0,5,7,"MOVE",JSON.stringify(["1","%IW100"])));
+  assert.throws(()=>insert_xgwx_iec_ld_function(wire,0,5,10,"MOVE",JSON.stringify(["1","%MW100"])));
+});
+
+
+test("IEC terminal timer deletion removes its short feed and preserves declarations", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE to an IEC workspace"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_terminal_function}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture), before=parse_xgwx(bytes);
+  const block=before.ladder[4].iecFunctions.find(block=>block.rowIndex===15 && block.name==="TON");
+  assert.ok(block);
+  assert.throws(()=>delete_xgwx_iec_ld_terminal_function(bytes,4,block.recordOffset,"UNKNOWN"));
+  const deleted=delete_xgwx_iec_ld_terminal_function(bytes,4,block.recordOffset,"TON"), after=parse_xgwx(deleted);
+  assert.deepEqual(after.localVariables,before.localVariables);
+  for (let p=0;p<before.ladder.length;p++) if(p!==4) assert.deepEqual(after.ladder[p],before.ladder[p]);
+  assert.equal(after.ladder[4].iecFunctions.length,before.ladder[4].iecFunctions.length-1);
+  assert.equal(after.ladder[4].iecRows.find(row=>row.rowIndex===15).recordCount,1);
+  assert.ok(!after.ladder[4].iecRows.some(row=>row.rowIndex===16 || row.rowIndex===17));
+});
+
+test("IEC terminal TON restoration reuses its declaration and checks TIME operands", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!fixture){t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const bytes=fs.readFileSync(fixture);
+  const {insert_xgwx_iec_ld_terminal_timer,delete_xgwx_iec_ld_terminal_function}=await import("../media/libxgwx.js");
+  const before=parse_xgwx(bytes), block=before.ladder[4].iecFunctions.find(b=>b.rowIndex===15&&b.name==="TON");
+  const deleted=delete_xgwx_iec_ld_terminal_function(bytes,4,block.recordOffset,"TON");
+  const site=parse_xgwx(deleted).ladder[4].iecTerminalTimerInsertionSites.find(s=>s.rowIndex===15);
+  assert.equal(site.rawX,7);
+  for(const args of [["UNKNOWN","시간","카운터"],["Timer","가스","카운터"],["Timer","시간","T#1s"],["Timer","시간","UNKNOWN"]]){
+    assert.throws(()=>insert_xgwx_iec_ld_terminal_timer(deleted,4,site.contactOffset,...args));
+  }
+  const restored=insert_xgwx_iec_ld_terminal_timer(deleted,4,site.contactOffset,"Timer","시간","카운터"), after=parse_xgwx(restored);
+  assert.deepEqual(after.localVariables,before.localVariables);
+  assert.deepEqual(after.ladder,before.ladder);
+  assert.throws(()=>insert_xgwx_iec_ld_terminal_timer(restored,4,site.contactOffset,"Timer","시간","카운터"));
+  const literal=insert_xgwx_iec_ld_terminal_timer(deleted,4,site.contactOffset,"Timer","T#2s","카운터");
+  const newBlock=parse_xgwx(literal).ladder[4].iecFunctions.find(b=>b.rowIndex===15&&b.name==="TON");
+  assert.deepEqual(delete_xgwx_iec_ld_terminal_function(literal,4,newBlock.recordOffset,"TON"),deleted);
+});
+
+test("IEC scalar chain Delete preserves shared pins and supports typed refill", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!fixture){t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function,insert_xgwx_iec_ld_function}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture), before=parse_xgwx(bytes);
+  for(const [x,name,operands] of [[4,"MOVE",["%MW10","메모리값"]],[13,"INT_TO_UDINT",["메모리값","int변경"]]]){
+    const block=before.ladder[4].iecFunctions.find(b=>b.rowIndex===18&&b.rawX===x);
+    assert.ok(before.ladder[4].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset));
+    assert.throws(()=>delete_xgwx_iec_ld_scalar_chain_function(bytes,4,block.recordOffset,"UNKNOWN"));
+    const deleted=delete_xgwx_iec_ld_scalar_chain_function(bytes,4,block.recordOffset,name), after=parse_xgwx(deleted);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    for(let p=0;p<7;p++)if(p!==4)assert.deepEqual(after.ladder[p],before.ladder[p]);
+    assert.equal(after.ladder[4].iecFunctions.length,before.ladder[4].iecFunctions.length-1);
+    assert.deepEqual(after.ladder[4].iecRows.map(r=>r.rowIndex),before.ladder[4].iecRows.map(r=>r.rowIndex));
+    if(x===13)assert.throws(()=>insert_xgwx_iec_ld_function(deleted,4,18,x,name,JSON.stringify(["가스","int변경"])));
+    const restored=insert_xgwx_iec_ld_function(deleted,4,18,x,name,JSON.stringify(operands)), result=parse_xgwx(restored);
+    assert.deepEqual(result.localVariables,before.localVariables);
+    assert.deepEqual(result.ladder[4].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]),before.ladder[4].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]));
+    if(x===4)assert.deepEqual(result.ladder,before.ladder);
+  }
+});
+
+test("IEC mixed-height chain deletion drops only empty tail rows and restores exactly", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!fixture){t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function,insert_xgwx_iec_ld_function}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture), before=parse_xgwx(bytes);
+  for(const [row,x,name,operands,removedRow] of [
+    [22,4,"MUL",["int변경","1000","udint변경"],25],
+    [22,13,"UDINT_TO_TIME",["udint변경","시간"],null],
+    [30,4,"TIME_TO_UDINT",["카운터","time변경"],null],
+    [30,13,"DIV",["time변경","1000","div_값"],33],
+    [34,4,"UDINT_TO_INT",["div_값","밀리변경"],null],
+  ]){
+    const block=before.ladder[4].iecFunctions.find(b=>b.rowIndex===row&&b.rawX===x);
+    assert.ok(before.ladder[4].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset));
+    const deleted=delete_xgwx_iec_ld_scalar_chain_function(bytes,4,block.recordOffset,name), after=parse_xgwx(deleted);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    assert.deepEqual(after.ladder[4].iecRows.map(r=>r.rowIndex),before.ladder[4].iecRows.map(r=>r.rowIndex).filter(r=>r!==removedRow));
+    const restored=insert_xgwx_iec_ld_function(deleted,4,row,x,name,JSON.stringify(operands));
+    assert.deepEqual(parse_xgwx(restored).ladder,before.ladder);
+  }
+});
+
+test("IEC deletes the last short-wire block left in a scalar chain", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!fixture){t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function,delete_xgwx_iec_ld_standalone_function}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture), before=parse_xgwx(bytes);
+  for(const [row,tailName,lastName] of [[22,"UDINT_TO_TIME","MUL"],[30,"DIV","TIME_TO_UDINT"],[41,"","GE"]]){
+    const tail=before.ladder[4].iecFunctions.find(b=>b.rowIndex===row&&b.name===tailName);
+    const one=tailName?delete_xgwx_iec_ld_scalar_chain_function(bytes,4,tail.recordOffset,tailName):bytes, middle=parse_xgwx(one);
+    const last=middle.ladder[4].iecFunctions.find(b=>b.rowIndex===row&&b.name===lastName);
+    assert.ok(middle.ladder[4].iecStandaloneFunctionDeletionSites.some(s=>s.blockOffset===last.recordOffset));
+    const deleted=delete_xgwx_iec_ld_standalone_function(one,4,last.recordOffset,lastName), after=parse_xgwx(deleted);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    assert.deepEqual(after.ladder[4].iecRows.map(r=>r.rowIndex),before.ladder[4].iecRows.map(r=>r.rowIndex).filter(r=>r<row||r>row+3));
+    assert.equal(after.ladder[4].iecFunctions.length,before.ladder[4].iecFunctions.length-(tailName?2:1));
+    for(const i of [0,1,2,3,5,6])assert.deepEqual(after.ladder[i],before.ladder[i]);
+  }
+});
+
+test("IEC staggered MOVE deletion retains neighboring function pins", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const shape = ladder => ladder.iecFunctions.map(b => [b.rowIndex, b.rawX, b.name, b.pinCount]);
+  for (const row of [22, 28, 53]) {
+    const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === row && b.rawX === 4 && b.name === "MOVE");
+    assert.ok(before.ladder[0].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+    const deleted = delete_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "MOVE"), after = parse_xgwx(deleted);
+    assert.deepEqual(after.localVariables, before.localVariables);
+    for (let p = 1; p < before.ladder.length; p++) assert.deepEqual(after.ladder[p], before.ladder[p]);
+    assert.deepEqual(shape(after.ladder[0]), shape(before.ladder[0]).filter(b => b[0] !== row || b[1] !== 4));
+    assert.deepEqual(after.ladder[0].iecRows.map(r => r.rowIndex), before.ladder[0].iecRows.map(r => r.rowIndex).filter(r => r !== row + 2));
+    const restored = insert_xgwx_iec_ld_function(deleted, 0, row, 4, "MOVE", JSON.stringify(["%MW700", "%MW200"]));
+    assert.deepEqual(shape(parse_xgwx(restored).ladder[0]), shape(before.ladder[0]));
+  }
+});
+
+test("IEC completed branch tails support Delete and scalar replacement", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_branch_function, replace_xgwx_iec_ld_branch_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [p, row, expected] of [[5, 19, "SUB"], [6, 34, "SUB"], [6, 42, "GT"], [5, 36, "GT"], [0, 79, "EQ"], [0, 87, "MOVE"], [6, 74, "EQ"]]) {
+    const block = before.ladder[p].iecFunctions.find(b => b.rowIndex === row && b.name === expected);
+    const deleted = delete_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, expected), after = parse_xgwx(deleted);
+    assert.deepEqual(after.ladder[p].iecRows.map(r => r.rowIndex), before.ladder[p].iecRows.map(r => r.rowIndex).filter(r => r <= row || r > row + block.pinCount));
+    assert.equal(after.ladder[p].iecFunctions.length, before.ladder[p].iecFunctions.length - 1);
+    assert.deepEqual(after.localVariables, before.localVariables);
+    for (let i = 0; i < before.ladder.length; i++) if (i !== p) assert.deepEqual(after.ladder[i], before.ladder[i]);
+    for (const name of (expected === "MOVE" ? ["MOVE"] : ["MOVE", "ADD", "SUB", "MUL", "DIV", "EQ", "GT", "GE", "LT", "LE"])) {
+      const operands = name === "MOVE" ? ["1", "%MW414"] : ["1", "2", ["EQ", "GT", "GE", "LT", "LE"].includes(name) ? "%MX32" : "%MW414"];
+      const replaced = replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, expected, name, JSON.stringify(operands)), result = parse_xgwx(replaced);
+      const tail = result.ladder[p].iecFunctions.find(b => b.rowIndex === row && b.rawX === block.rawX);
+      assert.equal(tail.name, name);
+      assert.deepEqual(delete_xgwx_iec_ld_branch_function(replaced, p, tail.recordOffset, name), deleted);
+    }
+    assert.throws(() => replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, expected, "EQ", JSON.stringify(["1", "2", "%MW414"])));
+  }
+});
+
+
+test("IEC contact scalar tails preserve contacts through Delete and replacement", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_branch_function, replace_xgwx_iec_ld_branch_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [p, row, x, output] of [[5, 43, 13, "%MW416"], [1, 6, 19, "%MW301"]]) {
+    const block = before.ladder[p].iecFunctions.find(b => b.rowIndex === row && b.rawX === x);
+    const deleted = delete_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, "MOVE");
+    const after = parse_xgwx(deleted);
+    assert.equal(after.ladder[p].iecFunctions.length, before.ladder[p].iecFunctions.length - 1);
+    assert.deepEqual(after.localVariables, before.localVariables);
+    for (let i = 0; i < before.ladder.length; i++) if (i !== p) assert.deepEqual(after.ladder[i], before.ladder[i]);
+    for (const [name, operands] of [["MOVE", ["0", output]], ["ADD", ["1", "2", output]], ["EQ", ["1", "2", "%MX32"]]]) {
+      const replaced = replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, "MOVE", name, JSON.stringify(operands));
+      const result = parse_xgwx(replaced), tail = result.ladder[p].iecFunctions.find(b => b.rowIndex === row && b.rawX === x);
+      assert.equal(tail.name, name);
+      for (let i = 0; i < before.ladder.length; i++) if (i !== p) assert.deepEqual(result.ladder[i], before.ladder[i]);
+      if (name === "MOVE" || p === 5) assert.deepEqual(delete_xgwx_iec_ld_branch_function(replaced, p, tail.recordOffset, name), deleted);
+      else assert.equal(result.ladder[p].iecRows.find(r => r.rowIndex > row + tail.pinCount).rowIndex, 10);
+    }
+    assert.throws(() => replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, "MOVE", "EQ", JSON.stringify(["1", "2", output])));
+  }
+});
+
+
+test("IEC continuing branch scalar bodies preserve their spine rows", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_branch_function, replace_xgwx_iec_ld_branch_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [p, row, x, name] of [[5, 32, 13, "LT"], [0, 71, 16, "EQ"], [0, 75, 16, "EQ"], [6, 66, 19, "EQ"], [6, 70, 19, "EQ"], [5, 24, 13, "LE"], [6, 38, 13, "LT"], [5, 28, 13, "GE"]]) {
+    const block = before.ladder[p].iecFunctions.find(b => b.rowIndex === row && b.rawX === x);
+    const deleted = delete_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, name), after = parse_xgwx(deleted);
+    assert.deepEqual(after.ladder[p].iecRows.map(r => r.rowIndex), before.ladder[p].iecRows.map(r => r.rowIndex));
+    assert.equal(after.ladder[p].iecFunctions.length, before.ladder[p].iecFunctions.length - 1);
+    for (const [replacement, operands] of [["MOVE", ["0", "%MW416"]], ["ADD", ["1", "2", "%MW416"]], ["GE", ["1", "2", "%MX32"]]]) {
+      const edited = replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, name, replacement, JSON.stringify(operands)), result = parse_xgwx(edited);
+      const target = result.ladder[p].iecFunctions.find(b => b.rowIndex === row && b.rawX === x);
+      assert.equal(target.name, replacement);
+      assert.deepEqual(delete_xgwx_iec_ld_branch_function(edited, p, target.recordOffset, replacement), deleted);
+      for (let i = 0; i < before.ladder.length; i++) if (i !== p) assert.deepEqual(result.ladder[i], before.ladder[i]);
+    }
+    assert.throws(() => replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, name, "EQ", JSON.stringify(["1", "2", "%MW416"])));
+  }
+});
+
+test("IEC upper MOVE grows a retained branch for three-pin replacement", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_branch_function, replace_xgwx_iec_ld_branch_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes), p = 5;
+  const block = before.ladder[p].iecFunctions.find(b => b.rowIndex === 40 && b.rawX === 13);
+  const deleted = delete_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, "MOVE");
+  const added = replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, "MOVE", "ADD", JSON.stringify(["1", "2", "%MW416"]));
+  const result = parse_xgwx(added), target = result.ladder[p].iecFunctions.find(b => b.rowIndex === 40 && b.rawX === 13);
+  assert.equal(result.ladder[p].iecRows.length, before.ladder[p].iecRows.length + 1);
+  assert.ok(result.ladder[p].iecFunctions.some(b => b.rowIndex === 44 && b.rawX === 13 && b.name === "MOVE"));
+  const recovered = delete_xgwx_iec_ld_branch_function(added, p, target.recordOffset, "ADD");
+  assert.notDeepEqual(recovered, deleted);
+  for (const [name, operands] of [["MOVE", ["0", "%MW416"]], ["GE", ["1", "2", "%MX32"]]]) {
+    const edited = replace_xgwx_iec_ld_branch_function(added, p, target.recordOffset, "ADD", name, JSON.stringify(operands));
+    const changed = parse_xgwx(edited).ladder[p].iecFunctions.find(b => b.rowIndex === 40 && b.rawX === 13);
+    assert.deepEqual(delete_xgwx_iec_ld_branch_function(edited, p, changed.recordOffset, name), recovered);
+  }
+  for (let i = 0; i < before.ladder.length; i++) if (i !== p) assert.deepEqual(result.ladder[i], before.ladder[i]);
+  assert.throws(() => replace_xgwx_iec_ld_branch_function(bytes, p, block.recordOffset, "MOVE", "EQ", JSON.stringify(["1", "2", "%MW416"])));
+});
+
+test("IEC scalar replacement preserves R_TRIG and rejects invalid outputs atomically", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function, replace_xgwx_iec_ld_scalar_chain_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === 32 && b.rawX === 19);
+  const deleted = delete_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "ADD"), after = parse_xgwx(deleted);
+  assert.deepEqual(after.ladder[0].iecRows.map(r => r.rowIndex), before.ladder[0].iecRows.filter(r => ![34, 35].includes(r.rowIndex)).map(r => r.rowIndex));
+  for (const [name, operands] of [["MOVE", ["0", "%MW600"]], ["ADD", ["1", "2", "%MW600"]], ["EQ", ["1", "2", "%MX32"]]]) {
+    const edited = replace_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "ADD", name, JSON.stringify(operands)), result = parse_xgwx(edited);
+    const target = result.ladder[0].iecFunctions.find(b => b.rowIndex === 32 && b.rawX === 19);
+    assert.equal(target.name, name);
+    assert.equal(result.ladder[0].iecFunctions.find(b => b.rowIndex === 32 && b.rawX === 10).instance, before.ladder[0].iecFunctions.find(b => b.rowIndex === 32 && b.rawX === 10).instance);
+    assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(edited, 0, target.recordOffset, name), deleted);
+    for (let p = 1; p < 7; p++) assert.deepEqual(result.ladder[p], before.ladder[p]);
+    assert.deepEqual(result.localVariables, before.localVariables);
+  }
+  assert.throws(() => replace_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "ADD", "EQ", JSON.stringify(["1", "2", "%MW600"])));
+});
+
+test("IEC EQ result MOVE exposes deletion and preserves shared pins on refill", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === 38 && b.rawX === 19);
+  assert.ok(before.ladder[0].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+  const deleted = delete_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "MOVE"), after = parse_xgwx(deleted);
+  assert.deepEqual(after.ladder[0].iecRows.map(r => r.rowIndex), before.ladder[0].iecRows.map(r => r.rowIndex));
+  const eq = after.ladder[0].iecFunctions.find(b => b.rowIndex === 37 && b.rawX === 10);
+  const owned = after.ladder[0].iecFunctionOperandLinks.filter(l => l.targetRecordOffset === eq.recordOffset);
+  assert.equal(owned.length, 2);
+  assert.ok(owned.every(l => !l.isOutput));
+  const restored = insert_xgwx_iec_ld_function(deleted, 0, 38, 19, "MOVE", JSON.stringify(["0", "%MW600"]));
+  const result = parse_xgwx(restored), target = result.ladder[0].iecFunctions.find(b => b.rowIndex === 38 && b.rawX === 19);
+  assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(restored, 0, target.recordOffset, "MOVE"), deleted);
+  for (let p = 1; p < 7; p++) assert.deepEqual(result.ladder[p], before.ladder[p]);
+  assert.throws(() => insert_xgwx_iec_ld_function(deleted, 0, 38, 19, "EQ", JSON.stringify(["1", "2", "%MX32"])));
+});
+
+test("IEC wired comparison refill exposes two inputs and keeps its MOVE consumer", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function, replace_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === 37 && b.rawX === 10);
+  assert.ok(before.ladder[0].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+  const deleted = delete_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "EQ"), scaffold = parse_xgwx(deleted);
+  assert.ok(scaffold.ladder[0].iecWiredComparisonInsertionSites.some(s => s.rowIndex === 37 && s.rawX === 10));
+  assert.ok(!scaffold.ladder[0].iecRows.some(r => r.rowIndex === 37));
+  for (const name of ["EQ", "GT", "GE", "LT", "LE"]) {
+    const edited = replace_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "EQ", name, JSON.stringify(["%MW600", "8"]));
+    const result = parse_xgwx(edited), target = result.ladder[0].iecFunctions.find(b => b.rowIndex === 37 && b.rawX === 10);
+    const links = result.ladder[0].iecFunctionOperandLinks.filter(l => l.targetRecordOffset === target.recordOffset);
+    assert.equal(target.name, name);
+    assert.equal(links.length, 2);
+    assert.ok(links.every(l => !l.isOutput));
+    assert.ok(result.ladder[0].iecFunctions.some(b => b.rowIndex === 38 && b.rawX === 19 && b.name === "MOVE"));
+    assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(edited, 0, target.recordOffset, name), deleted);
+    for (let p = 1; p < 7; p++) assert.deepEqual(result.ladder[p], before.ladder[p]);
+  }
+  const boolInputs = replace_xgwx_iec_ld_scalar_chain_function(bytes, 0, block.recordOffset, "EQ", "EQ", JSON.stringify(["TRUE", "FALSE"]));
+  const boolBlock = parse_xgwx(boolInputs).ladder[0].iecFunctions.find(b => b.rowIndex === 37 && b.rawX === 10);
+  assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(boolInputs, 0, boolBlock.recordOffset, "EQ"), deleted);
+  assert.throws(() => insert_xgwx_iec_ld_function(deleted, 0, 37, 10, "EQ", JSON.stringify(["%MW600", "%MX32"])));
+});
+
+
+test("IEC connected TON preserves its branch and coil during Delete and typed refill", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path: fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function,insert_xgwx_iec_ld_terminal_timer} = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[1].iecFunctions.find(b => b.rowIndex === 1 && b.rawX === 19);
+  assert.ok(before.ladder[1].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+  const deleted = delete_xgwx_iec_ld_scalar_chain_function(bytes,1,block.recordOffset,"TON"), scaffold = parse_xgwx(deleted);
+  const site = scaffold.ladder[1].iecTerminalTimerInsertionSites.find(s => s.rowIndex === 1 && s.rawX === 19);
+  assert.ok(site);
+  assert.ok(!scaffold.ladder[1].iecRows.some(r => r.rowIndex === 3));
+  for (const args of [["UNKNOWN","T#5s",""],["INST13","8",""],["INST13","T#5s","T#1s"]]) {
+    assert.throws(() => insert_xgwx_iec_ld_terminal_timer(deleted,1,site.contactOffset,...args));
+  }
+  const refill = insert_xgwx_iec_ld_terminal_timer(deleted,1,site.contactOffset,"INST13","T#5s",""), after = parse_xgwx(refill);
+  assert.deepEqual(after.localVariables,before.localVariables);
+  for (let i=0;i<7;i++) if (i !== 1) assert.deepEqual(after.ladder[i],before.ladder[i]);
+  const timer = after.ladder[1].iecFunctions.find(b => b.rowIndex === 1 && b.name === "TON");
+  assert.equal(timer.instance,"INST13");
+  assert.equal(after.ladder[1].iecFunctionOperandLinks.filter(l => l.targetRecordOffset === timer.recordOffset).length,1);
+  assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(refill,1,timer.recordOffset,"TON"),deleted);
+});
+
+test("IEC long-feed TON retains its contacts during Delete and positional typed refill", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path: fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function} = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [program,row,instance,count] of [[2,13,"INST10",1],[3,59,"INST1",3]]) {
+    const block = before.ladder[program].iecFunctions.find(b => b.rowIndex === row && b.rawX === 22);
+    assert.ok(before.ladder[program].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+    const deleted = delete_xgwx_iec_ld_scalar_chain_function(bytes,program,block.recordOffset,"TON"), scaffold = parse_xgwx(deleted);
+    assert.ok(scaffold.ladder[program].iecTerminalTimerInsertionSites.some(s => s.rowIndex === row && s.rawX === 22));
+    assert.equal(scaffold.ladder[program].iecRecords.filter(r => r.rowIndex === row && r.kind.startsWith("Contact")).length,count);
+    for (const args of [["UNKNOWN","T#15s"],[instance,"8"],[instance]]) {
+      assert.throws(() => insert_xgwx_iec_ld_function(deleted,program,row,22,"TON",JSON.stringify(args)));
+    }
+    assert.throws(() => insert_xgwx_iec_ld_function(deleted,program,row,19,"TON",JSON.stringify([instance,"T#15s"])));
+    const refill = insert_xgwx_iec_ld_function(deleted,program,row,22,"TON",JSON.stringify([instance,"T#15s"])), after = parse_xgwx(refill);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    for (let i=0;i<7;i++) if (i !== program) assert.deepEqual(after.ladder[i],before.ladder[i]);
+    const timer = after.ladder[program].iecFunctions.find(b => b.rowIndex === row && b.name === "TON");
+    assert.equal(timer.instance,instance);
+    assert.equal(after.ladder[program].iecFunctionOperandLinks.filter(l => l.targetRecordOffset === timer.recordOffset).length,1);
+    assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(refill,program,timer.recordOffset,"TON"),deleted);
+  }
+});
+
+test("IEC paired comparisons preserve their output branch through Delete and typed refill", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) {t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function,insert_xgwx_iec_ld_function}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture),before=parse_xgwx(bytes);
+  for (const [index,row,x,instance,first,second] of [[2,16,7,"INST10.ET","T#2s","T#3s"],[2,23,4,"INST10.ET","T#7s","T#9s"],[3,62,7,"INST1.ET","T#2s","T#3s"],[3,68,4,"INST1.ET","T#7s","T#9s"]]) {
+    for (const [r,at,name,preset] of [[row,x,"GT",first],[row+1,x+9,"LE",second]]) {
+      const block=before.ladder[index].iecFunctions.find(b=>b.rowIndex===r && b.rawX===at);
+      assert.ok(before.ladder[index].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset));
+      const deleted=delete_xgwx_iec_ld_scalar_chain_function(bytes,index,block.recordOffset,name),scaffold=parse_xgwx(deleted);
+      assert.ok(scaffold.ladder[index].iecWiredComparisonInsertionSites.some(s=>s.rowIndex===r && s.rawX===at));
+      assert.throws(()=>insert_xgwx_iec_ld_function(deleted,index,r,at,name,JSON.stringify([instance,"8"])));
+      const restored=insert_xgwx_iec_ld_function(deleted,index,r,at,name,JSON.stringify([instance,preset])),after=parse_xgwx(restored);
+      const replacement=after.ladder[index].iecFunctions.find(b=>b.rowIndex===r && b.rawX===at);
+      assert.equal(after.ladder[index].iecFunctionOperandLinks.filter(l=>l.targetRecordOffset===replacement.recordOffset).length,2);
+      for(let i=0;i<7;i++) if(i!==index) assert.deepEqual(after.ladder[i],before.ladder[i]);
+      assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(restored,index,replacement.recordOffset,name),deleted);
+    }
+    let both=bytes;
+    for(const [r,at,name] of [[row,x,"GT"],[row+1,x+9,"LE"]]) {
+      const block=parse_xgwx(both).ladder[index].iecFunctions.find(b=>b.rowIndex===r && b.rawX===at);
+      both=delete_xgwx_iec_ld_scalar_chain_function(both,index,block.recordOffset,name);
+    }
+    const vacant=parse_xgwx(both).ladder[index];
+    assert.ok(!vacant.iecRows.some(r=>r.rowIndex===row+1));
+    for(const [r,at,name,preset] of [[row+1,x+9,"LE",second],[row,x,"GT",first]]) {
+      both=insert_xgwx_iec_ld_function(both,index,r,at,name,JSON.stringify([instance,preset]));
+    }
+    assert.equal(parse_xgwx(both).ladder[index].iecFunctions.filter(b=>(b.rowIndex===row && b.rawX===x)||(b.rowIndex===row+1 && b.rawX===x+9)).length,2);
+  }
+});
+
+
+test("IEC conversion pairs retain TON records through typed Delete and refill", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) {t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function,insert_xgwx_iec_ld_function}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture),before=parse_xgwx(bytes);
+  for(const [index,row,device,shared,time] of [[5,8,"%MW410","출력_2","시간입력변환2"],[6,12,"%MW500","출력_1","시간입력변환"]]) {
+    const originalTimer=before.ladder[index].iecFunctions.find(b=>b.rowIndex===row+3 && b.rawX===10);
+    for (const [x,name,args] of [[10,"INT_TO_UDINT",[device,shared]],[19,"UDINT_TO_TIME",[shared,time]]]) {
+      const block=before.ladder[index].iecFunctions.find(b=>b.rowIndex===row && b.rawX===x);
+      assert.ok(before.ladder[index].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset));
+      const deleted=delete_xgwx_iec_ld_scalar_chain_function(bytes,index,block.recordOffset,name);
+      assert.throws(()=>insert_xgwx_iec_ld_function(deleted,index,row,x,name,JSON.stringify([time,shared])));
+      const restored=insert_xgwx_iec_ld_function(deleted,index,row,x,name,JSON.stringify(args)),after=parse_xgwx(restored);
+      const timer=after.ladder[index].iecFunctions.find(b=>b.rowIndex===row+3 && b.rawX===10);
+      assert.equal(timer.name,originalTimer.name);
+      assert.equal(timer.instance,originalTimer.instance);
+      assert.deepEqual(timer.pins,originalTimer.pins);
+      for(let i=0;i<7;i++) if(i!==index) assert.deepEqual(after.ladder[i],before.ladder[i]);
+      const replacement=after.ladder[index].iecFunctions.find(b=>b.rowIndex===row && b.rawX===x);
+      assert.deepEqual(delete_xgwx_iec_ld_scalar_chain_function(restored,index,replacement.recordOffset,name),deleted);
+    }
+    const results=[];
+    for(const reverse of [false,true]) {
+      let both=bytes;
+      const order=reverse?[19,10]:[10,19];
+      for(const x of order) {
+        const b=parse_xgwx(both).ladder[index].iecFunctions.find(b=>b.rowIndex===row && b.rawX===x);
+        both=delete_xgwx_iec_ld_scalar_chain_function(both,index,b.recordOffset,b.name);
+      }
+      assert.equal(parse_xgwx(both).ladder[index].iecRows.filter(r=>r.rowIndex>=row && r.rowIndex<=row+5).length,6);
+      for(const x of order) both=insert_xgwx_iec_ld_function(both,index,row,x,x===10?"INT_TO_UDINT":"UDINT_TO_TIME",JSON.stringify(x===10?[device,shared]:[shared,time]));
+      results.push(both);
+    }
+    assert.deepEqual(results[0],results[1]);
+  }
+});
+
+test("IEC shared branch TON supports typed Delete, refill and atomic replacement", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) {t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function:remove,insert_xgwx_iec_ld_function:insert,
+    replace_xgwx_iec_ld_scalar_chain_function:replace}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture),before=parse_xgwx(bytes);
+  for (const [index,row,instance,preset] of [[5,11,"타이머4","시간입력변환2"],[6,15,"타이머3","시간입력변환"]]) {
+    const block=before.ladder[index].iecFunctions.find(b=>b.rowIndex===row && b.rawX===10);
+    assert.ok(before.ladder[index].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset));
+    const deleted=remove(bytes,index,block.recordOffset,"TON"),summary=parse_xgwx(deleted);
+    assert.ok(summary.ladder[index].iecTerminalTimerInsertionSites.some(s=>s.rowIndex===row && s.rawX===10));
+    assert.throws(()=>insert(deleted,index,row,10,"TON",JSON.stringify([instance,"1"])));
+    assert.throws(()=>replace(bytes,index,block.recordOffset,"TON","TON",JSON.stringify(["UNKNOWN",preset])));
+    const restored=insert(deleted,index,row,10,"TON",JSON.stringify([instance,preset]));
+    const literal=replace(bytes,index,block.recordOffset,"TON","TON",JSON.stringify([instance,"T#2s"]));
+    assert.ok(parse_xgwx(literal).ladder[index].sourceStrings.some(s=>s.isIecFunctionOperand && s.value==="T#2s"));
+    for (let i=0;i<7;i++) if(i!==index) assert.deepEqual(parse_xgwx(restored).ladder[i],before.ladder[i]);
+    const newBlock=parse_xgwx(restored).ladder[index].iecFunctions.find(b=>b.rowIndex===row && b.rawX===10);
+    assert.deepEqual(remove(restored,index,newBlock.recordOffset,"TON"),deleted);
+  }
+  // The shared TON prompt also edits previously supported connected timers.
+  for (const [index,row,x] of [[1,1,19],[2,13,22],[3,59,22]]) {
+    const block=before.ladder[index].iecFunctions.find(b=>b.rowIndex===row && b.rawX===x && b.name==="TON");
+    const updated=replace(bytes,index,block.recordOffset,"TON","TON",JSON.stringify([block.instance,"T#2s"]));
+    const after=parse_xgwx(updated);
+    assert.equal(after.ladder[index].iecFunctions.find(b=>b.rowIndex===row && b.rawX===x).instance,block.instance);
+    assert.ok(after.ladder[index].sourceStrings.some(s=>s.isIecFunctionOperand && s.value==="T#2s"));
+    for(let i=0;i<7;i++) if(i!==index) assert.deepEqual(after.ladder[i],before.ladder[i]);
+  }
+
+});
+
+test("IEC enabled connected TON supports guarded Delete, refill and instance replacement", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) {t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function:remove,insert_xgwx_iec_ld_function:insert,
+    replace_xgwx_iec_ld_scalar_chain_function:replace}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture),before=parse_xgwx(bytes),block=before.ladder[2].iecFunctions.find(b=>b.rowIndex===31 && b.rawX===19);
+  assert.ok(before.ladder[2].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset));
+  const deleted=remove(bytes,2,block.recordOffset,"TON"),summary=parse_xgwx(deleted);
+  assert.ok(summary.ladder[2].iecTerminalTimerInsertionSites.some(s=>s.rowIndex===31 && s.rawX===19));
+  assert.throws(()=>insert(deleted,2,31,19,"TON",JSON.stringify(["INST10","T#5s"])));
+  assert.throws(()=>insert(deleted,2,31,19,"TON",JSON.stringify(["INST12","8"])));
+  for(const [instance,preset] of [["INST12","T#5s"],["INST12","T#7s"],["INST9","T#5s"]]) {
+    const updated=replace(bytes,2,block.recordOffset,"TON","TON",JSON.stringify([instance,preset])),after=parse_xgwx(updated);
+    const b=after.ladder[2].iecFunctions.find(b=>b.rowIndex===31 && b.rawX===19);
+    assert.equal(b.instance,instance);
+    assert.deepEqual(remove(updated,2,b.recordOffset,"TON"),deleted);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    for(let i=0;i<7;i++) if(i!==2) assert.deepEqual(after.ladder[i],before.ladder[i]);
+  }
+});
+
+
+test("IEC common-entry contact MOVE supports Delete, refill and typed operand editing", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) {t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function:remove,insert_xgwx_iec_ld_function:insert,
+    replace_xgwx_iec_ld_scalar_chain_function:replace}=await import("../media/libxgwx.js");
+  const bytes=fs.readFileSync(fixture),before=parse_xgwx(bytes),block=before.ladder[2].iecFunctions.find(b=>b.rowIndex===36 && b.rawX===19);
+  assert.ok(before.ladder[2].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset));
+  const {update_xgwx_iec_ld_function_operand:update}=await import("../media/libxgwx.js");
+  const input=before.ladder[2].sourceStrings.find(s=>s.value==="0" && before.ladder[2].iecFunctionOperandLinks.some(l=>l.targetRecordOffset===block.recordOffset && s.iecRecordOffset===l.recordOffset));
+  assert.throws(()=>update(bytes,2,input.offset,"0","TRUE"));
+  assert.ok(update(bytes,2,input.offset,"0","1"));
+  const deleted=remove(bytes,2,block.recordOffset,"MOVE"),summary=parse_xgwx(deleted);
+  assert.equal(summary.ladder[2].iecFunctions.some(b=>b.rowIndex===36),false);
+  assert.equal(summary.ladder[2].iecRecords.filter(r=>r.rowIndex===36).length,1);
+  for(const operands of [["0","0"],["TRUE","%MW301"],["UNKNOWN","%MW301"]]) {
+    assert.throws(()=>insert(deleted,2,36,19,"MOVE",JSON.stringify(operands)));
+  }
+  assert.throws(()=>insert(deleted,2,36,19,"ADD",JSON.stringify(["0","1","%MW301"])));
+  for(const operands of [["0","%MW301"],["1","%MW302"]]) {
+    const updated=insert(deleted,2,36,19,"MOVE",JSON.stringify(operands)),after=parse_xgwx(updated);
+    const b=after.ladder[2].iecFunctions.find(b=>b.rowIndex===36 && b.rawX===19);
+    assert.equal(b.name,"MOVE");
+    assert.deepEqual(remove(updated,2,b.recordOffset,"MOVE"),deleted);
+    assert.deepEqual(updated,replace(bytes,2,block.recordOffset,"MOVE","MOVE",JSON.stringify(operands)));
+    assert.deepEqual(after.localVariables,before.localVariables);
+    for(let i=0;i<7;i++) if(i!==2) assert.deepEqual(after.ladder[i],before.ladder[i]);
+  }
+});
+
+test("IEC lighting contact MOVE supports Delete and refill at x16", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const {
+    delete_xgwx_iec_ld_scalar_chain_function: remove,
+    insert_xgwx_iec_ld_function: insert,
+    replace_xgwx_iec_ld_scalar_chain_function: replace,
+  } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [row, input] of [[56, "3"], [59, "0"]]) {
+    const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === row && b.rawX === 16);
+    assert.ok(before.ladder[0].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+    const deleted = remove(bytes, 0, block.recordOffset, "MOVE"), empty = parse_xgwx(deleted);
+    assert.equal(empty.ladder[0].iecRecords.filter(r => r.rowIndex === row).length, 1);
+    assert.throws(() => insert(deleted, 0, row, 16, "ADD", JSON.stringify(["0", "1", "%MW700"])));
+    assert.throws(() => insert(deleted, 0, row, 16, "MOVE", JSON.stringify(["TRUE", "%MW700"])));
+    const operands = JSON.stringify([input, "%MW700"]);
+    const filled = insert(deleted, 0, row, 16, "MOVE", operands), after = parse_xgwx(filled);
+    const restored = after.ladder[0].iecFunctions.find(b => b.rowIndex === row && b.rawX === 16);
+    assert.equal(restored.name, "MOVE");
+    assert.deepEqual(remove(filled, 0, restored.recordOffset, "MOVE"), deleted);
+    assert.deepEqual(replace(bytes, 0, block.recordOffset, "MOVE", "MOVE", operands), filled);
+    assert.deepEqual(after.localVariables, before.localVariables);
+    for (let i = 1; i < 7; i++) assert.deepEqual(after.ladder[i], before.ladder[i]);
+  }
+});
+
+test("IEC MOVE accepts numeric BOOL literals without weakening WORD checks", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const {
+    update_xgwx_iec_ld_function_operand: update,
+    delete_xgwx_iec_ld_scalar_chain_function: remove,
+    insert_xgwx_iec_ld_function: insert,
+  } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes), program = before.ladder[0];
+  const block = program.iecFunctions.find(b => b.rowIndex === 63 && b.rawX === 16);
+  const linked = program.sourceStrings.filter(s => program.iecFunctionOperandLinks.some(l =>
+    l.targetRecordOffset === block.recordOffset && s.iecRecordOffset === l.recordOffset));
+  const input = linked.find(s => s.value === "0"), output = linked.find(s => s.value === "자기유지2");
+  assert.ok(update(bytes, 0, input.offset, "0", "1"));
+  assert.ok(update(bytes, 0, output.offset, "자기유지2", "자기유지1"));
+  assert.throws(() => update(bytes, 0, input.offset, "0", "2"));
+  const deleted = remove(bytes, 0, block.recordOffset, "MOVE");
+  for (const value of ["0", "1"]) {
+    const filled = insert(deleted, 0, 63, 16, "MOVE", JSON.stringify([value, "자기유지2"]));
+    const after = parse_xgwx(filled);
+    assert.equal(after.ladder[0].iecFunctions.find(b => b.rowIndex === 63).name, "MOVE");
+    for (let i = 1; i < 7; i++) assert.deepEqual(after.ladder[i], before.ladder[i]);
+  }
+  assert.throws(() => insert(deleted, 0, 63, 16, "MOVE", JSON.stringify(["2", "자기유지2"])));
+  assert.throws(() => insert(deleted, 0, 63, 16, "MOVE", JSON.stringify(["TRUE", "%MW700"])));
+});
+
+test("IEC parallel contact MOVE retains both branches through Delete and refill", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function: remove,
+    insert_xgwx_iec_ld_function: insert,
+    replace_xgwx_iec_ld_scalar_chain_function: replace } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === 48 && b.rawX === 19);
+  const deleted = remove(bytes, 0, block.recordOffset, "MOVE");
+  const filled = insert(deleted, 0, 48, 19, "MOVE", JSON.stringify(["0", "%MW600"]));
+  assert.deepEqual(replace(bytes, 0, block.recordOffset, "MOVE", "MOVE", JSON.stringify(["0", "%MW600"])), filled);
+  const restored = parse_xgwx(filled), after = parse_xgwx(deleted);
+  const next = restored.ladder[0].iecFunctions.find(b => b.rowIndex === 48 && b.rawX === 19);
+  assert.deepEqual(remove(filled, 0, next.recordOffset, "MOVE"), deleted);
+  assert.throws(() => insert(deleted, 0, 48, 19, "ADD", JSON.stringify(["1", "2", "%MW600"])));
+  for (let i = 1; i < 7; i++) {
+    assert.deepEqual(after.ladder[i], before.ladder[i]);
+    assert.deepEqual(restored.ladder[i], before.ladder[i]);
+  }
+});
+
+test("IEC upper staggered MOVE splits and merges groups without shifting its neighbor", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function: remove,
+    insert_xgwx_iec_ld_function: insert,
+    replace_xgwx_iec_ld_scalar_chain_function: replace } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === 52 && b.rawX === 16);
+  assert.ok(before.ladder[0].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+  const deleted = remove(bytes, 0, block.recordOffset, "MOVE");
+  const filled = insert(deleted, 0, 52, 16, "MOVE", JSON.stringify(["0", "%MW700"]));
+  assert.deepEqual(replace(bytes, 0, block.recordOffset, "MOVE", "MOVE", JSON.stringify(["0", "%MW700"])), filled);
+  const after = parse_xgwx(deleted), restored = parse_xgwx(filled);
+  for (const doc of [after, restored]) {
+    const lower = doc.ladder[0].iecFunctions.find(b => b.rowIndex === 53 && b.rawX === 4);
+    assert.equal(lower.name, "MOVE");
+    for (let i = 1; i < 7; i++) assert.deepEqual(doc.ladder[i], before.ladder[i]);
+  }
+  const next = restored.ladder[0].iecFunctions.find(b => b.rowIndex === 52 && b.rawX === 16);
+  assert.deepEqual(remove(filled, 0, next.recordOffset, "MOVE"), deleted);
+  assert.throws(() => insert(deleted, 0, 52, 16, "ADD", JSON.stringify(["1", "2", "%MW700"])));
+});
+
+test("IEC upper contact MOVE preserves both branch spines and its lower MOVE", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function: remove,
+    insert_xgwx_iec_ld_function: insert,
+    replace_xgwx_iec_ld_scalar_chain_function: replace } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === 84 && b.rawX === 16);
+  assert.ok(before.ladder[0].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+  const deleted = remove(bytes, 0, block.recordOffset, "MOVE");
+  const filled = insert(deleted, 0, 84, 16, "MOVE", JSON.stringify(["0", "%MW10"]));
+  assert.deepEqual(replace(bytes, 0, block.recordOffset, "MOVE", "MOVE", JSON.stringify(["0", "%MW10"])), filled);
+  const after = parse_xgwx(deleted), restored = parse_xgwx(filled);
+  for (const doc of [after, restored]) {
+    const lower = doc.ladder[0].iecFunctions.find(b => b.rowIndex === 87 && b.rawX === 16);
+    assert.equal(lower.name, "MOVE");
+    for (let i = 1; i < 7; i++) assert.deepEqual(doc.ladder[i], before.ladder[i]);
+  }
+  const next = restored.ladder[0].iecFunctions.find(b => b.rowIndex === 84 && b.rawX === 16);
+  assert.deepEqual(remove(filled, 0, next.recordOffset, "MOVE"), deleted);
+  assert.throws(() => insert(deleted, 0, 84, 16, "ADD", JSON.stringify(["1", "2", "%MW10"])));
+});
+
+test("IEC comparison deletion and refill retain the terminal result coil", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function: remove,
+    insert_xgwx_iec_ld_function: insert,
+    replace_xgwx_iec_ld_scalar_chain_function: replace } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[2].iecFunctions.find(b => b.rowIndex === 5 && b.rawX === 7);
+  assert.ok(before.ladder[2].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+  const deleted = remove(bytes, 2, block.recordOffset, "EQ"), after = parse_xgwx(deleted);
+  assert.ok(after.ladder[2].iecWiredComparisonInsertionSites.some(s => s.rowIndex === 5 && s.rawX === 7));
+  const operands = JSON.stringify(["변환", "8718"]);
+  const filled = insert(deleted, 2, 5, 7, "EQ", operands);
+  assert.deepEqual(replace(bytes, 2, block.recordOffset, "EQ", "EQ", operands), filled);
+  const alternate = insert(deleted, 2, 5, 7, "GT", operands);
+  for (const doc of [after, parse_xgwx(filled), parse_xgwx(alternate)]) {
+    for (let i = 0; i < 7; i++) if (i !== 2) assert.deepEqual(doc.ladder[i], before.ladder[i]);
+  }
+  const next = parse_xgwx(filled).ladder[2].iecFunctions.find(b => b.rowIndex === 5 && b.rawX === 7);
+  assert.deepEqual(remove(filled, 2, next.recordOffset, "EQ"), deleted);
+  assert.throws(() => insert(deleted, 2, 5, 7, "MOVE", JSON.stringify(["0", "%MW0"])));
+});
+
+
+test("IEC contact mesh MOVE retains all six branch rows", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const { delete_xgwx_iec_ld_scalar_chain_function: remove,
+    insert_xgwx_iec_ld_function: insert,
+    replace_xgwx_iec_ld_scalar_chain_function: replace } = await import("../media/libxgwx.js");
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const block = before.ladder[6].iecFunctions.find(b => b.rowIndex === 80 && b.rawX === 19);
+  assert.ok(before.ladder[6].iecScalarChainDeletionSites.some(s => s.blockOffset === block.recordOffset));
+  const deleted = remove(bytes, 6, block.recordOffset, "MOVE");
+  const filled = insert(deleted, 6, 80, 19, "MOVE", JSON.stringify(["0", "%MW129"]));
+  assert.deepEqual(replace(bytes, 6, block.recordOffset, "MOVE", "MOVE", JSON.stringify(["0", "%MW129"])), filled);
+  const after = parse_xgwx(deleted), restored = parse_xgwx(filled);
+  for (const doc of [after, restored]) {
+    assert.equal(doc.ladder[6].iecRows.filter(r => r.rowIndex >= 80 && r.rowIndex <= 85).length, 6);
+    for (let i = 0; i < 6; i++) assert.deepEqual(doc.ladder[i], before.ladder[i]);
+  }
+  const next = restored.ladder[6].iecFunctions.find(b => b.rowIndex === 80 && b.rawX === 19);
+  assert.deepEqual(remove(filled, 6, next.recordOffset, "MOVE"), deleted);
+  assert.throws(() => insert(deleted, 6, 80, 19, "ADD", JSON.stringify(["1", "2", "%MW129"])));
+});
+
+test("IEC heating mesh leading contact Delete and refill retain MOVE and branches", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const site = before.ladder[6].iecNoContactDeletionSites.find(s => s.rowIndex === 80 && s.rawX === 1);
+  assert.ok(site);
+  const deleted = delete_xgwx_iec_ld_contact(bytes, 6, site.contactOffset, 1, "NO", "%MX729");
+  const after = parse_xgwx(deleted);
+  assert.ok(after.ladder[6].iecLeadingContactInsertionSites.some(s => s.rowIndex === 80));
+  assert.equal(after.ladder[6].iecRows.filter(r => r.rowIndex >= 80 && r.rowIndex <= 85).length, 6);
+  const branches = p => p.iecCircuitGraph.edges.filter(e => e.kind === "verticalBranch")
+    .map(e => ({start: e.start, end: e.end}));
+  assert.ok(branches(before.ladder[6]).length > 0);
+  assert.deepEqual(branches(after.ladder[6]), branches(before.ladder[6]));
+  assert.deepEqual(after.ladder.slice(0, 6), before.ladder.slice(0, 6));
+  const filled = insert_xgwx_iec_ld_single_element(deleted, 6, 80, 1, "contact", "NO", "%MX729");
+  const restored = parse_xgwx(filled);
+  const next = restored.ladder[6].iecNoContactDeletionSites.find(s => s.rowIndex === 80 && s.rawX === 1);
+  assert.deepEqual(delete_xgwx_iec_ld_contact(filled, 6, next.contactOffset, 1, "NO", "%MX729"), deleted);
+  assert.throws(() => insert_xgwx_iec_ld_single_element(deleted, 6, 80, 1, "contact", "NO", "%MW129"));
+  assert.throws(() => delete_xgwx_iec_ld_contact(bytes, 6, site.contactOffset, 1, "NO", "%MX730"));
+});
+
+test("IEC interior contacts refill between branch endpoints and preserve original records", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [p,row,x,kind,operand] of [[6,80,7,"NC","%MX726"],[6,81,7,"NC","%MX727"],
+    [6,85,1,"NO","%MX734"],[0,3,1,"NO","시작"],[1,1,1,"NO","커튼_제어"]]) {
+    const site = before.ladder[p].iecNoContactDeletionSites.find(s => s.rowIndex === row && s.rawX === x);
+    assert.ok(site, `published p${p} L${row} x${x}`);
+    const removed = delete_xgwx_iec_ld_contact(bytes,p,site.contactOffset,x,kind,operand);
+    const restored = insert_xgwx_iec_ld_single_element(removed,p,row,x,"contact",kind,operand);
+    assert.deepEqual(parse_xgwx(restored).ladder,before.ladder, `exact refill p${p} L${row} x${x}`);
+    assert.throws(() => delete_xgwx_iec_ld_contact(bytes,p,site.contactOffset,x,kind,"STALE"));
+    assert.throws(() => insert_xgwx_iec_ld_single_element(removed,p,row,x,"contact",kind,"%MW129"));
+  }
+});
+
+
+test("IEC system BOOL flags resolve after their last contact is deleted", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  const flags = before.iecSystemVariables;
+  assert.equal(flags.length,13);
+  assert.equal(new Set(flags.map(f => f.name)).size,13);
+  assert.ok(flags.every(f => f.dataType === "BOOL" && f.writable === false && f.description));
+  assert.ok(flags.some(f => f.name === "_ON"));
+  const site = before.ladder[6].iecNoContactDeletionSites.find(s => s.rowIndex === 30 && s.rawX === 4);
+  assert.ok(site);
+  const removed = delete_xgwx_iec_ld_contact(bytes,6,site.contactOffset,4,"NO","_ON");
+  const restored = insert_xgwx_iec_ld_single_element(removed,6,30,4,"contact","NO","_ON");
+  assert.deepEqual(parse_xgwx(restored).ladder,before.ladder);
+  for (const operand of ["_ON_EXTRA","_UNKNOWN","%MW129"]) {
+    assert.throws(() => insert_xgwx_iec_ld_single_element(removed,6,30,4,"contact","NO",operand));
+  }
+  assert.throws(() => insert_xgwx_iec_ld_single_element(removed,6,30,4,"coil","OUT","_ON"));
+});
+
+
+test("IEC addressed coil Delete and refill preserve branched and function-fed rows", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [p,row,operand] of [[6,24,"%MX727"],[3,64,"%MX71"],[0,2,"시작"],
+    [0,12,"조명_2"],[1,1,"커튼닫힘"],[2,6,"공동현관_엘베"]]) {
+    const coil = before.ladder[p].sourceStrings.find(s => s.iecRowIndex === row && s.iecPosition?.[0] === 94 && s.value === operand);
+    assert.ok(coil, `coil p${p} L${row}`);
+    const removed = delete_xgwx_iec_ld_terminal_coil(bytes,p,coil.iecRecordOffset,operand);
+    const restored = insert_xgwx_iec_ld_single_element(removed,p,row,94,"coil","OUTPUT",operand);
+    assert.deepEqual(parse_xgwx(restored).ladder,before.ladder, `exact refill p${p} L${row}`);
+    assert.throws(() => delete_xgwx_iec_ld_terminal_coil(bytes,p,coil.iecRecordOffset,"STALE"));
+    assert.throws(() => insert_xgwx_iec_ld_single_element(removed,p,row,94,"coil","OUTPUT","%MW129"));
+    assert.throws(() => insert_xgwx_iec_ld_single_element(removed,p,row,94,"coil","OUTPUT","_ON"));
+  }
+});
+
+
+test("IEC disabled unresolved switch contacts refill without declaring variables", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
+  const bytes = fs.readFileSync(fixture), before = parse_xgwx(bytes);
+  for (const [row,operand] of [[2,"스위치_1"],[6,"스위치_2"]]) {
+    const site = before.ladder[0].iecNoContactDeletionSites.find(s => s.rowIndex === row && s.rawX === 1);
+    assert.ok(site);
+    const removed = delete_xgwx_iec_ld_contact(bytes,0,site.contactOffset,1,"RISING",operand);
+    const restored = insert_xgwx_iec_ld_single_element(removed,0,row,1,"contact","RISING",operand);
+    const after = parse_xgwx(restored);
+    assert.deepEqual(after.ladder,before.ladder);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    assert.deepEqual(after.variables,before.variables);
+    for (const invalid of ["%MW129","A B","A+B","1Invalid"]) {
+      assert.throws(() => insert_xgwx_iec_ld_single_element(removed,0,row,1,"contact","RISING",invalid));
+    }
+    assert.throws(() => insert_xgwx_iec_ld_single_element(removed,0,row,1,"coil","OUTPUT","UnresolvedDestination"));
+  }
+});
+
+test("IEC contact-fed comparison chain restores its row and supports repeat Delete/refill", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_eq_chain_head, delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function} = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  const block = before.ladder[0].iecFunctions.find(b => b.rowIndex === 67 && b.rawX === 16);
+  const deleted = delete_xgwx_iec_ld_eq_chain_head(source,0,block.recordOffset,"EQ");
+  const args = JSON.stringify(["%MW10","0","%MX0"]);
+  const restored = insert_xgwx_iec_ld_function(deleted,0,67,16,"EQ",args);
+  const after = parse_xgwx(restored);
+  assert.deepEqual(after.localVariables,before.localVariables);
+  assert.deepEqual(after.ladder.slice(1),before.ladder.slice(1));
+  assert.deepEqual(after.ladder[0].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]),before.ladder[0].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]));
+  assert.equal(after.ladder[0].iecFunctions.length,before.ladder[0].iecFunctions.length);
+  const added = after.ladder[0].iecFunctions.find(b=>b.rowIndex===67 && b.rawX===16);
+  assert.ok(after.ladder[0].iecScalarChainDeletionSites.some(s=>s.blockOffset===added.recordOffset));
+  const removed = delete_xgwx_iec_ld_scalar_chain_function(restored,0,added.recordOffset,"EQ");
+  assert.deepEqual(insert_xgwx_iec_ld_function(removed,0,67,16,"EQ",args),restored);
+  assert.throws(()=>delete_xgwx_iec_ld_scalar_chain_function(restored,0,added.recordOffset,"GT"));
+  for(const output of ["%MW0","_ON"]) {
+    assert.throws(()=>insert_xgwx_iec_ld_function(deleted,0,67,16,"EQ",JSON.stringify(["%MW10","0",output])));
+  }
+});
+
+test("IEC heating comparison head restores both continuing feeds", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_heating_chain_head, delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function} = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  const block = before.ladder[6].iecFunctions.find(b => b.rowIndex === 46 && b.rawX === 19);
+  const deleted = delete_xgwx_iec_ld_heating_chain_head(source,6,block.recordOffset,"EQ");
+  const args = JSON.stringify(["%MW129","1","%MX729"]);
+  const restored = insert_xgwx_iec_ld_function(deleted,6,46,19,"EQ",args);
+  const after = parse_xgwx(restored);
+  assert.deepEqual(after.localVariables,before.localVariables);
+  assert.deepEqual(after.ladder.slice(0,6),before.ladder.slice(0,6));
+  assert.deepEqual(after.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]),before.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]));
+  const added = after.ladder[6].iecFunctions.find(b=>b.rowIndex===46 && b.rawX===19);
+  assert.ok(after.ladder[6].iecScalarChainDeletionSites.some(s=>s.blockOffset===added.recordOffset));
+  const removed = delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"EQ");
+  assert.deepEqual(insert_xgwx_iec_ld_function(removed,6,46,19,"EQ",args),restored);
+  assert.throws(()=>delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"GT"));
+  for(const output of ["%MW0","_ON"]) {
+    assert.throws(()=>insert_xgwx_iec_ld_function(deleted,6,46,19,"EQ",JSON.stringify(["%MW129","1",output])));
+  }
+});
+
+test("IEC heating middle comparisons restore both branch continuations", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_heating_chain_middle, delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function} = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  for (const [row,value,output] of [[50,"2","%MX730"],[54,"3","%MX731"]]) {
+    const block = before.ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+    const deleted = delete_xgwx_iec_ld_heating_chain_middle(source,6,block.recordOffset,"EQ");
+    const args = JSON.stringify(["%MW129",value,output]);
+    const restored = insert_xgwx_iec_ld_function(deleted,6,row,19,"EQ",args);
+    const after = parse_xgwx(restored);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    assert.deepEqual(after.ladder.slice(0,6),before.ladder.slice(0,6));
+    assert.deepEqual(after.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]),before.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]));
+    const added = after.ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+    assert.ok(after.ladder[6].iecScalarChainDeletionSites.some(s=>s.blockOffset===added.recordOffset));
+    const removed = delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"EQ");
+    assert.deepEqual(insert_xgwx_iec_ld_function(removed,6,row,19,"EQ",args),restored);
+    assert.throws(()=>delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"GT"));
+    for (const bad of ["%MW0","_ON"]) {
+      assert.throws(()=>insert_xgwx_iec_ld_function(deleted,6,row,19,"EQ",JSON.stringify(["%MW129",value,bad])));
+    }
+  }
+});
+
+test("IEC heating outer comparison restores its feed and continuation", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_heating_chain_x3_eq_repaired, delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function} = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  for (const [row,value,output] of [[58,"0","%MX735"]]) {
+    const block = before.ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+    const deleted = delete_xgwx_iec_ld_heating_chain_x3_eq_repaired(source,6,block.recordOffset,"EQ");
+    const args = JSON.stringify(["%MW129",value,output]);
+    const restored = insert_xgwx_iec_ld_function(deleted,6,row,19,"EQ",args);
+    const after = parse_xgwx(restored);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    assert.deepEqual(after.ladder.slice(0,6),before.ladder.slice(0,6));
+    assert.deepEqual(after.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]),before.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]));
+    const added = after.ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+    assert.ok(after.ladder[6].iecScalarChainDeletionSites.some(s=>s.blockOffset===added.recordOffset));
+    const removed = delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"EQ");
+    assert.deepEqual(insert_xgwx_iec_ld_function(removed,6,row,19,"EQ",args),restored);
+    assert.throws(()=>delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"GT"));
+    for (const bad of ["%MW0","_ON"]) {
+      assert.throws(()=>insert_xgwx_iec_ld_function(deleted,6,row,19,"EQ",JSON.stringify(["%MW129",value,bad])));
+    }
+  }
+});
+
+test("IEC heating contact comparison restores its feed and continuation", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_heating_chain_contact_eq, delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function} = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture), before = parse_xgwx(source);
+  for (const [row,value,output] of [[62,"1","%MX732"]]) {
+    const block = before.ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+    const deleted = delete_xgwx_iec_ld_heating_chain_contact_eq(source,6,block.recordOffset,"EQ");
+    const args = JSON.stringify(["%MW129",value,output]);
+    const restored = insert_xgwx_iec_ld_function(deleted,6,row,19,"EQ",args);
+    const after = parse_xgwx(restored);
+    assert.deepEqual(after.localVariables,before.localVariables);
+    assert.deepEqual(after.ladder.slice(0,6),before.ladder.slice(0,6));
+    assert.deepEqual(after.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]),before.ladder[6].iecFunctions.map(b=>[b.rowIndex,b.rawX,b.name]));
+    const added = after.ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+    assert.ok(after.ladder[6].iecScalarChainDeletionSites.some(s=>s.blockOffset===added.recordOffset));
+    const removed = delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"EQ");
+    assert.deepEqual(insert_xgwx_iec_ld_function(removed,6,row,19,"EQ",args),restored);
+    assert.throws(()=>delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"GT"));
+    for (const bad of ["%MW0","_ON"]) {
+      assert.throws(()=>insert_xgwx_iec_ld_function(deleted,6,row,19,"EQ",JSON.stringify(["%MW129",value,bad])));
+    }
+  }
+});
+
+test("IEC comparison refill composes with missing contacts", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {delete_xgwx_iec_ld_scalar_chain_function, insert_xgwx_iec_ld_function} = await import("../media/libxgwx.js");
+  const source=fs.readFileSync(fixture), original=parse_xgwx(source);
+  const target=original.ladder[6].iecFunctions.find(b=>b.rowIndex===62 && b.rawX===19);
+  const base=delete_xgwx_iec_ld_heating_chain_contact_eq(source,6,target.recordOffset,"EQ");
+  const args=JSON.stringify(["%MW129","1","%MX732"]);
+  const canonical=insert_xgwx_iec_ld_function(base,6,62,19,"EQ",args);
+  const contacts=[[1,7,"NO","%MX727"],[2,10,"NC","%MX726"],[4,13,"NC","타이머3.Q"]];
+  for(let mask=1;mask<=7;mask++) {
+    let bytes=base;
+    for(const [bit,x,kind,value] of contacts) {
+      if(!(mask&bit)) continue;
+      const site=parse_xgwx(bytes).ladder[6].iecNoContactDeletionSites.find(s=>s.rowIndex===62 && s.rawX===x);
+      assert.ok(site,`contact site mask ${mask} x${x}`);
+      bytes=delete_xgwx_iec_ld_contact(bytes,6,site.contactOffset,x,kind,value);
+    }
+    const filled=insert_xgwx_iec_ld_function(bytes,6,62,19,"EQ",args);
+    const view=parse_xgwx(filled), block=view.ladder[6].iecFunctions.find(b=>b.rowIndex===62 && b.rawX===19);
+    assert.ok(view.ladder[6].iecScalarChainDeletionSites.some(s=>s.blockOffset===block.recordOffset),`Delete site mask ${mask}`);
+    const removed=delete_xgwx_iec_ld_scalar_chain_function(filled,6,block.recordOffset,"EQ");
+    bytes=insert_xgwx_iec_ld_function(removed,6,62,19,"EQ",args);
+    assert.deepEqual(bytes,filled,`repeat mask ${mask}`);
+    for(const [bit,x,kind,value] of contacts) {
+      if(mask&bit) bytes=insert_xgwx_iec_ld_single_element(bytes,6,62,x,"contact",kind,value);
+    }
+    assert.deepEqual(bytes,canonical,`completed mask ${mask}`);
+    assert.deepEqual(parse_xgwx(bytes).localVariables,original.localVariables);
+  }
+});
+
+test("IEC heating comparisons remain editable after row and group shifts", async t => {
+  const fixture = process.env.LIBXGWX_XGI_FIXTURE;
+  if (!fixture) { t.skip("set LIBXGWX_XGI_FIXTURE"); return; }
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const api = await import("../media/libxgwx.js");
+  const source = fs.readFileSync(fixture);
+  const cases = [[46,api.delete_xgwx_iec_ld_heating_chain_head,"1","%MX729"],
+    [50,api.delete_xgwx_iec_ld_heating_chain_middle,"2","%MX730"],
+    [54,api.delete_xgwx_iec_ld_heating_chain_middle,"3","%MX731"],
+    [58,api.delete_xgwx_iec_ld_heating_chain_x3_eq_repaired,"0","%MX735"],
+    [62,api.delete_xgwx_iec_ld_heating_chain_contact_eq,"1","%MX732"]];
+  for (const comment of [false,true]) {
+    let shifted = api.insert_xgwx_iec_ld_blank_row(source,6,45);
+    if (comment) shifted = api.insert_xgwx_iec_ld_comment(shifted,6,46,"shift audit");
+    const before = parse_xgwx(shifted);
+    for (const [row,remove,value,output] of cases) {
+      const block = before.ladder[6].iecFunctions.find(b=>b.rowIndex===row+1 && b.rawX===19);
+      assert.ok(block);
+      assert.throws(()=>remove(shifted,6,block.recordOffset,"NE"));
+      const deleted = remove(shifted,6,block.recordOffset,"EQ");
+      const oldBlock = parse_xgwx(source).ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+      let expected = api.insert_xgwx_iec_ld_blank_row(remove(source,6,oldBlock.recordOffset,"EQ"),6,45);
+      if (comment) expected = api.insert_xgwx_iec_ld_comment(expected,6,46,"shift audit");
+      assert.deepEqual(deleted,expected,`shift/delete commute L${row}, comment=${comment}`);
+      const args = JSON.stringify(["%MW129",value,output]);
+      const restored = api.insert_xgwx_iec_ld_function(deleted,6,row+1,19,"EQ",args);
+      const after = parse_xgwx(restored);
+      assert.deepEqual(after.localVariables,before.localVariables);
+      assert.deepEqual(after.ladder.slice(0,6),before.ladder.slice(0,6));
+      const added = after.ladder[6].iecFunctions.find(b=>b.rowIndex===row+1 && b.rawX===19);
+      const again = api.delete_xgwx_iec_ld_scalar_chain_function(restored,6,added.recordOffset,"EQ");
+      assert.deepEqual(api.insert_xgwx_iec_ld_function(again,6,row+1,19,"EQ",args),restored);
+    }
+  }
+});
+
+test("IEC contact kind edits compose with comparison deletion and refill", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!fixture){t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const api=await import("../media/libxgwx.js"), source=fs.readFileSync(fixture);
+  const capture=process.env.LIBXGWX_CONTACT_KIND_CAPTURE;
+  const contact=(bytes,row,x)=>{
+    const body=parse_xgwx(bytes).ladder[6];
+    return body.sourceStrings.find(e=>e.iecRowIndex===row && e.iecPosition?.[0]===x && e.iecRecordKind==='Contact');
+  };
+  const block=(bytes,row)=>parse_xgwx(bytes).ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+  const args=JSON.stringify(["%MW129","1","%MX732"]);
+  for(const shifted of [false,true]) {
+    const delta=Number(shifted);
+    const base=shifted?api.insert_xgwx_iec_ld_blank_row(source,6,45):source;
+    const deletedBase=api.delete_xgwx_iec_ld_heating_chain_contact_eq(base,6,block(base,62+delta).recordOffset,"EQ");
+    for(const [row,x,oldKind,retained] of [[62,7,'NO',true],[62,10,'NC',true],[62,13,'NC',true],[63,7,'NO',false]]) {
+      for(const [index,kind] of ['NO','NC','RISING','FALLING','NEGATED_RISING','NEGATED_FALLING'].entries()) {
+        const element=contact(base,row+delta,x);
+        assert.ok(element,`contact L${row+delta} x${x}`);
+        const changed=api.update_xgwx_iec_ld_contact_kind(base,6,element.offset,oldKind,kind);
+        assert.throws(()=>api.delete_xgwx_iec_ld_heating_chain_contact_eq(changed,6,block(changed,62+delta).recordOffset,'NE'));
+        const deleted=api.delete_xgwx_iec_ld_heating_chain_contact_eq(changed,6,block(changed,62+delta).recordOffset,'EQ');
+        const expected=retained?api.update_xgwx_iec_ld_contact_kind(deletedBase,6,contact(deletedBase,row+delta,x).offset,oldKind,kind):deletedBase;
+        assert.deepEqual(deleted,expected,`kind/delete commute L${row}, x${x}, ${kind}, shifted=${shifted}`);
+        const filled=api.insert_xgwx_iec_ld_function(deleted,6,62+delta,19,'EQ',args);
+        const again=api.delete_xgwx_iec_ld_scalar_chain_function(filled,6,block(filled,62+delta).recordOffset,'EQ');
+        assert.deepEqual(api.insert_xgwx_iec_ld_function(again,6,62+delta,19,'EQ',args),filled);
+        assert.deepEqual(parse_xgwx(filled).localVariables,parse_xgwx(base).localVariables);
+        if(capture && !shifted && row===62 && x===10) {
+          for(const [state,bytes] of [['C',changed],['D',deleted],['R',filled]]) {
+            assert.deepEqual(Buffer.from(bytes),fs.readFileSync(path.join(capture,`K${index+6}${state}.xgwx`)));
+          }
+        }
+      }
+    }
+  }
+});
+
+test("IEC contact-first deletion composes with comparison deletion and refill", async t => {
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!fixture){t.skip("set LIBXGWX_XGI_FIXTURE");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const api=await import("../media/libxgwx.js"), source=fs.readFileSync(fixture);
+  const capture=process.env.LIBXGWX_CONTACT_FIRST_CAPTURE;
+  const contact=(bytes,row,x)=>parse_xgwx(bytes).ladder[6].sourceStrings.find(e=>e.iecRowIndex===row && e.iecPosition?.[0]===x && e.iecRecordKind==='Contact');
+  const block=(bytes,row)=>parse_xgwx(bytes).ladder[6].iecFunctions.find(b=>b.rowIndex===row && b.rawX===19);
+  const removeContact=(bytes,row,x,kind)=>{
+    const element=contact(bytes,row,x);
+    assert.ok(element,`contact L${row} x${x}`);
+    return api.delete_xgwx_iec_ld_contact(bytes,6,element.iecRecordOffset,x,kind,element.value);
+  };
+  const args=JSON.stringify(["%MW129","1","%MX732"]);
+  for(const shifted of [false,true]) {
+    const row=62+Number(shifted);
+    const base=shifted?api.insert_xgwx_iec_ld_blank_row(source,6,45):source;
+    const before=parse_xgwx(base);
+    const deletedBase=api.delete_xgwx_iec_ld_heating_chain_contact_eq(base,6,block(base,row).recordOffset,"EQ");
+    const canonical=api.insert_xgwx_iec_ld_function(deletedBase,6,row,19,"EQ",args);
+    const sites=[[row,7,"NO"],[row,10,"NC"],[row,13,"NC"],[row+1,7,"NO"]];
+    for(let mask=1;mask<16;mask++) {
+      const compare=(state,bytes)=>{
+        if(capture && !shifted) assert.deepEqual(Buffer.from(bytes),fs.readFileSync(path.join(capture,`A${mask}${state}.xgwx`)),`Rust ${state} mask ${mask}`);
+      };
+      let bytes=base, expected=deletedBase;
+      for(const [index,[r,x,kind]] of sites.entries()) {
+        if(!(mask&(1<<index))) continue;
+        bytes=removeContact(bytes,r,x,kind);
+        if(index<3) expected=removeContact(expected,r,x,kind);
+      }
+      compare("C",bytes);
+      assert.throws(()=>api.delete_xgwx_iec_ld_heating_chain_contact_eq(bytes,6,block(bytes,row).recordOffset,"NE"));
+      bytes=api.delete_xgwx_iec_ld_heating_chain_contact_eq(bytes,6,block(bytes,row).recordOffset,"EQ");
+      if((mask&7)!==7) assert.deepEqual(bytes,expected,`contact/delete commute mask ${mask}, shifted=${shifted}`);
+      compare("D",bytes);
+      bytes=api.insert_xgwx_iec_ld_function(bytes,6,row,19,"EQ",args);
+      compare("R",bytes);
+      assert.deepEqual(bytes,api.insert_xgwx_iec_ld_function(expected,6,row,19,"EQ",args),`refill cleanup mask ${mask}`);
+      const filled=bytes;
+      bytes=api.delete_xgwx_iec_ld_scalar_chain_function(bytes,6,block(bytes,row).recordOffset,"EQ");
+      bytes=api.insert_xgwx_iec_ld_function(bytes,6,row,19,"EQ",args);
+      assert.deepEqual(bytes,filled,`repeat mask ${mask}, shifted=${shifted}`);
+      for(const [index,[r,x,kind]] of sites.slice(0,3).entries()) {
+        if(mask&(1<<index)) bytes=api.insert_xgwx_iec_ld_single_element(bytes,6,r,x,"contact",kind,contact(base,r,x).value);
+      }
+      compare("F",bytes);
+      assert.deepEqual(bytes,canonical,`completed mask ${mask}, shifted=${shifted}`);
+      const after=parse_xgwx(bytes);
+      assert.deepEqual(after.localVariables,before.localVariables);
+      assert.deepEqual(after.ladder.slice(0,6),before.ladder.slice(0,6));
+    }
+  }
+});
+
+test("IEC refills native contact-first Delete Line captures", async t => {
+  const capture=process.env.LIBXGWX_CONTACT_FIRST_CAPTURE;
+  const fixture=process.env.LIBXGWX_XGI_FIXTURE;
+  if(!capture || !fixture){t.skip("set native contact-first capture and source fixture");return;}
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const api=await import("../media/libxgwx.js"), source=fs.readFileSync(fixture);
+  const contact=x=>parse_xgwx(source).ladder[6].sourceStrings.find(e=>e.iecRowIndex===62 && e.iecPosition?.[0]===x && e.iecRecordKind==='Contact');
+  const args=JSON.stringify(["%MW129","1","%MX732"]);
+  for(const mask of [1,8,7]) {
+    const original=fs.readFileSync(path.join(capture,`A${mask}NS.xgwx`));
+    const before=parse_xgwx(original);
+    let bytes=api.insert_xgwx_iec_ld_function(original,6,62,19,"EQ",args);
+    assert.deepEqual(Buffer.from(bytes),fs.readFileSync(path.join(capture,`N${mask}R.xgwx`)),`native Rust refill mask ${mask}`);
+    const filled=bytes;
+    const block=parse_xgwx(bytes).ladder[6].iecFunctions.find(b=>b.rowIndex===62 && b.rawX===19);
+    bytes=api.delete_xgwx_iec_ld_scalar_chain_function(bytes,6,block.recordOffset,"EQ");
+    bytes=api.insert_xgwx_iec_ld_function(bytes,6,62,19,"EQ",args);
+    assert.deepEqual(bytes,filled,`native repeat mask ${mask}`);
+    for(const [index,x] of [7,10,13].entries()) {
+      if(mask&(1<<index)) bytes=api.insert_xgwx_iec_ld_single_element(bytes,6,62,x,"contact",x===7?"NO":"NC",contact(x).value);
+    }
+    assert.deepEqual(Buffer.from(bytes),fs.readFileSync(path.join(capture,`N${mask}F.xgwx`)),`native Rust completion mask ${mask}`);
+    assert.deepEqual(parse_xgwx(bytes).localVariables,before.localVariables);
+  }
+});
+
+test("XGK quoted string operands preserve embedded spaces and commas through edits", async () => {
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const source=fs.readFileSync(path.join(libraryRoot,"fixtures/elements.xgwx"));
+  const operands=["'Room A, on (night)'","D100"];
+  const inserted=insert_xgwx_ladder_instruction(source,0,52,"$MOV",JSON.stringify(operands));
+  const cell=parse_xgwx(inserted).ladder[0].cells.find(c=>c.rawY===52&&c.value==="$MOV");
+  assert.deepEqual(cell.operands,operands);
+  const edited=update_xgwx_ladder_cell(inserted,0,cell.offset,cell.sourceText,"$MOV,'Room B, off',D104");
+  const changed=parse_xgwx(edited).ladder[0].cells.find(c=>c.rawY===52&&c.value==="$MOV");
+  assert.deepEqual(changed.operands,["'Room B, off'","D104"]);
+  const restored=update_xgwx_ladder_cell(edited,0,changed.offset,changed.sourceText,cell.sourceText);
+  assert.deepEqual(restored,inserted);
+  const removed=delete_xgwx_ladder_instruction(inserted,0,cell.offset,cell.sourceText);
+  assert.deepEqual(insert_xgwx_ladder_instruction(removed,0,52,"$MOV",JSON.stringify(operands)),inserted);
+  assert.throws(()=>insert_xgwx_ladder_instruction(source,0,52,"MOV",JSON.stringify(operands)),/string constant/);
+  assert.throws(()=>insert_xgwx_ladder_instruction(source,0,52,"$MOV",JSON.stringify(["D100","'bad'"])),/string constant/);
+});
+
+test("XGK instruction choices and writes honor reviewed CPU model restrictions", async () => {
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const source=fs.readFileSync(path.join(libraryRoot,"fixtures/elements.xgwx"));
+  for (const [model, supported] of [["XGK-CPUH",false],["XGK-CPUHN",true],["XGK-CPUSN",true],["XGK-CPUUN",true]]) {
+    const bytes=select_xgwx_cpu(source,model);
+    const choices=parse_xgwx(bytes).ladder[0].instructionChoices.map(c=>c.mnemonic);
+    assert.equal(choices.includes("INLATCH"),supported,model);
+    assert.equal(choices.includes("GETIP"),supported,model);
+    assert.ok(choices.includes("MOV"),model);
+    assert.equal(choices.includes("GETCOMM"),false,model);
+    if (!supported) {
+      assert.throws(()=>insert_xgwx_ladder_instruction(bytes,0,52,"INLATCH",JSON.stringify(["0","D100"])),/selected XGK CPU/);
+      const inserted=insert_xgwx_ladder_instruction(bytes,0,52,"MOV",JSON.stringify(["0","D100"]));
+      const cell=parse_xgwx(inserted).ladder[0].cells.find(c=>c.rawY===52&&c.value==="MOV");
+      assert.throws(()=>update_xgwx_ladder_cell(inserted,0,cell.offset,cell.sourceText,"INLATCH,0,D100"),/selected XGK CPU/);
+    } else {
+      const inserted=insert_xgwx_ladder_instruction(bytes,0,52,"INLATCH",JSON.stringify(["0","D100"]));
+      assert.ok(parse_xgwx(inserted).ladder[0].cells.some(c=>c.value==="INLATCH"));
+      const older=select_xgwx_cpu(inserted,"XGK-CPUH");
+      const summary=parse_xgwx(older).ladder[0];
+      assert.equal(summary.instructionChoices.some(c=>c.mnemonic==="INLATCH"),false);
+      assert.ok(summary.retainedInstructionChoices.some(c=>c.mnemonic==="INLATCH"));
+      const cell=summary.cells.find(c=>c.rawY===52&&c.value==="INLATCH");
+      const repaired=update_xgwx_ladder_cell(older,0,cell.offset,cell.sourceText,"INLATCH,0,D200");
+      assert.deepEqual(parse_xgwx(repaired).ladder[0].cells.find(c=>c.value==="INLATCH").operands,["0","D200"]);
+    }
+  }
+});
+
+test("XGK output commands from interior branch cursors preserve the branch and existing output", async () => {
+  await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
+  const {xgkBlankCommands,xgkInsertionColumn}=await import('../media/ladder-commands.js');
+  const source=fs.readFileSync(path.join(libraryRoot,"fixtures/elements.xgwx"));
+  const before=parse_xgwx(source).ladder[0];
+  for (const [rawY,column,mnemonic,operands] of [[12,2,'OUT',['M00030']],[16,5,'SET',['M00031']],[12,8,'MOV',['1','D100']]]) {
+    const position={rawY,column};const choice=xgkBlankCommands(before,position).find(c=>c.mnemonic===mnemonic);
+    const bytes=choice.category==='function'
+      ?insert_xgwx_ladder_instruction(source,0,rawY,mnemonic,JSON.stringify(operands))
+      :edit_xgwx_ladder_cell(source,0,{rawY,column:xgkInsertionColumn(choice,position),expected:null,replacement:{kind:choice.kind,operand:operands[0]}});
+    const after=parse_xgwx(bytes).ladder[0];
+    assert.deepEqual(after.branchConnections,before.branchConnections);
+    assert.deepEqual(after.cells.find(c=>c.rawY===8&&c.coil),before.cells.find(c=>c.rawY===8&&c.coil));
+    assert.ok(after.cells.some(c=>c.rawY===rawY&&(c.value===operands[0]&&c.coil||c.value===mnemonic)),mnemonic);
+    assert.ok(after.horizontalLines.some(line=>line.rawY===rawY&&line.rawXEnd>=85),mnemonic);
   }
 });

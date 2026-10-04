@@ -366,8 +366,9 @@ powered by the sibling `libxgwx` project during development.
   project.
   The WASM summary exposes a validated circuit graph containing element and
   wire edges, occupied grid areas, connected geometry components, and typed
-  function bindings. Every current IEC writer validates that graph before and
-  after an edit. All function-block body fields, pin positions, directions,
+  function bindings. Structural IEC writers validate their supported graph shapes. Nonstructural
+  text/kind edits preserve decoded geometry and typed bindings, including open
+  endpoints. All function-block body fields, pin positions, directions,
   reference ordinals, and IEC type masks in the supplied project are decoded.
   Multi-row group construction and merging, general element insertion,
   additional function insertion and connected-function deletion shapes,
@@ -460,10 +461,12 @@ WASM rebuild stops the build instead of copying an older package.
 
 To run the extension, open this directory in VS Code and press `F5`. In the
 Extension Development Host, open an `.xgwx` file. Use **Reopen Editor With… →
-XGWX Workspace Editor** if the file opens in VS Code's text editor. In VS Code
-1.137.0, `code --new-window FILE.xgwx` can open the file as text during window
-startup; opening it in a running window with `code --reuse-window FILE.xgwx`
-selects the custom editor.
+XGWX Workspace Editor** if you explicitly chose the text editor. Startup
+recovery opens clean `.xgwx` binary tabs in the workspace editor after activation,
+including `code --new-window FILE.xgwx` on VS Code 1.137.0. It checks the XGWX
+signature and respects configured editor associations, the binary editor choice,
+and unsaved text. Recovery runs once; later **Reopen Editor With…** choices are
+preserved.
 
 The debug configuration launches a development host in a separate temporary
 VS Code profile and attaches to its inspector through `127.0.0.1:9230`.
@@ -574,4 +577,757 @@ In **IEC operations**, choose the last segment of a supported terminal contact
 feed and select **Remove terminal feed and tail**. The feed row and open tail
 are removed as one undoable edit while function blocks remain in place. Native
 incomplete circuits stay visible; an existing open terminal tail can be removed
-through its final segment. Forked tails and function-reference rows remain guarded.
+through its final segment. Final function continuation references sharing the preceding branch row are
+retained. Program 3 L73 and L67 pass native all-program checking together with zero errors
+and the original 27 warnings; all seven program payloads survive native Save As
+unchanged. Forked tails and other function-reference row shapes remain guarded.
+
+
+### IEC arithmetic blocks beside a branch spine
+
+Delete or Backspace on a focused function marker invokes the guarded block
+deletion directly. The inspector's Delete block action uses the same writer.
+Four-row scalar ADD/SUB/MUL/DIV blocks beside a simple external branch spine
+can be removed while retaining the spine and neighboring blocks. Later rows
+shift up once. Other layouts remain guarded.
+
+Deleting the original project's program 5 ADD at L15 and program 6 ADD at L30
+passes XG5000 strict all-program checking with zero errors and the original
+27 warnings. Native Save As preserves all seven program payloads unchanged.
+The other arithmetic names share the writer shape but have no separate native
+mutation captures. Browser acceptance verifies the diagram Delete key emits
+one undoable edit; its VS Code host bridge is mocked.
+
+
+Branch removal also reconnects simple branch-only or single-contact spine rows
+inside function groups. This exposes program 2 L21/L28 and program 6 L83/L84
+through the existing segment picker. It uses the same native-validated writers
+as Delete branch-only row and Delete chained contact row, and preserves all
+function bindings. General multi-row network reconstruction remains unfinished.
+
+
+### Connected IEC trigger deletion
+
+Delete/Backspace on supported R_TRIG blocks removes their body and output
+reference while retaining neighboring functions, rows and local symbols.
+Reconnect the resulting gap through **More IEC operations… → Reconnect
+horizontal wire gap → Insert horizontal wire**.
+
+Program 0 L20's deletion alone has three native errors. Its repaired
+circuit passes XG5000 strict all-program checking with zero errors and the
+original 27 warnings; all seven program payloads survive native Save As
+unchanged. Fixture checks also cover L26/L32's wire-fed layouts; those do not
+have separate native mutation captures. The browser test verifies Delete and
+repair as two undoable edits with a mock VS Code bridge.
+
+
+A compatible gap left by connected R_TRIG deletion also accepts
+`R_TRIG InstanceName` through the blank-cell Enter/double-click instruction
+prompt. Autocomplete offers declared R_TRIG instances. This restores the block
+and its output reference while preserving the surrounding rows and functions.
+All three lighting-program trigger restorations match the original program
+payloads exactly in fixture tests; the generated L20 restoration passes native
+XG5000 strict all-program checking with zero errors and 27 warnings.
+General trigger placement and new instance declaration creation remain guarded.
+
+Native Save As of the generated L20 trigger restoration preserves all seven
+decoded ProgramData payloads byte for byte.
+
+
+### Compound IEC operand input
+
+Parentheses keep a spaced operand together in the instruction prompt.
+Autocomplete continues inside an unfinished group; after its closing
+parenthesis and a space, the hint advances to the next operand. Reopening a
+spaced operand groups it without changing its stored text.
+
+Comparison, Boolean, bitwise and MOD compound operand text is currently
+rejected. A native five-MOVE test reports ten XG5000 Check Program errors,
+even though native Save As preserves the generated program bytes. These forms
+need a native-valid expression representation or construction using connected
+function blocks. The existing `0+1` capture proves check/save compatibility,
+not arithmetic evaluation semantics.
+
+
+### Vertical wires on shared function rows
+
+Click a vertical wire and press Delete or Backspace to remove its paired wire
+records while retaining the rows, function blocks, operands, and references.
+A gap between adjacent exposed endpoints shows a small `+` control. Double-click
+it or press Enter to reconnect; keyboard focus follows the gap and restored wire.
+The branch picker also offers row-preserving removal for shared rows and can
+reconnect gaps alongside function blocks. Operations that would empty a stored
+row still need row-group reconstruction. Text, supported contact/coil kinds, and arithmetic/comparison operator edits
+remain available while wiring is open, provided record topology and typed pin
+bindings remain unchanged. Structural edits retain their own guards.
+
+All 192 original vertical segments pass fixture deletion/restoration checks
+with exact program payload recovery. The generated program 0 L69-L70 deletion
+separately passes native XG5000 strict all-program checking with zero errors
+and the baseline 27 warnings; native Save As preserves all seven generated
+program payloads byte for byte. This native capture validates that operation;
+it does not prove that every possible wire deletion leaves a working circuit.
+
+
+Operand, comment, supported contact/coil-kind and arithmetic/comparison-operator
+edits can preserve an existing open wire layout. They must retain its electrical
+geometry, record order and typed function bindings. A combined vertical-wire
+deletion, EQ operand length change and EQ-to-GE replacement passes native strict
+all-program checking with zero errors and the baseline 27 warnings; Save As
+preserves all seven generated program payloads byte for byte.
+
+
+### Joining and separating IEC networks
+
+Select a diagram cell and press F6 to connect its left boundary to the next
+stored row. Consecutive networks can be joined when both electrical points
+exist and the boundary clears function bodies. A joined network is disabled
+if either source network is disabled. Existing rows, elements and function
+bindings remain in place.
+
+After removing crossing wires, **More IEC operations → Separate networks**
+splits a disconnected row boundary. Both resulting networks keep the current
+execution setting. Each operation supports undo. New rows and connections
+without existing electrical points still require additional construction support.
+
+
+The combined contact, branched-network and EQ-network join candidate passes
+native XG5000 strict all-program checking with zero errors and 27 original
+warnings. Native Save As preserves all seven generated program payloads exactly.
+
+
+### Extending an IEC branch into a blank row
+
+F6 can extend a group's final row into the next empty row when the selected
+boundary has an electrical point and clears function bodies. Delete on the new
+wire removes its branch-only row. Shared function rows retain their separate
+row-preserving deletion behavior. The generated L4-L5 extension passes native
+strict checking with zero errors and 27 original warnings; Save As retains all
+seven program payloads exactly. Leading contact placement on the new branch-only row is now supported.
+
+
+Enter or double-click the first cell of a new branch-only row to insert a
+BOOL contact using the instruction prompt. The cursor advances after insertion.
+Delete or Backspace on a contact uses supported native deletion and returns
+focus to the empty cell. The L5 NO ON insertion matches native records and
+passes strict checking with zero errors and 27 original warnings; native Save
+As preserves all seven program payloads exactly. Enter or double-click an empty cell to the right of an incoming x3 branch
+endpoint and enter `OUT %MX0` to create a right-rail coil and its feed wire.
+The cursor advances to the next row. Delete or Backspace removes the coil
+and feed while retaining the branch endpoint. Wider x6 and x24 branch feeds are also supported. Coils can be inserted or
+deleted while another branch remains open; function bindings and other open
+endpoints are preserved. The x93 boundary beside a right-rail output still
+needs further support.
+
+The incoming x3 branch row also accepts `MOVE`, arithmetic, and comparison
+blocks at raw x7. Placement creates the required body rows and shifts later
+networks and their pin links. Disabled networks remain disabled. Delete or
+Backspace removes the block and its operands while retaining the branch rows;
+Enter in the selected empty cell can insert another scalar block. A shorter
+MOVE preserves the extra branch row; a taller arithmetic or comparison block
+extends a MOVE scaffold and makes room below it. Other branch boundaries
+remain guarded pending native validation.
+
+Generated MOVE, ADD, and EQ placements each pass native XG5000 strict
+all-program checking with zero errors and 27 original warnings. Native Save As
+preserves all seven program payloads exactly. Two-pin and three-pin deletion
+results also pass native strict checking with the same baseline counts, and
+native Save As preserves their program payloads exactly. Browser interaction checks use a
+mock VS Code bridge; they cover insertion, deletion, blank-cell focus, and
+reinsertion.
+
+
+### Deleting a terminal timer
+
+Delete or Backspace on the supported gas-control TON at L15 removes the block,
+its short feed, and its owned pins while preserving the contact, later rows,
+and local timer declaration. The result matches native XG5000 Delete, which
+leaves an unfinished contact-only rung: strict checking reports one input/output
+error. Complete it by double-clicking the vacated cell or pressing Enter and
+entering `TON Timer 시간 카운터` to restore the original block. The instruction
+prompt takes an existing TON instance, TIME preset, and writable TIME elapsed
+destination. A TIME literal such as `T#2s` can replace the preset. Insertion
+preserves the local declaration and returns focus to the block. Other timer
+layouts and creation of new timer declarations remain guarded.
+
+### Replacing an IEC scalar block directly
+
+Double-click a supported branch scalar block or press Enter to edit its complete
+instruction. The prompt offers MOVE, arithmetic, and comparison commands with
+operand descriptions and type rules. Changing the command replaces the block
+as one edit; taller blocks extend the retained scaffold and shorter blocks keep
+surplus native branch rows. Invalid types, stale targets, and unsupported
+layouts leave the document unchanged. Existing operand-only and family editors
+remain available for other decoded layouts.
+
+Direct MOVE-to-ADD and ADD-to-MOVE outputs are byte-identical to the generated
+projects validated by native XG5000 strict checking and Save As. Rendered prompt
+checks use a mock VS Code bridge.
+
+### Editing shared IEC scalar chains
+
+Delete or Backspace can remove a scalar block from a supported horizontal chain
+without removing its neighbors or shared operand rows. Tail deletion trims the
+unused trailing wires. Deleting a leading block leaves an unfinished gap until
+it is refilled. Enter or double-click in the empty cell opens the instruction
+prompt. `INT_TO_UDINT Source Destination` requires an INT source and a writable
+UDINT destination. Refilling either gas-control L18 block with its original
+operands restores all seven original program payloads exactly. Focus returns
+to the new block, where Enter reopens its operand editor. Mixed function layouts
+remain guarded until their native record topology is verified.
+
+Shared horizontal scalar chains also support different block heights. Delete
+removes only the selected block and its owned pins; trailing empty body rows
+become implicit blank rows, while later ladder row numbers remain unchanged.
+The empty-cell prompt also accepts `UDINT_TO_TIME`, `TIME_TO_UDINT`, and
+`UDINT_TO_INT`, with typed sources and writable destinations. Refilling the
+captured gas-control MUL/conversion and conversion/DIV chains restores all
+original program payloads exactly.
+
+The captured lighting L32 scalar tail after `R_TRIG` also supports Delete,
+typed refill and replacement between MOVE, arithmetic and comparisons.
+Deleting the scalar retains the contact, trigger instance and its reference;
+only unused trailing pin rows disappear. Enter on a supported chain block
+opens the instruction editor with atomic scalar replacement. Invalid operand
+types leave the original document unchanged.
+
+Lighting L38 `MOVE`, driven by the L37 `EQ` result, supports Delete and
+Enter/double-click refill with `MOVE Source Destination`. Deletion removes
+its feed wire and retains both comparison inputs and all later row numbers.
+Refill reconnects the comparison result. Other instruction kinds in this
+shared result-row scaffold remain guarded.
+
+The connected comparison at lighting L37 supports `EQ`, `GT`, `GE`, `LT`
+and `LE` with two source operands. Enter or double-click opens its instruction
+editor; its BOOL result stays wired to MOVE. Delete retains MOVE and its feed,
+and Enter/double-click on the vacated comparison cell restores the header and
+left rail connection. Changing both source types in one edit is atomic.
+
+IEC standalone block deletion also accepts the native one-cell short wire
+feed. This enables deleting the last MUL or conversion left after removing a
+chain tail, and the standalone gas-control GE comparison. Later rung numbers
+and other programs stay unchanged.
+Deleting a contiguous final standalone group also trims the program row
+count at that group, matching native XG5000 deletion.
+
+Staggered `MOVE` blocks below a neighboring function also support Delete in the
+captured layout, including lighting L22, L28, and L53 in the IEC project. The
+neighbor's pins remain intact. Enter on the vacated cell opens the instruction
+input for refill. Deletion retains the native feed wire, so the intermediate
+program has an unfinished input/output path until refilled or disconnected.
+
+Completed scalar branch tails also support Delete, Enter-to-refill, and
+replacement between MOVE, arithmetic, and comparisons. This covers boiler L19,
+boiler L36, heating L34/L42/L74, and lighting L79/L87 in the IEC project, including
+the captured disabled lighting networks. The upper block and vertical
+branch remain intact. Removing the tail leaves an open branch until refilled;
+refill reconnects it without extending the branch through the new pin rows.
+Deleting the final lighting MOVE also trims the program's editable row count;
+refill expands it to fit the replacement block.
+Long-wire drawing now reaches the next cell and connects to incoming branches,
+matching the native editor's wiring display.
+
+
+Captured contact-fed scalar tails support the same Delete, Enter refill and
+replacement flow: boiler MOVE L43 after its NC contact and retained branch,
+and curtain MOVE L6 after its NO contact in a disabled network. Deletion keeps
+the contact and removes the block's feed and owned pin rows. Refill creates a
+single native wire from the contact to EN. A three-pin curtain replacement
+makes room before the next network using the native blank-row operation.
+Other contact-prefix, block-position and execution-mode combinations remain
+guarded.
+
+Captured contact-fed upper branches also support scalar body Delete, typed
+refill and replacement: boiler LE L24 and MOVE L40, and heating LT L38.
+Deletion preserves both leading contacts and the continuing branch rows.
+The captured boiler GE L28 branch also retains its NO/NC contacts and both
+branch connections during Delete, typed refill and scalar replacement.
+Replacing the upper boiler MOVE with arithmetic or a comparison adds one
+branch row, moving the lower MOVE from L43 to L44. Deleting that replacement
+retains the expanded scaffold for further editing.
+
+
+Scalar blocks on the captured continuing branch spines support body Delete,
+Enter refill and replacement between MOVE, arithmetic and comparisons. This
+covers boiler LT L32, lighting EQ L71/L75 and heating EQ L66/L70. Body deletion keeps the four
+branch rows and the following blocks at their original rows. MOVE uses three
+of those rows and keeps the spare row; deleting the replacement restores the
+same branch-only state. Disabled continuing-branch refill marks the body,
+feed and operands disabled. Other spine and execution-mode combinations stay
+guarded.
+
+
+The captured curtain TON at L1/x19 now supports Delete and typed refill while
+retaining its contact branch and Q output coil. Enter or double-click on the
+empty cell opens `TON Instance Preset`; autocomplete filters TON instances and
+TIME operands. The source network's disabled mode and later row numbers are
+preserved. Other connected timer layouts remain guarded.
+
+Terminal IEC TON blocks at verified x22 layouts can now be deleted and refilled
+with Enter or double-click. The instruction prompt accepts an existing unused
+TON instance and a TIME preset, preserves the input contacts, and restores the
+long feed wire and pin rows. Deletion leaves an unfinished rung until refill,
+matching XG5000. Other timer layouts remain guarded.
+
+IEC staggered comparison pairs can now be deleted and refilled while keeping
+the output branch, contacts, and coil. The supported normal layouts place
+comparisons at x4/x13 or x7/x16 with three or four branch segments. Delete
+handles either block or both in sequence; Enter and double-click request two
+compatible input expressions for the wired comparison. Native XG5000 checks
+and thirteen Save As round trips validate the generated layouts. Other
+connected layouts remain guarded.
+
+IEC `INT_TO_UDINT` / `UDINT_TO_TIME` pairs sharing an input branch with a TON
+now support Delete and typed refill at the verified x10/x19 positions.
+Enter or double-click requests the source and writable destination operands;
+the timer and its bindings remain unchanged. Either conversion or both can
+be deleted and restored in either order. Unknown layouts remain guarded.
+
+The captured shared conversion branches in the boiler and heating programs also
+support TON deletion and refill while retaining their input branches and other
+blocks. The prompt accepts `TON <local instance> <TIME preset>`; supported
+connected TON blocks expose both fields when editing. Conversion edits remain
+available while the shared timer is absent. Browser checks cover keyboard and
+double-click refill, cancel/reopen, TIME literal replacement and deleting and
+restoring all three blocks, using real WASM with a mock VS Code prompt bridge.
+Original smart-home function deletion preflight coverage is now 79/81; two
+layouts remain guarded, and this does not establish full IEC editability.
+
+Shared timer native acceptance covered twelve generated Open / strict all-program
+Check Program / Save As cases with all 84 decoded program payloads unchanged.
+The eight restored cases had zero errors and the existing 27 warnings. Deletion
+leaves unfinished networks: individual timer removal reports one error, and
+removing all three blocks reports two errors until the network is completed.
+
+The enabled common-entry TON at L31/x19 also supports guarded Delete, refill,
+preset editing and replacement with an unused declared local TON instance.
+The input branch and coil remain available while the timer is absent. Enter
+and double-click use the same typed `TON <local instance> <TIME preset>` prompt.
+
+Five native generated-file checks and Save As round trips preserve all 35
+decoded program payloads exactly. Refills, preset and instance replacement,
+and combined timer edits report zero errors with the existing 27 warnings.
+Timer deletion leaves three unfinished-circuit errors until the block is restored.
+
+The enabled common-entry MOVE at L36/x19 now supports Delete and typed refill
+through Enter or double-click. Deletion retains its leading contact, and refill
+restores the native continuous feed. The original and refilled blocks remain
+editable. Known scalar operand types are checked together; a BOOL source cannot
+be assigned through MOVE to a WORD destination. Supported scalar instruction
+prompts apply changed operands atomically, allowing a valid pair of operands to
+change together. Browser checks use real WASM and a mock VS Code prompt bridge.
+
+Three native Open / strict all-program Check Program / Save As cases preserve
+all 21 program payloads exactly. Original and alternate MOVE operands pass
+with zero errors and the existing 27 warnings. Deletion leaves one unfinished
+circuit error until the block is restored.
+
+Lighting MOVE L56/x16 and L59/x16 also support Delete and typed refill through
+Enter or double-click, retaining the leading contact. Refill reproduces the
+native layout after reopening the saved deletion file. Four generated native
+Open / strict all-program Check Program / Save As cases preserve all 28 program
+payloads exactly. Both refills report zero errors and the existing 27 warnings;
+each deletion leaves one incomplete-circuit error until restored. Browser checks
+use real WASM and a mock VS Code prompt bridge.
+
+Two original function positions remain guarded: common EQ L5/x7 and heating
+MOVE L80/x19. Broader IEC
+placement, wiring and declaration editing still need work.
+
+IEC MOVE operand edits and refill accept numeric `0` and `1` for BOOL
+destinations, including the existing lighting L63 block. Other scalar
+instructions retain their operand type checks. Native strict checking rejects
+numeric `2` for this BOOL destination with L0706. Four generated native Check
+Program / Save As cases pass with zero errors and the existing 27 warnings;
+all 28 decoded program payloads match exactly. Browser interaction checks use
+real WASM with a mock VS Code prompt bridge.
+
+Lighting MOVE L48/x19 supports Delete and typed refill while preserving its
+two parallel contacts and both branch connections. Enter and double-click
+use the shared instruction editor. Native Delete and fresh refill records
+match the writer exactly; two generated native Check Program / Save As cases
+preserve all 14 decoded program payloads exactly. Refill reports zero errors
+and the existing 27 warnings. Deletion leaves one L0000 input/output error
+until the MOVE is restored. Browser checks use real WASM with a mock VS Code
+prompt bridge and match all five emitted edits to Rust artifacts.
+
+Lighting MOVE L52/x16 also supports Delete, typed refill and atomic replacement.
+The independent lower MOVE at L53/x4 and its operands keep their row positions.
+Delete splits the contact row and lower MOVE into separate groups; refill merges
+them and preserves the existing row caches. Enter and double-click use the shared
+instruction editor. Two generated native Check Program / Save As cases preserve
+all 14 decoded program payloads exactly. Refill reports zero errors and the
+existing 27 warnings; deletion leaves one L0000 input/output error until restored.
+Browser checks use real WASM with a mock VS Code prompt bridge and match all five
+emitted edits to Rust artifacts.
+
+
+Lighting MOVE L84/x16 supports Delete, typed refill and atomic replacement
+while retaining its two contact branch spines and the lower L87 MOVE. Native
+refill preserves the six-row disabled network and its cached coordinates.
+Both generated Delete and refill projects pass strict all-program checks with
+zero errors and the existing 27 warnings; native Save As preserves all 14
+program payloads exactly. Rust and WASM regressions cover replacement and repeat
+deletion. Browser checks cover Delete, Enter refill, double-click replacement,
+physical blank-cell double-click, and cancel/reopen, using real WASM and a mock
+VS Code prompt bridge.
+
+The comparison feeding a terminal coil at x94 supports Delete, typed EQ refill
+and GT replacement at x7. Deletion keeps the result wire and coil; the prompt
+accepts the two comparison inputs and reconnects the output on refill. Generated
+EQ refill and GT replacement pass strict all-program checks with zero errors
+and the existing 27 warnings. The intermediate deletion reports L0000 and
+L0401 for its unconnected coil. Native Save As preserves all 21 program payloads
+across these three cases exactly. Browser interaction uses real WASM with a
+mock VS Code prompt bridge.
+
+Heating MOVE L80/x19 supports Delete, typed refill and atomic replacement while
+retaining its six contact rows and branch wires. Three focused WASM regressions
+pass, and five browser edits match Rust output exactly. Generated refill passes
+strict all-program checking with zero errors and the existing 27 warnings;
+deletion reports L0000 until refilled. Native Save As preserves all 14 program
+payloads across both cases exactly. Browser checks use real WASM with a mock
+VS Code prompt bridge. Original function deletion preflight is 81/81.
+
+Full IEC editing remains incomplete: broader placement and wiring, and
+creation of function-block instance declarations, still need more work.
+
+The verified six-row heating mesh supports leading-contact Delete and typed
+refill while retaining its MOVE, operands and branch wiring. Native XG5000
+checks pass for both generated cases, and Save As preserves all seven program
+payloads exactly per case. Unsupported contact layouts retain editing guards.
+
+IEC addressed-contact deletion now covers all 284 original contacts in the
+validation workspace. Blank-cell refill preserves branch boundaries and native
+execution flags; all 284 contacts recover their original program records in the
+full-project preflight. The two undeclared switch operands can be restored in
+explicitly disabled rows with captured disabled record flags, without creating
+declarations. Representative upper and lower branch contacts have native and
+browser validation; preflight coverage is not individual native acceptance of
+every contact.
+
+
+IEC operand autocomplete now includes the 13 BOOL system flags documented in
+XG5000 IEC instruction help, including `_ON` and `_OFF`. Their symbolic names
+remain read-only and do not create local declarations. The `_ON` contact can be
+deleted and restored even after its last program usage is removed.
+
+
+IEC right-rail coil Delete and typed refill now cover all 67 original coils in
+the validation workspace preflight, restoring their program payloads exactly.
+Branches and function-fed rows retain their surrounding records and pin
+bindings. Native heating coil Delete/refill agrees on all circuit records,
+with three explicitly checked display-height refreshes. Browser interaction
+checks use real WASM with a mock VS Code prompt bridge. Read-only BOOL flags
+remain available for source operands and are excluded from destination
+suggestions.
+
+The disabled `스위치_1` and `스위치_2` contact deletions and the common restored
+project pass native strict all-program checking with 0 errors, 27 warnings and
+42 messages. Native Save As preserves all 21 program payload comparisons and
+every parsed local-symbol field exactly. Unknown names remain guarded in
+enabled or unmarked rows and as coil destinations. Browser checks use real
+WASM with a simulated VS Code prompt bridge.
+
+Deleting and refilling the disabled lighting comparison-chain head now restores
+its missing row and branch continuation automatically. Subsequent Delete/refill
+retains that scaffold and reproduces the generated file exactly. Native manual
+insertion matches every circuit record, with three checked display-height
+refreshes. Both generated states pass strict all-program checking with 0 errors,
+27 warnings and 42 messages; native Save As preserves all fourteen program
+payloads and all parsed local-symbol fields exactly. Browser Delete, Enter,
+double-click and cancel/reopen checks use real WASM with a simulated VS Code
+prompt bridge.
+
+The enabled heating comparison-chain head also restores its missing row and
+both branch continuations automatically. Repeated Delete/refill reproduces the
+generated file exactly. Native insertion matches every circuit record, with
+seven checked display-height refreshes; native Save As of both generated states
+preserves all fourteen program payloads and all parsed local-symbol fields
+exactly. Both states pass strict all-program checking with 0 errors,
+27 warnings and 42 messages. The refill retains the native post-deletion contact
+feed, which differs from the original source. Two heating comparison-chain
+refills remain unfinished. Browser interaction checks use real WASM with a
+simulated VS Code prompt bridge.
+
+The two middle heating comparisons also restore their missing row and both
+branch continuations automatically. Delete, Enter, double click and prompt
+reopening pass browser checks with real WASM and a simulated VS Code prompt
+bridge. All four generated refill/deletion states pass native strict
+all-program checking with 0 errors, 27 warnings and 42 messages. Native Save As
+preserves all 28 program payloads and every parsed local-symbol field exactly.
+Original-function preflight accepts 79 of 81 refills; the x3-fed and later
+contact-fed heating comparisons remain unsupported. Full IEC editing remains
+unfinished.
+
+The outer-fed heating comparison also supports Delete/refill while retaining
+its repaired branch shape. Both generated refill/deletion states pass native
+strict all-program checking with 0 errors, 27 warnings and 42 messages. Native
+Save As preserves all fourteen program payloads and every parsed local-symbol
+field exactly. Browser interaction checks pass with real WASM and a simulated
+VS Code prompt bridge. Original-function preflight now accepts 80 of 81
+refills; the later contact-fed comparison remains unsupported. Full IEC editing
+remains unfinished.
+
+The contact-fed heating comparison at original L62 now has a structural
+Delete/refill implementation in the checkout. Native placement and removal
+captures match all circuit records, with seven explicit row-height changes.
+Five chain-refill Rust capture fixtures and five focused WASM tests pass.
+Browser checks pass Delete, Enter, double-click and cancel/reopen, with five
+edits matching Rust output exactly; these checks use a simulated VS Code
+prompt bridge. Original-function local preflight now accepts 81/81 deletions
+and refills, of which 12 reproduce all original program payloads exactly.
+Both generated L62 states pass native strict all-program checking with
+0 errors and the baseline 27 warnings. Native Save As preserves all fourteen
+decoded program payloads and all parsed local-symbol fields exactly. All five
+chain-refill Save As fixture gates pass. This does not establish arbitrary
+placement or combined edits.
+
+The contact-fed comparison also supports deleting any subset of its three
+retained contacts, refilling and deleting the comparison, and restoring the
+contacts. Rust and WASM checks cover all seven nonempty subsets. Browser
+workflows for the first and last contacts match Rust output exactly, using real
+WASM with a simulated VS Code prompt bridge. Native Save As for four combined
+editing states preserves all 28 program payloads and every parsed local-symbol
+field exactly. Missing contacts produce native compiler errors until the circuit
+is completed; the completed refill matches the previously validated program.
+This coverage applies to the recognized comparison scaffold. Full IEC editing
+remains unfinished.
+
+Heating comparison deletion derives its location from decoded records, so
+inserting rows or comments before the chain preserves editing support. Rust
+and WASM checks cover all five original comparisons after row shifts, with
+and without a comment that changes the group index. Five browser workflows
+pass Delete, Enter refill, double-click editing and cancel/reopen; fifteen
+edits match Rust exactly with a simulated VS Code prompt bridge. The shifted
+source and ten deletion/refill states pass native strict all-program checks
+with zero errors and the baseline 27 warnings. Native Save As preserves all
+77 program payloads and every parsed local-symbol field exactly.
+
+Contact-kind edits now compose with original contact-fed comparison deletion
+and refill. Rust and WASM checks pass all six kinds at four contact positions,
+before and after a preceding row insertion (48 combinations). Six browser
+workflows pass contact editing, comparison Delete/refill, replacement and
+cancel/reopen using real WASM with a simulated VS Code prompt bridge. Native
+XG5000 checks of the L62 x10 contact across all six kinds and all three states
+pass strict all-program checking with zero errors and the baseline 27 warnings.
+Native Save As preserves all 126 program payloads and every parsed local-symbol
+field exactly. Direct native Delete Line also matches the generated circuit
+records, with six explicitly checked cached row-height changes and two local
+record-offset changes; all symbol values and allocations remain unchanged.
+Full arbitrary IEC placement and wiring remain unfinished.
+
+Contact deletion also composes with comparison deletion and refill in the
+recognized heating chain, including the state with all three top contacts
+removed. Refill restores the contact feed before the missing contacts are
+reinserted. Thirty Rust/WASM lifecycle cases and five browser workflows pass;
+browser prompts use a simulated VS Code bridge. Native XG5000 validation covers
+21 generated and native-import states. Save As preserves all 147 program
+payloads and every parsed local-symbol field exactly. All eight completed
+restorations check with zero errors and the baseline warning total; incomplete
+contact feeds retain compiler errors until restored. Arbitrary IEC placement
+and wiring remain unfinished.
+
+A separate real VS Code host check covers built-in contact/comparison prompts,
+cancel then Enter reopening, BOOL autocomplete, contact-first comparison
+deletion/refill, single-contact restoration, cursor advance and Ctrl+S. The
+restored QA file matches its starting bytes exactly. Clicking an empty IEC
+cell keeps keyboard focus so Enter opens its instruction prompt.
+
+Fresh `MOVE` placement below the stored IEC rows at the first function column
+is native-validated. The generated file passes strict all-program checking
+with zero errors and preserves all seven payloads and every local-symbol field
+including offsets through native Save As. The diagram provides selectable
+trailing blank rows and preserves its scroll position after saving. A real
+VS Code host check covers L87 placement through Enter, double-click editing,
+Escape then Enter reopening, and Ctrl+S; its output matches Rust byte-for-byte.
+
+Fresh scalar placement also supports arithmetic and comparisons below the
+stored rows. A generated-original MOVE/ADD/EQ sequence at distinct rows and
+columns passes native strict all-program checking with 0 errors, 31 warnings
+and 42 messages. Native Save As preserves all seven payloads and every local
+field including offsets exactly. Real VS Code blank-cell Enter prompts and
+Ctrl+S reproduce that sequence byte-for-byte and preserve diagram scroll.
+This establishes fresh scalar placement; broader mixed-layout wiring still
+requires additional implementation and native acceptance.
+
+An earlier wire gap no longer blocks a scalar function in a separate new
+network below the stored rows. The writer preserves earlier bytes, exposed
+endpoints and existing pin bindings exactly. A native-saved open-layout
+baseline plus fresh MOVE passes strict all-program checking with 0 errors
+and the 27 baseline warnings; Save As preserves every program payload and
+local field exactly. Real VS Code Enter insertion and Ctrl+S reproduce the
+validated file and preserve diagram scroll.
+
+FF and R_TRIG cells can also be deleted and refilled in a closed network while
+another network retains a wire gap. Native Save As preserves every program
+payload and local field exactly; refilling the three tested lighting cells
+restores the baseline strict check result of zero errors and 27 warnings.
+The intermediate deletion leaves missing connections and reports six errors.
+Real VS Code Delete, Enter insertion and Ctrl+S reproduce both files exactly.
+IEC instance names such as `FF` now use IEC type resolution in the instruction
+prompt instead of XGK device-address validation.
+
+Connected ADD/SUB deletion and refill now support an unrelated wire gap while
+splitting and merging networks. A combined lighting ADD/SUB edit sequence passes
+native strict checking with zero errors; refill restores the 27 baseline
+warnings. Native Save As preserves all seven program payloads and every local
+field exactly. WASM and real VS Code Delete, Enter refill and Ctrl+S reproduce
+the validated files byte-for-byte.
+
+MOVE and wired EQ deletion/refill also support a closed network beside an
+unrelated wire gap. A four-block lighting edit sequence is verified through
+real VS Code Delete, Enter insertion and Ctrl+S, WASM, and native XG5000 Save As.
+All seven program payloads and every local-variable field match the generated
+files exactly. The two intermediate deletion states report two and four
+connection/input errors; restoring all blocks returns to zero errors and
+the 27 baseline warnings. Edits within the open network itself remain limited.
+
+Parallel-contact, staggered upper and continuing-contact upper MOVE editing
+also works beside an unrelated wire gap. The combined three-MOVE deletion
+and reinsertion sequence is verified through real VS Code, WASM and native
+XG5000 Save As; all program payloads and local-variable fields remain exact.
+Restoration passes strict checking with zero errors and the 27 baseline
+warnings. The deleted intermediate state reports two invalid I/O errors.
+
+GE and continuing EQ deletion/refill also work within the tested network that
+retains a wire gap. Deleting and reinserting its three comparisons is verified
+through real VS Code Delete, Enter insertion and Ctrl+S, WASM, and native XG5000
+Check Program and Save As. Both checkpoints report zero errors and the 27
+baseline warnings; every program payload and local-variable field, including
+offsets, matches exactly. Branches, exposed endpoints and rows outside each
+edited function footprint are preserved. Broader mixed wiring remains limited.
+
+Simple terminal output coils can be deleted and reinserted while another
+network retains a wire gap. A three-coil sequence is verified through actual
+VS Code Delete, Enter and Save, WASM, and native XG5000 Check Program/Save As.
+Both checkpoints report zero errors and the 27 baseline warnings; all seven
+program payloads and every local-variable field, including offsets, match
+exactly. Restoration recovers the original program data. The writer audit
+accepts deletion and exact reinsertion for all 67 existing coils on the tested
+open-layout baseline; arbitrary mixed wiring still needs further work.
+
+Blank row insertion/deletion also supports an existing wire gap. The tested
+lighting sequence inserts a blank row after L10 and removes the resulting L11,
+shifting later functions and gap endpoints while preserving their connections.
+Actual VS Code operations and Save match the generated checkpoints exactly.
+Both native XG5000 checks report zero errors and the 27 baseline warnings;
+Save As preserves all seven program payloads and every local-variable field,
+including offsets, exactly. Removal restores the source program data.
+
+### Parallel-wire cleanup with an unrelated open network
+
+Closed networks retain their branch-segment removal controls when another
+network has a gap. The selected rows must retain a parallel connection, and
+all unrelated network bytes, gaps and typed bindings are preserved. Open-tail
+labels now refer to the selected network. Six additional lighting-network
+removals pass writer preflight, raising cleanup coverage from 75/191 to 81/191.
+Row-preserving wire removal remains 191/191; those counts are writer audits.
+
+Both three-wire deletion sets and restoration survive native XG5000 Save As
+with all seven program payloads and every local field including offsets exact.
+Deleting L48–L49/x3 causes L0000/L0403 in both native interactive editing and
+the generated file; the disconnected intermediate circuit does not compile.
+The isolated L84–L85/x3 deletion passes strict all-program Check with zero
+errors and the baseline 27 warnings. Reconnecting restores 0 errors,
+27 warnings and 42 messages. Actual VS Code removal/insertion pickers and
+four Ctrl+S checkpoints match Rust/WASM output byte for byte. Broader branch
+reconstruction and full-project editability remain unfinished.
+
+### Branch row cleanup with an unrelated open network
+
+Captured contact/wire branch cleanup can now remove a lower row while another
+network has a wiring gap. Untouched network bytes must match the verified row
+coordinate translation exactly, including later function pins. Two independent
+edits passed native XG5000 strict checking across all seven programs with the
+baseline 0 errors and 27 warnings. Native Save As preserved every program payload
+and every local-symbol field, including offsets, exactly. Rebuilt WASM and actual
+VS Code removal, saving and undo also passed exact file comparisons. General
+mixed branch reconstruction remains incomplete.
+
+### Terminal feed cleanup beside other wiring gaps
+
+Captured terminal feed and unique-tail removal now works when another network
+has a gap, including long-wire feeds sharing a function continuation row. Other
+networks must retain exactly the expected row-coordinate translation. Actual
+VS Code removal, save and undo pass exact file checks. Four native Save As
+checkpoints match all seven program payloads and every local-symbol field,
+including offsets, exactly. Native strict checking returns each cleaned result
+to its deliberately gapped baseline of two errors; the unrelated gap remains.
+General mixed network reconstruction is still incomplete.
+
+IEC whole-network deletion, copy, move, and replacement now preserve unrelated
+wiring gaps. Six native XG5000 Check Program/Save As cases passed with zero errors
+and exact equality of all seven program payloads and every local declaration field.
+Copies retain operands and can add duplicate-write warnings; review outputs
+after copying.
+Actual VS Code checks also verified row deletion, clipboard copying (including
+cross-program local declarations), move/replacement pickers, save, and undo.
+Save acknowledgments update status without rebuilding the diagram or discarding
+keyboard focus.
+
+Copy and move also support selected incomplete IEC networks with a validated
+decoded layout. Their exposed endpoints translate exactly while other network
+bytes remain intact. Three additional native cases cover a four-comparison
+network copied, moved, and copied across programs with local declarations:
+zero errors, unchanged prepared-baseline warnings, and exact native Save As
+equality of all seven program payloads and every local field including offsets.
+Actual VS Code clipboard copy, move-picker placement, cross-program clipboard
+copy, save and undo were checked against exact generated file checkpoints.
+
+IEC local address editing supports all 19 captured primitive memory mappings:
+
+| Address | Width in bits | Types |
+| --- | --- | --- |
+| `%MX` | 1 | BOOL |
+| `%MB` | 8 | BYTE, SINT, USINT |
+| `%MW` | 16 | WORD, INT, UINT, DATE |
+| `%MD` | 32 | DWORD, DINT, UDINT, REAL, TIME, TIME_OF_DAY |
+| `%ML` | 64 | LWORD, LINT, ULINT, LREAL, DATE_AND_TIME |
+
+Assigning, clearing, and remapping update address text and allocation metadata.
+Validation rejects wrong address sizes, malformed numbers, overflow, and
+overlapping mapped ranges across widths. Clearing and reassigning all 19
+types recreates their native declarations exactly. Generated remaps passed
+strict all-program XG5000 checking with zero errors, 27 baseline warnings and
+42 messages; Save As preserves all seven program payloads and every local
+field including offsets exactly. Actual VS Code remapping, save, and undo of
+all 19 types matched generated file checkpoints; WASM matched Rust.
+Automatically allocated BOOL, INT, UDINT, and TIME locals can also be assigned
+explicit memory addresses. The writer updates their existing allocation and
+storage class without changing program payloads or reallocating other locals.
+Native Check completed with zero errors, 27 baseline warnings and 42 messages;
+Save As preserves all seven program payloads and every local field including
+offsets exactly. Actual VS Code assignment, save, and undo of all four types
+matched the generated file and original baseline; WASM matched Rust.
+Numeric I/O shapes, automatic allocation of new declarations, other automatic
+types, arrays, structures, and full global declaration editing remain guarded.
+
+### XGK string literals
+
+Instruction prompts accept single-quoted ASCII string operands, preserving spaces,
+commas and parentheses: `$MOV 'Room A, on' D100`. Literal permissions and device
+restrictions come from the manual's string usage tables. String constants are
+limited to 31 printable ASCII characters; destinations, unknown literal
+permissions, non-ASCII strings and apostrophe escapes remain guarded.
+Native $MOV/$MOVP captures passed Check Program with 0 errors and 0 warnings;
+the Rust writer reproduces the full 683-byte saved payload without normalization.
+PLC execution and non-ASCII literal encodings are not yet validated.
+
+### Reviewed XGK CPU restrictions
+
+Instruction completion filters documented model incompatibilities for 31
+commands from InstructionHelp V3.5. For example, INLATCH and GETIP require
+XGK-CPUUN/HN/SN. Insertion and instruction replacement also reject these
+incompatibilities in the writer. Other instructions and unknown CPU models
+keep their existing behavior. Firmware and module requirements still need
+XG5000 Check Program validation.
+
+### Output entry from blank XGK cells
+
+Double-click a blank cell or press Enter to type OUT, SET, RST, OUTP, OUTN
+or a catalog application such as MOV. Output instructions are placed at the
+right output position of the same physical row, including lower branch rows.
+Contacts still use the selected cell, and P/N remain contact pulse commands
+in interior cells (use OUTP/OUTN for pulse coils). Existing outputs are
+protected by the writer's occupied-cell checks.

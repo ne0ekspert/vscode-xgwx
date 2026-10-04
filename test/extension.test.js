@@ -42,12 +42,77 @@ Module._load = function load(request, parent, isMain) {
   if (request === "vscode") return mockVscode;
   return originalLoad.call(this, request, parent, isMain);
 };
-const { XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact, promptLadderInsertion, promptInstruction } = require(path.resolve(__dirname, "../extension.js"));
+const { recoverStartupEditors, XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact, promptLadderInsertion, promptInstruction, tokenizeInstruction } = require(path.resolve(__dirname, "../extension.js"));
 Module._load = originalLoad;
 
 function uri(value) {
   return { fsPath: value, path: value, toString: () => value };
 }
+
+test("startup recovery respects editor choices, dirty tabs, file magic and asynchronous closure", async () => {
+  class TextInput { constructor(uri) { this.uri = uri; } }
+  class CustomInput { constructor(uri) { this.uri = uri; this.viewType = "xgwx.workspaceViewer"; } }
+  mockVscode.TabInputText = TextInput;
+  mockVscode.TabInputCustom = CustomInput;
+  const calls = [];
+  mockVscode.commands = { executeCommand: async (...args) => calls.push(args) };
+  mockVscode.workspace.textDocuments = [];
+  let associations = { "*.md": "default" };
+  let binaryEditor;
+  mockVscode.workspace.getConfiguration = (section) => ({ get: (key, fallback) => {
+    if (section === "workbench" && key === "editorAssociations") return associations;
+    if (section === "workbench.editor" && key === "defaultBinaryEditor") return binaryEditor ?? fallback;
+    throw new Error(`Unexpected configuration key: ${section}.${key}`);
+  } });
+  const target = uri("/startup/project.xgwx");
+  files.set(target.toString(), [0x58, 0x47, 1]);
+  const tab = { input: new TextInput(target), isDirty: false, isActive: true, isPreview: true };
+  const group = { tabs: [tab], viewColumn: 2 };
+  const closed = [];
+  mockVscode.window = { tabGroups: { all: [group], close: async (target) => closed.push(target) } };
+  mockVscode.commands.executeCommand = async (...args) => {
+    calls.push(args);
+    group.tabs.push({ input: new CustomInput(target) });
+  };
+  await recoverStartupEditors();
+  assert.deepEqual(calls.splice(0), [["vscode.openWith", target, "xgwx.workspaceViewer", {
+    viewColumn: 2, preserveFocus: false, preview: true,
+  }]]);
+  assert.deepEqual(closed, [tab]);
+  group.tabs.pop();
+  for (const pattern of ["*.xgwx", "**/*.xgwx", "/startup/{project,other}.xgwx"]) {
+    associations = { [pattern]: "default" };
+    await recoverStartupEditors();
+    assert.equal(calls.length, 0, pattern);
+  }
+  associations = {};
+  binaryEditor = "default";
+  await recoverStartupEditors();
+  binaryEditor = undefined;
+  tab.isDirty = true;
+  await recoverStartupEditors();
+  tab.isDirty = false;
+  mockVscode.workspace.textDocuments = [{ uri: target, isDirty: true }];
+  await recoverStartupEditors();
+  mockVscode.workspace.textDocuments = [];
+  group.tabs.push({ input: new CustomInput(target) });
+  await recoverStartupEditors();
+  group.tabs.pop();
+  files.set(target.toString(), [1, 2]);
+  await recoverStartupEditors();
+  assert.equal(calls.length, 0);
+  const readFile = mockVscode.workspace.fs.readFile;
+  try {
+    mockVscode.workspace.fs.readFile = async () => {
+      group.tabs = [];
+      return Uint8Array.from([0x58, 0x47]);
+    };
+    await recoverStartupEditors();
+    assert.equal(calls.length, 0);
+  } finally {
+    mockVscode.workspace.fs.readFile = readFile;
+  }
+});
 
 test("editable document participates in dirty, undo, redo, save, and backup lifecycle", async () => {
   const target = uri("/workspace/program.xgwx");
@@ -428,4 +493,71 @@ test("direct editor validates through the webview before returning one command a
   await receive({type:"ladderInstructionValidationResult",validationId:validation.validationId,error:null});await accepting;await pending;
   assert.deepEqual(messages.at(-1),{type:"iecContactInputResult",requestId:7,value:{command:"NC",operands:["Ready"]}});
   assert.deepEqual(reveals,[[undefined,false]]);assert.deepEqual([...document.bytes],[1,2,3]);
+});
+
+
+test("XGK string prompt accepts complete quoted operands and keeps constants out of destinations", async () => {
+  let picker;
+  mockVscode.window = { createQuickPick: () => (picker = {
+    activeItems: [], items: [],
+    onDidChangeValue(callback) { this.changed = callback; },
+    onDidAccept(callback) { this.accepted = callback; },
+    onDidHide(callback) { this.hidden = callback; },
+    set value(value) { this._value = value; this.changed?.(value); },
+    get value() { return this._value; }, show() {}, dispose() {},
+  }) };
+  const rules = [{label:'S',dataTypes:['STRING'],allowsConstant:true}, {label:'D',dataTypes:['STRING'],allowsConstant:false}];
+  const result = promptInstruction({structuredResult:true, choices:[{mnemonic:'$MOV',operandCount:2,operandRules:rules}]}, 'Insert');
+  picker.value = "$MOV 'Room A, on (night)' 'bad destination'";
+  assert.equal(picker.items.some(item=>item.insert),false);
+  picker.value = "$MOV 'Room A, on (night)' D100";
+  assert.equal(picker.items[0].insert,true);
+  await picker.accepted();
+  assert.deepEqual(await result,{command:'$MOV',operands:["'Room A, on (night)'",'D100']});
+});
+
+test("instruction prompt keeps quoted string spaces, commas and parentheses intact", () => {
+  assert.deepEqual(tokenizeInstruction("$MOV 'Room A, on (night)' D100").tokens,
+    ["$MOV", "'Room A, on (night)'", "D100"]);
+  assert.equal(tokenizeInstruction("$MOV 'Room A '").trailingSeparator, false);
+  assert.equal(tokenizeInstruction("$MOV 'Room A' ").trailingSeparator, true);
+  assert.match(tokenizeInstruction("$MOV 'Room A").error, /single quote/);
+});
+
+test("instruction operands preserve nested expressions and reject unmatched parentheses", () => {
+  assert.deepEqual(tokenizeInstruction("MOVE (%MW0 MOD 7 + 1) %MW1000").tokens,
+    ["MOVE", "(%MW0 MOD 7 + 1)", "%MW1000"]);
+  assert.deepEqual(tokenizeInstruction("MOVE (%MX0 OR NOT %MX1 AND (%MW2 >= 2)) %MX1002").tokens,
+    ["MOVE", "(%MX0 OR NOT %MX1 AND (%MW2 >= 2))", "%MX1002"]);
+  assert.deepEqual(tokenizeInstruction("MOV D100 D200").tokens, ["MOV", "D100", "D200"]);
+  assert.match(tokenizeInstruction("MOVE (%MW0 + 1").error, /Close/);
+  assert.match(tokenizeInstruction("MOVE %MW0) %MW1").error, /Unexpected/);
+});
+
+test("IEC instruction prompt completes inside grouped operands and advances to destination", async () => {
+  let picker;
+  mockVscode.window = { createQuickPick: () => (picker = {
+    activeItems: [], items: [],
+    onDidChangeValue(callback) { this.changed = callback; },
+    onDidAccept(callback) { this.accepted = callback; },
+    onDidHide(callback) { this.hidden = callback; },
+    set value(value) { this._value = value; this.changed?.(value); },
+    get value() { return this._value; }, show() {}, dispose() {},
+  }) };
+  const result = promptInstruction({ structuredResult: true,
+    choices: [{ mnemonic: "MOVE", operandCount: 2 }],
+    suggestions: [{ value: "%MW0" }, { value: "%MW1000" }],
+  }, "Insert");
+  picker.value = "MOVE (%MW0 + %MW";
+  assert.equal(picker.items.some(item => item.insert), false);
+  const completion = picker.items.find(item => item.completion === "MOVE (%MW0 + %MW1000");
+  assert.ok(completion);
+  picker.activeItems = [completion];
+  await picker.accepted();
+  assert.equal(picker.value, "MOVE (%MW0 + %MW1000");
+  picker.value = "MOVE (%MW0 MOD 7 + 1) ";
+  assert.match(picker.title, /Destination operand/);
+  picker.value = "MOVE (%MW0 MOD 7 + 1) %MW1000";
+  await picker.accepted();
+  assert.deepEqual(await result, { command: "MOVE", operands: ["(%MW0 MOD 7 + 1)", "%MW1000"] });
 });

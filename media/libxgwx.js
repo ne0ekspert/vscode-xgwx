@@ -1,6 +1,29 @@
 /* @ts-self-types="./libxgwx.d.ts" */
 
 /**
+ * Connect adjacent IEC groups, rebuilding group envelopes and adding wiring.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} upper_group_index
+ * @param {number} expected_upper_row
+ * @param {number} lower_group_index
+ * @param {number} expected_lower_row
+ * @param {number} x
+ * @returns {Uint8Array}
+ */
+export function connect_xgwx_iec_ld_groups(bytes, program_index, upper_group_index, expected_upper_row, lower_group_index, expected_lower_row, x) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.connect_xgwx_iec_ld_groups(ptr0, len0, program_index, upper_group_index, expected_upper_row, lower_group_index, expected_lower_row, x);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Copy one complete decoded IEC LD network into an empty row range.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -98,6 +121,28 @@ export function delete_xgwx_iec_ld_blank_row(bytes, program_index, blank_row_ind
 }
 
 /**
+ * Remove a scalar branch-mounted block while retaining its branch rows.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_branch_function(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_branch_function(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Delete the upper line of a captured two-row IEC branch.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -115,6 +160,28 @@ export function delete_xgwx_iec_ld_branch_top_row(bytes, program_index, group_in
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Delete a scalar arithmetic block while retaining its external branch spine.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_branched_arithmetic(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_branched_arithmetic(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
 }
 
 /**
@@ -570,6 +637,28 @@ export function delete_xgwx_iec_ld_rung(bytes, program_index, row_index, expecte
 }
 
 /**
+ * Delete one scalar body from a shared-row horizontal chain.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_scalar_chain_function(bytes, program_index, block_offset, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_scalar_chain_function(ptr0, len0, program_index, block_offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Delete an occupied simple IEC LD row and shift later lines up.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -713,6 +802,28 @@ export function delete_xgwx_ladder_comparison(bytes, program_index, offset, expe
 }
 
 /**
+ * Delete a verified XGK application from an unbranched output row.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_ladder_instruction(bytes, program_index, offset, expected) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_ladder_instruction(ptr0, len0, program_index, offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Delete a supported native rung comment.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -804,6 +915,30 @@ export function edit_xgwx_iec_ld_branch_segment(bytes, program_index, group_inde
 }
 
 /**
+ * Toggle a vertical wire without deleting shared row or function records.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} start_row_index
+ * @param {number} end_row_index
+ * @param {number} x
+ * @param {boolean} expected
+ * @param {boolean} present
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_iec_ld_vertical_wire(bytes, program_index, group_index, start_row_index, end_row_index, x, expected, present) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_iec_ld_vertical_wire(ptr0, len0, program_index, group_index, start_row_index, end_row_index, x, expected, present);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Add or remove a supported vertical branch connection.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -852,6 +987,27 @@ export function edit_xgwx_ladder_comment(bytes, program_index, edit) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.edit_xgwx_ladder_comment(ptr0, len0, program_index, edit);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Extend an IEC group into the adjacent implicit blank row.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} start_row_index
+ * @param {number} x
+ * @returns {Uint8Array}
+ */
+export function extend_xgwx_iec_ld_vertical_wire(bytes, program_index, group_index, start_row_index, x) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.extend_xgwx_iec_ld_vertical_wire(ptr0, len0, program_index, group_index, start_row_index, x);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }
@@ -1284,6 +1440,34 @@ export function insert_xgwx_iec_ld_terminal_move(bytes, program_index, contact_o
 }
 
 /**
+ * Insert a terminal TON with a declared instance and typed TIME operands.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} contact_offset
+ * @param {string} instance
+ * @param {string} preset
+ * @param {string} elapsed
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_terminal_timer(bytes, program_index, contact_offset, instance, preset, elapsed) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(instance, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(preset, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(elapsed, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_terminal_timer(ptr0, len0, program_index, contact_offset, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
  * Insert an unallocated primitive IEC program-local symbol.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -1496,6 +1680,34 @@ export function repair_xgwx_iec_ld_horizontal_wire(bytes, program_index, inserti
 }
 
 /**
+ * Replace a captured scalar branch function atomically, adjusting its footprint.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @param {string} function_name
+ * @param {string} operands_json
+ * @returns {Uint8Array}
+ */
+export function replace_xgwx_iec_ld_branch_function(bytes, program_index, block_offset, expected_name, function_name, operands_json) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(function_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(operands_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.replace_xgwx_iec_ld_branch_function(ptr0, len0, program_index, block_offset, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
+}
+
+/**
  * Replace an occupied IEC LD network with a copy of another in the program.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -1539,6 +1751,34 @@ export function replace_xgwx_iec_ld_group_from_program(bytes, source_program_ind
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Replace a supported scalar chain function atomically, adjusting its footprint.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @param {string} function_name
+ * @param {string} operands_json
+ * @returns {Uint8Array}
+ */
+export function replace_xgwx_iec_ld_scalar_chain_function(bytes, program_index, block_offset, expected_name, function_name, operands_json) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(function_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ptr3 = passStringToWasm0(operands_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len3 = WASM_VECTOR_LEN;
+    const ret = wasm.replace_xgwx_iec_ld_scalar_chain_function(ptr0, len0, program_index, block_offset, ptr1, len1, ptr2, len2, ptr3, len3);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v5 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v5;
 }
 
 /**
@@ -1644,6 +1884,27 @@ export function set_xgwx_module_option(bytes, base, slot, key, index, value) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+}
+
+/**
+ * Split disconnected IEC row ranges without changing coordinates or elements.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} group_index
+ * @param {number} expected_upper_row
+ * @param {number} expected_lower_row
+ * @returns {Uint8Array}
+ */
+export function split_xgwx_iec_ld_group(bytes, program_index, group_index, expected_upper_row, expected_lower_row) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.split_xgwx_iec_ld_group(ptr0, len0, program_index, group_index, expected_upper_row, expected_lower_row);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**

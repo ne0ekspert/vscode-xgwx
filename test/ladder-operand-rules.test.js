@@ -2,6 +2,20 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { typeMatches, operandError, suggestionMatches } = require('../media/ladder-operand-rules.cjs');
 
+test('IEC symbols and instance names are not classified as XGK device addresses', () => {
+  const instance = { label: 'Instance', dataTypes: ['FF'], allowsConstant: false };
+  assert.equal(operandError(instance, 'FF', true), undefined);
+  assert.equal(suggestionMatches(instance, { value: 'FF', dataType: 'FF' }, true), true);
+  assert.ok(operandError(instance, 'FF'));
+  const word = { label: 'Destination', dataTypes: ['WORD'], allowsConstant: false };
+  for (const name of ['HFF', 'B101', 'MFA']) {
+    assert.equal(operandError(word, name, true), undefined);
+    assert.ok(operandError(word, name));
+  }
+  assert.ok(operandError(word, '1', true));
+  assert.equal(suggestionMatches(instance, { value: 'FF', dataType: 'TON' }, true), false);
+});
+
 test('XGK storage aliases preserve width and keep floating-point symbols distinct', () => {
   for (const [required, accepted, rejected] of [
     ['BIT','BOOL','WORD'], ['INT','WORD','DWORD'], ['DINT','DWORD','LWORD'],
@@ -44,4 +58,34 @@ test('D register bit indices accept 0 through F and reject whole-word use', () =
   for (const value of ['D0000.10', 'D0000.G', 'D.0', 'DA.0', 'D0000..0']) assert.ok(operandError(bit, value), value);
   assert.ok(operandError({ label: 'S', dataTypes: ['WORD'] }, 'D0000.F'));
   assert.equal(operandError({ label: 'S', dataTypes: ['WORD'], deviceAreas: ['D.x'] }, 'D0000.F'), undefined);
+});
+
+
+test('read-only BOOL flags remain source suggestions but are excluded from destinations', () => {
+  const flag = { value: '_ON', dataType: 'BOOL', writable: false };
+  const source = { dataTypes: ['BOOL'], allowsConstant: false };
+  const destination = { ...source, requiresWritable: true };
+  assert.equal(suggestionMatches(source, flag), true);
+  assert.equal(suggestionMatches(destination, flag), false);
+  assert.equal(suggestionMatches(destination, { value: '%MX0', dataType: 'BOOL', writable: true }), true);
+});
+
+test('constant-only XGK operands exclude raw devices and named variable suggestions', () => {
+  const rule = { label: 'S', dataTypes: ['WORD'], allowsConstant: true, deviceAreas: [] };
+  for (const value of ['0', '31', 'H1F', 'B11111']) assert.equal(operandError(rule, value), undefined);
+  for (const value of ['D100', 'LoopNumber', '루프번호']) {
+    assert.match(operandError(rule, value), /constant/);
+    assert.equal(suggestionMatches(rule, { value, dataType: 'WORD' }), false);
+  }
+  assert.equal(operandError(rule, 'LoopNumber', true), undefined);
+});
+
+test('XGK string constants preserve punctuation and enforce destination permissions', () => {
+  const source = {label:'S',dataTypes:['STRING'],allowsConstant:true};
+  for (const text of ["'Room A, on (night)'", "''", "'"+'a'.repeat(31)+"'"]) assert.equal(operandError(source,text),undefined);
+  for (const text of ["'unclosed", "'"+'a'.repeat(32)+"'", "'room\n'", "'한글'"]) assert.ok(operandError(source,text));
+  assert.ok(operandError({...source,allowsConstant:false},"'Room A'"));
+  assert.ok(operandError({...source,allowsConstant:undefined},"'Room A'"));
+  assert.ok(operandError(source,"1"));
+  assert.ok(operandError({...source,dataTypes:['WORD']},"'Room A'"));
 });

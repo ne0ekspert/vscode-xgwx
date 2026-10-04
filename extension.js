@@ -1,5 +1,6 @@
 const path = require("node:path");
 const vscode = require("vscode");
+const picomatch = require("./media/vendor/picomatch");
 const { operandError, suggestionMatches } = require("./media/ladder-operand-rules.cjs");
 
 const VIEW_TYPE = "xgwx.workspaceViewer";
@@ -268,6 +269,34 @@ function promptIecContact(currentValue, suggestions, rowIndex) {
   });
 }
 
+// Parentheses keep compound IEC expressions together as one instruction operand.
+function tokenizeInstruction(value) {
+  const tokens = [];
+  let depth = 0;
+  let quoted = false;
+  let start = -1;
+  let error;
+  for (let i = 0; i < value.length; i++) {
+    const char = value[i];
+    if (char === "'") quoted = !quoted;
+    if (/\s/.test(char) && depth === 0 && !quoted) {
+      if (start >= 0) tokens.push(value.slice(start, i));
+      start = -1;
+      continue;
+    }
+    if (start < 0) start = i;
+    if (!quoted && char === "(") depth++;
+    if (!quoted && char === ")") {
+      if (depth === 0) error = "Unexpected closing parenthesis";
+      else depth--;
+    }
+  }
+  if (start >= 0) tokens.push(value.slice(start));
+  if (depth) error = "Close the expression parentheses";
+  if (quoted) error = "Close the string's single quote";
+  return { tokens, error, trailingSeparator: /\s$/.test(value) && depth === 0 && !quoted, depth, quoted };
+}
+
 // QuickPick exposes text changes, but no caret position: context follows the final token.
 function promptInstruction(instruction, title, validate) {
   return new Promise((resolve) => {
@@ -289,22 +318,24 @@ function promptInstruction(instruction, title, validate) {
       resolve(value);
     };
     const parse = value => {
-      const tokens = value.trim().split(/\s+/).filter(Boolean);
+      const { tokens, error: groupingError } = tokenizeInstruction(value);
       const choice = choices.find(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase() === tokens[0]?.toUpperCase()));
       const operands = tokens.slice(1);
-      const error = validationError || (!choice && tokens.length && !choices.some(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase().startsWith(tokens[0].toUpperCase()))) ? "Unknown or unavailable command" : undefined)
+      const error = validationError || groupingError || (!choice && tokens.length && !choices.some(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase().startsWith(tokens[0].toUpperCase()))) ? "Unknown or unavailable command" : undefined)
         || (choice && operands.length > choice.operandCount ? `Expected ${choice.operandCount} operands` : undefined)
-        || operands.map((operand, index) => operandError(choice?.operandRules?.[index], operand)).find(Boolean);
+        || operands.map((operand, index) => operandError(choice?.operandRules?.[index], operand, instruction.iec === true)).find(Boolean);
       const complete = !error && choice && operands.length === choice.operandCount
-        && value.length <= 255 && !/[\p{Cc},]/u.test(value);
+        && value.length <= 255 && !/[\p{Cc}]/u.test(value)
+        && tokens.every(token => !token.includes(",") || token.startsWith("'") && token.endsWith("'"));
       return { tokens, choice, operands, complete, error };
     };
     const update = value => {
       const { tokens, choice, operands, complete, error } = parse(value);
-      const last = /\s$/.test(value) ? "" : (tokens.at(-1) || "");
+      const { trailingSeparator, depth, quoted } = tokenizeInstruction(value);
+      const last = trailingSeparator ? "" : (tokens.at(-1) || "");
       let hint = "Instruction";
       let completions;
-      if (!choice || tokens.length === 1 && !/\s$/.test(value)) {
+      if (!choice || tokens.length === 1 && !trailingSeparator) {
         completions = choices.filter(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase().startsWith(value.trim().toUpperCase())))
           .slice(0, 50).map(item => ({ value: `${item.mnemonic} `,
             description: `${item.operandCount} operands` }));
@@ -323,15 +354,18 @@ function promptInstruction(instruction, title, validate) {
             : /^S\d+$/.test(rule.label) ? `Source operand ${rule.label.slice(1)}` : rule.label;
           hint = `${label} · ${rule.dataTypes.join("/")}`;
         }
-        const prefix = last ? value.slice(0, -last.length) : value;
-        completions = index >= choice.operandCount ? [] : suggestions
-          .filter(item => suggestionMatches(rule, item)
-            && item.value.toLocaleLowerCase().includes(last.toLocaleLowerCase()))
+        const fragment = depth ? (value.match(/[\p{L}\p{N}_%.]*$/u)?.[0] || "") : last;
+        const prefix = fragment ? value.slice(0, -fragment.length) : value;
+        completions = index >= choice.operandCount || quoted || last.startsWith("'") ? [] : suggestions
+          .filter(item => suggestionMatches(rule, item, instruction.iec === true)
+            && item.value.toLocaleLowerCase().includes(fragment.toLocaleLowerCase()))
           .slice(0, 30).map(item => ({ value: prefix + item.value
-            + (index + 1 < choice.operandCount ? " " : ""), description: item.description }));
+            + (!depth && index + 1 < choice.operandCount ? " " : ""), description: item.description }));
       }
       picker.title = `${title} · ${error || hint}`;
-      picker.placeholder = `${hint} · separate operands with spaces`;
+      const groupingHint = instruction.iec !== true && choice?.operandRules?.some(rule => rule.dataTypes?.includes("STRING"))
+        ? "quote strings with single quotes" : "group expressions in parentheses";
+      picker.placeholder = `${hint} · separate operands with spaces; ${groupingHint}`;
       picker.items = [
         ...(complete ? [{ label: value.trim(), description: instruction.mode === "edit" ? "Apply instruction" : "Insert instruction", insert: true }] : []),
         ...(error ? [{ label: value.trim(), description: error, invalid: true }] : []),
@@ -422,6 +456,45 @@ function bytesEqual(left, right) {
   return left.every((byte, index) => byte === right[index]);
 }
 
+async function recoverStartupEditors() {
+  // Only inspect the startup snapshot. Later Reopen With choices belong to the user.
+  const candidates = vscode.window.tabGroups.all.flatMap((group) =>
+    group.tabs.filter((tab) => tab.input instanceof vscode.TabInputText
+      && /\.xgwx$/i.test(tab.input.uri.path)).map((tab) => ({ group, tab, uri: tab.input.uri })));
+  for (const { group, tab, uri } of candidates) {
+    const eligible = () => {
+      if (!vscode.window.tabGroups.all.includes(group) || !group.tabs.includes(tab) || tab.isDirty) return false;
+      if (vscode.workspace.textDocuments.some((document) => document.uri.toString() === uri.toString() && document.isDirty)) return false;
+      const configuration = vscode.workspace.getConfiguration("workbench.editor", uri);
+      const binaryEditor = configuration.get("defaultBinaryEditor");
+      if (binaryEditor && binaryEditor !== VIEW_TYPE) return false;
+      const associations = vscode.workspace.getConfiguration("workbench", uri).get("editorAssociations", {});
+      return !Object.entries(associations).some(([pattern, editor]) => {
+        if (editor === VIEW_TYPE) return false;
+        const target = pattern.includes("/") ? uri.path : path.posix.basename(uri.path);
+        return picomatch.isMatch(target, pattern, { dot: true, nocase: true });
+      });
+    };
+    try {
+      if (!eligible()) continue;
+      const bytes = await vscode.workspace.fs.readFile(uri);
+      if (bytes[0] !== 0x58 || bytes[1] !== 0x47 || !eligible()) continue;
+      const customIsOpen = () => vscode.window.tabGroups.all.some((other) => other.tabs.some((current) =>
+        current.input instanceof vscode.TabInputCustom && current.input.viewType === VIEW_TYPE
+        && current.input.uri.toString() === uri.toString()));
+      // A custom tab may have opened while the read was in flight.
+      if (customIsOpen()) continue;
+      await vscode.commands.executeCommand("vscode.openWith", uri, VIEW_TYPE, {
+        viewColumn: group.viewColumn, preserveFocus: !tab.isActive, preview: tab.isPreview,
+      });
+      if (customIsOpen() && eligible()) await vscode.window.tabGroups.close(tab, true);
+    } catch (error) {
+      // Startup recovery must not prevent normal custom-editor activation.
+      console.warn("XGWX startup editor recovery:", error);
+    }
+  }
+}
+
 function activate(context) {
   const provider = new XgwxEditorProvider(context);
   context.subscriptions.push(
@@ -431,8 +504,9 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("xgwx.refreshViewer", () => provider.refreshActive()),
   );
+  void recoverStartupEditors();
 }
 
 function deactivate() {}
 
-module.exports = { activate, deactivate, XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact, promptLadderInsertion, promptInstruction };
+module.exports = { activate, deactivate, recoverStartupEditors, XgwxDocument, XgwxEditorProvider, bytesEqual, promptIecContact, promptLadderInsertion, promptInstruction, tokenizeInstruction };

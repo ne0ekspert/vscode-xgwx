@@ -1,4 +1,4 @@
-import { elementCommands, iecPinRule, scalarIecCommands } from "./ladder-commands.js";
+import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
   cpu_catalog,
   copy_xgwx_iec_ld_group,
@@ -6,6 +6,7 @@ import init, {
   duplicate_xgwx_iec_ld_function_instance,
   delete_xgwx_ladder_rung_comment,
   delete_xgwx_ladder_comparison,
+  delete_xgwx_ladder_instruction,
   delete_xgwx_iec_ld_blank_row,
   delete_xgwx_iec_ld_branch_top_row,
   delete_xgwx_iec_ld_nested_contact_branch_row,
@@ -15,6 +16,9 @@ import init, {
   delete_xgwx_iec_ld_contact,
   delete_xgwx_iec_ld_contact_cell,
   delete_xgwx_iec_ld_connected_arithmetic,
+  delete_xgwx_iec_ld_branched_arithmetic,
+  delete_xgwx_iec_ld_branch_function,
+  replace_xgwx_iec_ld_branch_function,
   delete_xgwx_iec_ld_eq_chain_head,
   delete_xgwx_iec_ld_heating_chain_head,
   delete_xgwx_iec_ld_heating_chain_middle,
@@ -28,9 +32,15 @@ import init, {
   delete_xgwx_iec_ld_simple_row,
   delete_xgwx_iec_ld_standalone_function,
   delete_xgwx_iec_ld_terminal_function,
+  delete_xgwx_iec_ld_scalar_chain_function,
+  replace_xgwx_iec_ld_scalar_chain_function,
   delete_xgwx_iec_local_symbol,
   delete_xgwx_module,
   edit_xgwx_iec_ld_branch_segment,
+  edit_xgwx_iec_ld_vertical_wire,
+  connect_xgwx_iec_ld_groups,
+  extend_xgwx_iec_ld_vertical_wire,
+  split_xgwx_iec_ld_group,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
   edit_xgwx_ladder_comment,
@@ -40,6 +50,7 @@ import init, {
   insert_xgwx_iec_ld_leading_contact,
   insert_xgwx_iec_ld_function_cell,
   insert_xgwx_iec_ld_terminal_move,
+  insert_xgwx_iec_ld_terminal_timer,
   insert_xgwx_iec_ld_standalone_function,
   insert_xgwx_iec_ld_blank_row,
   insert_xgwx_iec_ld_parallel_contact_kind,
@@ -194,7 +205,20 @@ window.addEventListener("message", async ({ data }) => {
   if (data?.type === "error") renderError(data.message);
   if (data?.type === "saved" || data?.type === "reverted") {
     dirty = Boolean(data.dirty);
-    if (current) renderWorkspace();
+    if (current && data.type === "reverted") {
+      renderWorkspace();
+    } else if (current) {
+      // A save acknowledgment changes status, not the diagram. Rebuilding it
+      // would discard keyboard focus and unfinished inspector input.
+      const state = app.querySelector(".edit-state");
+      if (state) {
+        state.textContent = dirty ? "Unsaved changes" : "Saved";
+        state.classList.toggle("dirty", dirty);
+      }
+      const save = app.querySelector('button[aria-label="Save workspace"]');
+      if (save) save.disabled = !dirty;
+      app.querySelector(".status-bar")?.replaceWith(renderStatusBar(current.summary));
+    }
   }
   if (data?.type === "requestRefresh") vscode.postMessage({ type: "refresh" });
 });
@@ -236,16 +260,30 @@ async function loadWorkspace(file) {
 function renderWorkspace() {
   closeLadderOverlay();
   const { file, summary } = current;
+  const oldShell = app.querySelector(".editor-shell");
+  const sameProgram = activeView === "programs" && oldShell?.dataset.view === activeView
+    && oldShell.dataset.programIndex === String(selectedProgramIndex);
+  const oldLayout = sameProgram ? app.querySelector(".iec-layout-viewport") : null;
+  const scroll = oldLayout ? { top: oldLayout.scrollTop, left: oldLayout.scrollLeft,
+    editorTop: app.querySelector(".editor-canvas")?.scrollTop ?? 0 } : null;
   app.replaceChildren();
 
   const shell = element("div", "editor-shell");
   shell.dataset.view = activeView;
+  shell.dataset.programIndex = String(selectedProgramIndex);
   shell.append(
     renderCommandBar(file, summary),
     renderWorkbench(file, summary),
     renderStatusBar(summary),
   );
   app.append(shell);
+  const layout = scroll && shell.querySelector(".iec-layout-viewport");
+  if (layout) {
+    layout.scrollTop = scroll.top;
+    layout.scrollLeft = scroll.left;
+    const editor = shell.querySelector(".editor-canvas");
+    if (editor) editor.scrollTop = scroll.editorTop;
+  }
 }
 
 function renderCommandBar(file, summary) {
@@ -896,7 +934,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
     const editableCount = (ladder.sourceStrings || []).filter((item) => item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction).length;
     canvas.append(editorHeader(
       `${programLanguage(ladder)} payload`,
-      `${ladder.iecRows?.length || 0} stored rows · ${ladder.iecRecords?.length || 0} records · ${ladder.iecFunctions?.length || 0} function blocks · ${ladder.iecFunctionReferences?.length || 0} block links · ${(ladder.iecTerminalFunctionDeletionSites?.length || 0) + (ladder.iecStandaloneFunctionDeletionSites?.length || 0) + (ladder.iecFunctionCellDeletionSites?.length || 0) + (ladder.iecConnectedArithmeticDeletionSites?.length || 0)} function deletions · ${(ladder.iecTerminalFunctionInsertionSites?.length || 0) + (ladder.iecStandaloneFunctionInsertionSites?.length || 0) + (ladder.iecFunctionCellInsertionSites?.length || 0)} function insertions · ${(ladder.iecNoContactInsertionSites?.length || 0) + (ladder.iecShortWireContactInsertionSites?.length || 0)} contact insertion sites · ${ladder.iecNoContactCellDeletionSites?.length || 0} cell deletions · ${ladder.iecHorizontalWireDeletionSites?.length || 0} removable wires · ${ladder.iecHorizontalWireRepairSites?.length || 0} wire gaps · ${editableCount} editable records`,
+      `${ladder.iecRows?.length || 0} stored rows · ${ladder.iecRecords?.length || 0} records · ${ladder.iecFunctions?.length || 0} function blocks · ${ladder.iecFunctionReferences?.length || 0} block links · ${(ladder.iecTerminalFunctionDeletionSites?.length || 0) + (ladder.iecStandaloneFunctionDeletionSites?.length || 0) + (ladder.iecFunctionCellDeletionSites?.length || 0) + (ladder.iecConnectedArithmeticDeletionSites?.length || 0) + (ladder.iecScalarChainDeletionSites?.length || 0)} function deletions · ${(ladder.iecTerminalFunctionInsertionSites?.length || 0) + (ladder.iecStandaloneFunctionInsertionSites?.length || 0) + (ladder.iecFunctionCellInsertionSites?.length || 0) + (ladder.iecWiredComparisonInsertionSites?.length || 0) + (ladder.iecTerminalTimerInsertionSites?.length || 0)} function insertions · ${(ladder.iecNoContactInsertionSites?.length || 0) + (ladder.iecShortWireContactInsertionSites?.length || 0)} contact insertion sites · ${ladder.iecNoContactCellDeletionSites?.length || 0} cell deletions · ${ladder.iecHorizontalWireDeletionSites?.length || 0} removable wires · ${ladder.iecHorizontalWireRepairSites?.length || 0} wire gaps · ${editableCount} editable records`,
     ));
     const selectedElement = selectedIecElement?.programIndex === selectedProgramIndex
       ? (ladder.sourceStrings || []).find((item) => item.offset === selectedIecElement.offset) : null;
@@ -1000,12 +1038,14 @@ function renderProgramsEditor(canvas, inspector, programs) {
     const deleteSelection = async (label = null) => {
       const selection = currentLadderSelection(ladder);
       if (!ladder.structuralEditing || !selection.decodedCells.length
-        || selection.decodedCells.some((cell) => !structuralElement(cell) && !isEditableComparison(cell, ladder))) return false;
+        || selection.decodedCells.some((cell) => !structuralElement(cell) && !isEditableComparison(cell, ladder) && !cell.instructionDeletion)) return false;
       const editableCells = [...selection.decodedCells].sort((a, b) => b.offset - a.offset);
       const activeKey = selectedLadderFocus ? ladderPositionKey(selectedLadderFocus) : null;
       const edited = await applyEdit(
         () => editableCells.reduce((bytes, cell) => isEditableComparison(cell, ladder)
           ? delete_xgwx_ladder_comparison(bytes, selectedProgramIndex, cell.offset, cell.sourceText)
+          : cell.instructionDeletion
+            ? delete_xgwx_ladder_instruction(bytes, selectedProgramIndex, cell.offset, cell.sourceText)
           : edit_xgwx_ladder_cell(bytes, selectedProgramIndex, {
             rawY: cell.rawY, column: ldCellColumn(cell.rawX),
             expected: structuralElement(cell), replacement: null,
@@ -1038,10 +1078,15 @@ function programLanguage(body) {
   return version || "Unknown";
 }
 
+function iecEditableLastRow(body) {
+  const rows = body.iecRows || [];
+  return rows.length ? Math.min(16383, Math.max(...rows.map((row) => row.rowIndex)) + 16) : -1;
+}
+
 function iecOccupiedCell(body, rowIndex, rawX) {
   const rows = body.iecRows || [];
   if (!rows.length || rowIndex < 0
-    || rowIndex > Math.max(...rows.map((row) => row.rowIndex)) + 1
+    || rowIndex > iecEditableLastRow(body)
     || rawX < 1 || rawX > 97 || (rawX - 1) % 3 !== 0) return true;
   if ((body.sourceStrings || []).some((item) => item.isIecComment
     && item.iecRowIndex === rowIndex)) return true;
@@ -1072,7 +1117,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const section = element("section", "iec-layout");
   section.append(element("h3", "", "IEC ladder layout"));
   section.append(element("p", "muted",
-    "Single-click selects cells. Double-click or Enter opens the instruction editor. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
+    "Single-click selects cells. Double-click or Enter opens the instruction editor. F6 draws a vertical connection beside the selected cell. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
   const rows = body.iecRows || [];
   if (!rows.length) {
     section.append(emptyState("No decoded IEC rows."));
@@ -1086,15 +1131,15 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const gapOffset = iecGapOffsets(body);
   const visualX = (rowIndex, storedX) => x(storedX - gapOffset(rowIndex, storedX));
   const y = (rowIndex) => top + rowIndex * pitch;
-  const maxRow = Math.max(...rows.map((row) => row.rowIndex));
+  const lastEditableRow = iecEditableLastRow(body);
   const rowByIndex = new Map(rows.map((row) => [row.rowIndex, row]));
   const viewport = element("div", "iec-layout-viewport");
   const board = element("div", "iec-layout-board");
   board.style.width = `${x(100) + 32}px`;
-  board.style.height = `${y(maxRow + 1) + pitch}px`;
+  board.style.height = `${y(lastEditableRow) + pitch}px`;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.classList.add("iec-layout-wires");
-  svg.setAttribute("viewBox", `0 0 ${x(100) + 32} ${y(maxRow + 1) + pitch}`);
+  svg.setAttribute("viewBox", `0 0 ${x(100) + 32} ${y(lastEditableRow) + pitch}`);
   svg.setAttribute("aria-hidden", "true");
   const line = (x1, y1, x2, y2, kind) => {
     const node = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -1126,7 +1171,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       : `Empty L${rowIndex} selected. Ctrl+V pastes the copied network.`;
     selectNetworkRow(rowIndex);
   };
-  for (let rowIndex = 0; rowIndex <= maxRow + 1; rowIndex += 1) {
+  for (let rowIndex = 0; rowIndex <= lastEditableRow; rowIndex += 1) {
     const isCommentRow = commentRows.has(rowIndex);
     const isEmpty = !rowByIndex.has(rowIndex);
     const labelText = isCommentRow ? "설명문" : `L${rowIndex}`;
@@ -1150,6 +1195,27 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     label.style.top = `${y(rowIndex) - 9}px`;
     board.append(label);
   }
+  board.addEventListener("keydown", event => {
+    if (event.key !== "F6" || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    const cell = event.target.closest("[data-row-index][data-raw-x]");
+    if (!cell) return;
+    event.preventDefault(); event.stopPropagation();
+    const rowIndex = Number(cell.dataset.rowIndex);
+    const x = Number(cell.dataset.rawX) - 1;
+    const upper = rowByIndex.get(rowIndex);
+    const lower = rowByIndex.get(rowIndex + 1);
+    if (!upper || x < 3 || x > 93) {
+      status.textContent = "Select a cell beside an existing connection on two adjacent rows."; return;
+    }
+    const pair = { groupIndex: upper.groupIndex, lowerGroupIndex: lower?.groupIndex, extendBlankRow: !lower,
+      startRowIndex: rowIndex, endRowIndex: rowIndex + 1 };
+    void applyEdit(() => addIecBranchBytes(pair, x),
+      `Connect IEC rows L${rowIndex}–L${rowIndex + 1} x${x}`).then(edited => {
+      if (edited) requestAnimationFrame(() => document.querySelector(
+        `[aria-label="Vertical IEC wire L${rowIndex}–L${rowIndex + 1} x${x}"]`,
+      )?.focus({ preventScroll: true }));
+    });
+  });
   board.addEventListener("keydown", async (event) => {
     if (!(event.ctrlKey || event.metaKey) || event.altKey
       || !["c", "v"].includes(event.key.toLowerCase())
@@ -1192,14 +1258,79 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
         source.programIndex, source.groupIndex, source.firstRow,
         selectedProgramIndex, rowIndex), label);
   });
+  const wireKinds = new Map((body.iecRecords || []).map(record => [record.offset, record.kind]));
   for (const wire of body.iecGeometry?.horizontal || []) {
-    line(visualX(wire.rowIndex, wire.startX), y(wire.rowIndex),
-      visualX(wire.rowIndex, wire.endX), y(wire.rowIndex), "wire");
+    // LongWire stores the last occupied cell anchor; ShortWire geometry already
+    // includes the following boundary. Both must reach the next element's EN.
+    const longWire = wireKinds.get(wire.offset) === "Long wire" || wire.startX === wire.endX;
+    const incomingBranch = (body.iecGeometry?.vertical || []).some(branch =>
+      branch.groupIndex === wire.groupIndex && branch.x === wire.startX - 1
+        && branch.startRowIndex <= wire.rowIndex && branch.endRowIndex >= wire.rowIndex);
+    line(visualX(wire.rowIndex, wire.startX - (incomingBranch ? 1 : 0)), y(wire.rowIndex),
+      visualX(wire.rowIndex, wire.endX + (longWire ? 3 : 0)), y(wire.rowIndex), "wire");
   }
   for (const wire of body.iecGeometry?.vertical || []) {
     line(x(wire.x), y(wire.startRowIndex), x(wire.x), y(wire.endRowIndex), "branch");
   }
   board.append(svg);
+  for (const wire of body.iecGeometry?.vertical || []) {
+    const control = button("", "iec-layout-marker vertical-wire", () => {
+      board.querySelectorAll(".iec-layout-marker.selected").forEach(marker => marker.classList.remove("selected"));
+      control.classList.add("selected");
+      selectRow(wire.startRowIndex);
+      status.textContent = `Vertical wire L${wire.startRowIndex}–L${wire.endRowIndex} x${wire.x} selected. Delete removes the wire and keeps shared rows.`;
+    });
+    control.style.left = `${x(wire.x) - 6}px`;
+    control.style.top = `${y(wire.startRowIndex) + 4}px`;
+    control.style.height = `${y(wire.endRowIndex) - y(wire.startRowIndex) - 8}px`;
+    control.dataset.groupIndex = String(wire.groupIndex);
+    control.setAttribute("aria-label", `Vertical IEC wire L${wire.startRowIndex}–L${wire.endRowIndex} x${wire.x}`);
+    control.title = "Select vertical wire; Delete or Backspace removes it while retaining shared rows";
+    control.addEventListener("keydown", event => {
+      if (!["Delete", "Backspace"].includes(event.key) || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      event.preventDefault(); event.stopPropagation();
+      void applyEdit(() => deleteIecVerticalWireBytes(body, wire),
+      `Delete vertical IEC wire L${wire.startRowIndex}–L${wire.endRowIndex} x${wire.x}`).then(edited => {
+        if (edited) requestAnimationFrame(() => {
+          const target = document.querySelector(
+            `[aria-label="Reconnect vertical IEC wire L${wire.startRowIndex}–L${wire.endRowIndex} x${wire.x}"]`,
+          ) || document.querySelector(
+            `.iec-layout-marker[data-row-index="${wire.startRowIndex}"][data-raw-x="${wire.x + 1}"]`,
+          );
+          target?.focus({ preventScroll: true });
+        });
+      });
+    });
+    board.append(control);
+  }
+  const endpoints = body.iecCircuitGraph?.openBranchEndpoints || [];
+  for (const start of endpoints) {
+    const end = endpoints.find(point => point.groupIndex === start.groupIndex
+      && point.x === start.x && point.rowIndex === start.rowIndex + 1);
+    if (!end || (body.iecGeometry?.vertical || []).some(wire => wire.groupIndex === start.groupIndex
+      && wire.x === start.x && wire.startRowIndex === start.rowIndex && wire.endRowIndex === end.rowIndex)) continue;
+    const repair = () => applyEdit(() => edit_xgwx_iec_ld_vertical_wire(current.file.bytes, selectedProgramIndex,
+      start.groupIndex, start.rowIndex, end.rowIndex, start.x, false, true),
+    `Reconnect vertical IEC wire L${start.rowIndex}–L${end.rowIndex} x${start.x}`).then(edited => {
+      if (edited) requestAnimationFrame(() => document.querySelector(
+        `[aria-label="Vertical IEC wire L${start.rowIndex}–L${end.rowIndex} x${start.x}"]`,
+      )?.focus({ preventScroll: true }));
+    });
+    const control = button("+", "iec-layout-marker vertical-gap", () => {
+      status.textContent = `Vertical wire gap L${start.rowIndex}–L${end.rowIndex} x${start.x}. Double-click or Enter reconnects it.`;
+    });
+    control.textContent = "+";
+    control.style.left = `${x(start.x) - 9}px`;
+    control.style.top = `${(y(start.rowIndex) + y(end.rowIndex)) / 2 - 9}px`;
+    control.setAttribute("aria-label", `Reconnect vertical IEC wire L${start.rowIndex}–L${end.rowIndex} x${start.x}`);
+    control.title = "Double-click or Enter to reconnect vertical wire";
+    control.addEventListener("dblclick", event => { event.preventDefault(); event.stopPropagation(); void repair(); });
+    control.addEventListener("keydown", event => {
+      if (event.key !== "Enter" || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      event.preventDefault(); event.stopPropagation(); void repair();
+    });
+    board.append(control);
+  }
   const insertionSites = [
     ...(body.iecNoContactInsertionSites || []).map((site) => ({ ...site, type: "long" })),
     ...(body.iecShortWireContactInsertionSites || []).map((site) => ({ ...site, type: "short" })),
@@ -1278,6 +1409,24 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
         void showIecElementInput(item, body);
       });
       marker.addEventListener("keydown", (event) => {
+        if (kind === "contact" && ["Delete", "Backspace"].includes(event.key)
+            && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault(); event.stopPropagation();
+          void deleteIecContact(item, body);
+          return;
+        }
+        if (kind === "coil" && ["Delete", "Backspace"].includes(event.key)
+            && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault(); event.stopPropagation();
+          void deleteIecCoil(item);
+          return;
+        }
+        if (kind === "function" && ["Delete", "Backspace"].includes(event.key)
+            && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          event.preventDefault(); event.stopPropagation();
+          void deleteIecFunction(item, body);
+          return;
+        }
         if (event.key !== "Enter" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
         event.preventDefault();
         event.stopPropagation();
@@ -1439,7 +1588,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   };
   const cellAtPoint = (clientX, clientY) => {
     const bounds = board.getBoundingClientRect();
-    const rowIndex = Math.max(0, Math.min(maxRow + 1,
+    const rowIndex = Math.max(0, Math.min(lastEditableRow,
       Math.round((clientY - bounds.top - top) / pitch)));
     const localX = clientX - bounds.left;
     const rawX = Array.from({ length: 33 }, (_, index) => 1 + index * 3)
@@ -1506,6 +1655,9 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       document.removeEventListener("pointermove", move);
       document.removeEventListener("pointerup", up);
       document.removeEventListener("pointercancel", up);
+      // The pointerdown target can be the board before the cell indicator
+      // moves into place. Its default mouse focus then replaces our focus.
+      if (!moved) blankIndicator.focus({ preventScroll: true });
     };
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", up);
@@ -1520,9 +1672,10 @@ let instructionPromptOpen = false;
 
 function instructionSuggestions(iec) {
   const locals = iec ? current.summary.localVariables?.[selectedProgramIndex] || [] : [];
-  return [...locals, ...(current.summary.variables || [])].filter(symbol => !symbol.isInstance)
-    .map(symbol => ({ value: iec ? symbol.name : symbol.address, dataType: symbol.dataType,
-      description: [symbol.name, symbol.dataType, symbol.comment].filter(Boolean).join(" · ") }))
+  const system = iec ? current.summary.iecSystemVariables || [] : [];
+  return [...locals, ...system, ...(current.summary.variables || [])].filter(symbol => !symbol.isInstance)
+    .map(symbol => ({ value: iec ? symbol.name : symbol.address, dataType: symbol.dataType, writable: symbol.writable,
+      description: [symbol.name, symbol.dataType, symbol.comment || symbol.description].filter(Boolean).join(" · ") }))
     .filter(symbol => symbol.value);
 }
 
@@ -1540,7 +1693,7 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
       }
       const choice = choices.find(item => item.mnemonic === result?.command);
       if (!choice || !Array.isArray(result.operands) || result.operands.length !== choice.operandCount
-        || result.operands.some(operand => typeof operand !== "string" || !operand || /[\p{Cc},]/u.test(operand))) {
+        || result.operands.some(operand => !instructionOperandText(operand, iec))) {
         throw new Error("Unknown command or incorrect operands");
       }
       return build(choice, result.operands, source, programIndex);
@@ -1548,7 +1701,7 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
     const result = await new Promise(resolve => {
       pendingContactPrompts.set(requestId, { resolve, focusSelector, fileUri, programIndex, validate, restoreFocus: false });
       vscode.postMessage({ type: "promptLadderInstruction", requestId, title,
-        instruction: { choices, value, mode, suggestions: [...instructionSuggestions(iec), ...choices.flatMap(choice => choice.suggestions || [])] } });
+        instruction: { choices, value, mode, iec: Boolean(iec), suggestions: [...instructionSuggestions(iec), ...choices.flatMap(choice => choice.suggestions || [])] } });
     });
     if (result) await applyEdit(() => validate(result), `${mode === "edit" ? "Edit" : "Insert"} ${result.command}`, () => {
       if (afterInsert) focusSelector = afterInsert(choices.find(choice => choice.mnemonic === result.command)) || focusSelector;
@@ -1562,23 +1715,21 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
 }
 
 function showXgkBlankInput(ladder, position) {
-  const choices = position.column === 9
-    ? [...elementCommands("coil", false, true), ...(ladder.instructionChoices || []).map(choice => ({ ...choice, category: "function" }))]
-    : [...elementCommands("contact"), ...(position.column <= 6 ? (ladder.comparisonChoices || []).map(choice => ({ ...choice, category: "comparison" })) : [])];
+  const choices = xgkBlankCommands(ladder, position);
   return requestLadderInstruction({ choices, title: `Insert · L${position.rawY} column ${position.column + 1}`, mode: "insert", iec: false,
     focusSelector: `[data-ladder-key="${ladderPositionKey(position)}"]`,
     afterInsert: choice => {
-      if (!["contact", "comparison"].includes(choice.category)) return;
-      const next = { ...position, column: Math.min(9, position.column + (choice.category === "comparison" ? 3 : 1)) };
+      const output = ["coil", "function"].includes(choice.category);
+      const next = { ...position, column: output ? 9 : Math.min(9, position.column + (choice.category === "comparison" ? choice.operandCount + 1 : 1)) };
       selectedLadderComment = null;
       selectedLadderAnchor = selectedLadderFocus = next;
       return `[data-ladder-key="${ladderPositionKey(next)}"]`;
     },
     build: (choice, operands, bytes, program) => {
       if (!ladder.structuralEditing) throw new Error("This program layout does not support structural editing");
-      if (choice.category === "comparison") return insert_xgwx_ladder_comparison(bytes, program, position.rawY, position.column, choice.mnemonic, JSON.stringify(operands));
+      if (choice.category === "comparison") return insert_xgwx_ladder_comparison(bytes, program, position.rawY, position.column, choice.nativeMnemonic || choice.mnemonic, JSON.stringify(operands));
       if (choice.category === "function") return insert_xgwx_ladder_instruction(bytes, program, position.rawY, choice.mnemonic, JSON.stringify(operands));
-      return edit_xgwx_ladder_cell(bytes, program, { rawY: position.rawY, column: position.column, expected: null,
+      return edit_xgwx_ladder_cell(bytes, program, { rawY: position.rawY, column: xgkInsertionColumn(choice, position), expected: null,
         replacement: { kind: choice.kind, operand: operands[0]?.toUpperCase() || "" } });
     } });
 }
@@ -1588,8 +1739,14 @@ function showXgkElementInput(cell, ladder) {
   const comparison = cell.kind === "Comparison";
   let choices;
   if (expected) choices = elementCommands(cell.coil ? "coil" : "contact", false, Boolean(cell.coil));
-  else choices = (comparison ? ladder.comparisonChoices : ladder.instructionChoices) || [];
-  const selected = expected ? choices.find(choice => choice.kind === expected.kind) : choices.find(choice => choice.mnemonic === cell.value);
+  else choices = comparison ? xgkInputCommands(ladder.comparisonChoices) : ladder.instructionChoices || [];
+  // Retained incompatible commands may have their operands repaired. They
+  // remain absent from blank-cell insertion and other commands' replacements.
+  if (!expected && !comparison) {
+    const retained = (ladder.retainedInstructionChoices || []).find(choice => choice.mnemonic === cell.value);
+    if (retained) choices = [...choices, retained];
+  }
+  const selected = expected ? choices.find(choice => choice.kind === expected.kind) : choices.find(choice => (choice.nativeMnemonic || choice.mnemonic) === cell.value);
   const value = [selected?.mnemonic || cell.value, ...(expected ? expected.operand ? [expected.operand] : [] : cell.operands || [])].join(" ");
   return requestLadderInstruction({ choices, value, mode: "edit", iec: false, title: `Edit · L${cell.rawY}`,
     focusSelector: `[data-cell-offset="${cell.offset}"]`,
@@ -1603,26 +1760,50 @@ function showXgkElementInput(cell, ladder) {
         return edit_xgwx_ladder_cell(bytes, program, { rawY: cell.rawY, column: ldCellColumn(cell.rawX), expected, replacement });
       }
       if (!cell.instructionTextEditing || !selected) throw new Error("This instruction is read only");
-      return update_xgwx_ladder_cell(bytes, program, cell.offset, cell.sourceText, [choice.mnemonic, ...operands].join(","));
+      return update_xgwx_ladder_cell(bytes, program, cell.offset, cell.sourceText, [choice.nativeMnemonic || choice.mnemonic, ...operands].join(","));
     } });
 }
 
 function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-cell") {
   const site = iecContactInsertionSiteAt(body, position.rowIndex, position.rawX);
   const newRow = !(body.iecRows || []).some(row => row.rowIndex === position.rowIndex);
+  const wiredComparison = (body.iecWiredComparisonInsertionSites || []).some(site =>
+    site.rowIndex === position.rowIndex && site.rawX === position.rawX);
+  const scalarChoices = wiredComparison ? scalarIecCommands(true).filter(choice =>
+    ["EQ", "GT", "GE", "LT", "LE"].includes(choice.mnemonic)) : scalarIecCommands();
   const choices = [
     ...elementCommands("contact", true),
     ...(!site ? elementCommands("coil", true) : []),
-    ...(position.rawX >= 4 && position.rawX <= 91 ? scalarIecCommands() : []),
+    ...(position.rawX >= 4 && position.rawX <= 91 ? [...scalarChoices, ...[
+      ["INT_TO_UDINT", "INT", "UDINT"],
+      ["UDINT_TO_TIME", "UDINT", "TIME"],
+      ["TIME_TO_UDINT", "TIME", "UDINT"],
+      ["UDINT_TO_INT", "UDINT", "INT"],
+    ].map(([mnemonic, source, destination]) => ({
+      mnemonic, category: "function", operandCount: 2,
+      operandRules: [{label:"Source",dataTypes:[source]},
+        {label:"Destination",dataTypes:[destination],allowsConstant:false}],
+    }))] : []),
   ];
   const atPosition = sites => (sites || []).find(site => site.rowIndex === position.rowIndex && site.rawX === position.rawX);
   const terminal = atPosition(body.iecTerminalFunctionInsertionSites);
+  const timer = atPosition(body.iecTerminalTimerInsertionSites);
   const standalone = atPosition(body.iecStandaloneFunctionInsertionSites);
-  const ff = atPosition(body.iecFunctionCellInsertionSites);
+  const instanceSite = atPosition(body.iecFunctionCellInsertionSites);
   if (terminal) {
     const index = choices.findIndex(choice => choice.mnemonic === "MOVE");
     if (index >= 0) choices.splice(index, 1);
     choices.push({ ...scalarIecCommands().find(choice => choice.mnemonic === "MOVE"), category: "terminal" });
+  }
+  if (timer) {
+    const connected = [10, 19, 22].includes(timer.rawX);
+    choices.push({ mnemonic: "TON", category: "terminalTimer", operandCount: connected ? 2 : 3,
+      operandRules: [{label:"Instance",dataTypes:["TON"],allowsConstant:false},
+        {label:"Preset time",dataTypes:["TIME"]},
+        ...(!connected ? [{label:"Elapsed time destination",dataTypes:["TIME"],allowsConstant:false}] : [])],
+      suggestions: (current.summary.localVariables?.[selectedProgramIndex] || [])
+        .filter(symbol => symbol.isInstance && symbol.typeReference === "TON")
+        .map(symbol => ({value:symbol.name,dataType:"TON",description:"TON instance"})) });
   }
   if (standalone) {
     const conversionIndex = choices.findIndex(choice => choice.mnemonic === "WORD_TO_UDINT");
@@ -1630,14 +1811,28 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
     choices.push({ mnemonic: "WORD_TO_UDINT", category: "standalone", operandCount: 2,
     operandRules: [{label:"Source",dataTypes:["WORD"]},{label:"Destination",dataTypes:["UDINT"],allowsConstant:false}] });
   }
-  if (ff) choices.push({ mnemonic: "FF", category: "instance", operandCount: 1,
-    operandRules: [{label:"Instance",dataTypes:["FF"],allowsConstant:false}],
-    suggestions: (current.summary.localVariables?.[selectedProgramIndex] || []).filter(symbol => symbol.isInstance && symbol.typeReference === "FF")
-      .map(symbol => ({value:symbol.name,dataType:"FF",description:"FF instance"})) });
+  if (instanceSite) {
+    const name = instanceSite.functionName || "FF";
+    choices.push({ mnemonic: name, category: "instance", operandCount: 1,
+      operandRules: [{label:"Instance",dataTypes:[name],allowsConstant:false}],
+      suggestions: (current.summary.localVariables?.[selectedProgramIndex] || [])
+        .filter(symbol => symbol.isInstance && symbol.typeReference === name)
+        .map(symbol => ({value:symbol.name,dataType:name,description:`${name} instance`})) });
+  }
   return requestLadderInstruction({ choices, mode: "insert", iec: true, title: `Insert · L${position.rowIndex}`, focusSelector,
     afterInsert: choice => {
-      if (choice.category !== "contact") return;
-      const next = { rowIndex: position.rowIndex, rawX: Math.min(94, position.rawX + 3) };
+      if (["terminalTimer", "function"].includes(choice.category)) {
+        const updated = current.summary.ladder.find(body => body.programIndex === selectedProgramIndex);
+        const element = (updated.sourceStrings || []).find(item => item.isIecFunctionName
+          && item.iecRowIndex === position.rowIndex && item.iecPosition?.[0] === position.rawX);
+        selectedIecBlank = null;
+        selectedIecElement = element ? { programIndex: selectedProgramIndex, offset: element.offset } : null;
+        return element ? `.iec-layout-marker[data-iec-offset="${element.offset}"]` : focusSelector;
+      }
+      if (!["contact", "coil"].includes(choice.category)) return;
+      const next = choice.category === "coil"
+        ? { rowIndex: position.rowIndex + 1, rawX: 1 }
+        : { rowIndex: position.rowIndex, rawX: Math.min(94, position.rawX + 3) };
       const updated = current.summary.ladder.find(body => body.programIndex === selectedProgramIndex);
       const element = (updated.sourceStrings || []).find(item => item.iecRowIndex === next.rowIndex
         && item.iecPosition?.[0] === next.rawX && (item.iecElementKind || item.isIecFunctionName));
@@ -1648,9 +1843,13 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
       return element ? `.iec-layout-marker[data-iec-offset="${element.offset}"]` : ".iec-layout-blank-cell";
     },
     build: (choice, operands, bytes, program) => {
+      if (choice.category === "terminalTimer") {
+        if ([10, 22].includes(timer.rawX)) return insert_xgwx_iec_ld_function(bytes, program, position.rowIndex, position.rawX, "TON", JSON.stringify(operands));
+        return insert_xgwx_iec_ld_terminal_timer(bytes, program, timer.contactOffset, operands[0], operands[1], operands[2] || "");
+      }
       if (choice.category === "terminal") return insert_xgwx_iec_ld_terminal_move(bytes, program, terminal.contactOffset, operands[0], operands[1]);
       if (choice.category === "standalone") return insert_xgwx_iec_ld_standalone_function(bytes, program, standalone.insertionOffset, choice.mnemonic, operands[0], operands[1]);
-      if (choice.category === "instance") return insert_xgwx_iec_ld_function_cell(bytes, program, ff.insertionOffset, choice.mnemonic, operands[0]);
+      if (choice.category === "instance") return insert_xgwx_iec_ld_function_cell(bytes, program, instanceSite.insertionOffset, choice.mnemonic, operands[0]);
       if (choice.category === "function") return insert_xgwx_iec_ld_function(bytes, program, position.rowIndex, position.rawX, choice.mnemonic, JSON.stringify(operands));
       if (newRow || !site) return insert_xgwx_iec_ld_single_element(bytes, program, position.rowIndex,
         position.rawX, choice.category, choice.iecKind, operands[0]);
@@ -1677,6 +1876,86 @@ function showIecElementInput(item, body) {
     } });
 }
 
+async function deleteIecContact(item, body) {
+  const gap = iecAddressedContactSites(body, "iecNoContactDeletionSites")
+    .find(site => site.contactOffset === item.iecRecordOffset);
+  const cell = iecAddressedContactSites(body, "iecNoContactCellDeletionSites")
+    .find(site => site.contactOffset === item.iecRecordOffset);
+  const site = gap || cell;
+  if (!site) {
+    await applyEdit(() => { throw new Error("This contact layout does not yet support deletion"); }, "Delete IEC contact");
+    return;
+  }
+  const edited = await applyEdit(() => (gap ? delete_xgwx_iec_ld_contact : delete_xgwx_iec_ld_contact_cell)(
+    current.file.bytes, selectedProgramIndex, site.contactOffset, site.rawX, site.kind, site.variable),
+    `Delete IEC contact ${site.variable}`);
+  if (edited) {
+    const rawX = item.iecPosition?.[0] ?? 1;
+    const updated = current.summary.ladder.find(program => program.programIndex === selectedProgramIndex);
+    const replacement = (updated.sourceStrings || []).find(element => element.iecRowIndex === item.iecRowIndex
+      && element.iecPosition?.[0] === rawX && (element.iecElementKind || element.isIecFunctionName));
+    selectedIecElement = replacement ? { programIndex: selectedProgramIndex, offset: replacement.offset } : null;
+    selectedIecBlank = replacement ? null : { programIndex: selectedProgramIndex, rowIndex: item.iecRowIndex, rawX };
+    renderWorkspace();
+    const selector = replacement ? `.iec-layout-marker[data-iec-offset="${replacement.offset}"]` : ".iec-layout-blank-cell";
+    requestAnimationFrame(() => document.querySelector(selector)?.focus({ preventScroll: true }));
+  }
+}
+
+async function deleteIecCoil(item) {
+  const edited = await applyEdit(() => delete_xgwx_iec_ld_terminal_coil(
+    current.file.bytes, selectedProgramIndex, item.iecRecordOffset, item.value),
+    `Delete IEC coil ${item.value}`);
+  if (edited) {
+    selectedIecElement = null;
+    selectedIecBlank = { programIndex: selectedProgramIndex, rowIndex: item.iecRowIndex,
+      rawX: item.iecPosition?.[0] ?? 94 };
+    renderWorkspace();
+    requestAnimationFrame(() => document.querySelector(".iec-layout-blank-cell")?.focus({ preventScroll: true }));
+  }
+}
+
+async function deleteIecFunction(item, body) {
+  const block = (body.iecFunctions || []).find(block => block.nameOffset === item.offset);
+  if (!block) return;
+  const edited = await applyEdit(() => {
+    const deletions = [delete_xgwx_iec_ld_branch_function, delete_xgwx_iec_ld_branched_arithmetic,
+      delete_xgwx_iec_ld_scalar_chain_function,
+      delete_xgwx_iec_ld_terminal_function, delete_xgwx_iec_ld_standalone_function,
+      delete_xgwx_iec_ld_function_cell, delete_xgwx_iec_ld_connected_arithmetic,
+      delete_xgwx_iec_ld_eq_chain_head, delete_xgwx_iec_ld_heating_chain_head,
+      delete_xgwx_iec_ld_heating_chain_middle, delete_xgwx_iec_ld_heating_chain_x3_eq_repaired,
+      delete_xgwx_iec_ld_heating_chain_contact_eq, delete_xgwx_iec_ld_heating_chain_x15_eq];
+    for (const remove of deletions) {
+      try { return remove(current.file.bytes, selectedProgramIndex, block.recordOffset, block.name); }
+      catch { /* Each writer rejects unsupported geometry without changing the source. */ }
+    }
+    throw new Error("This connected function layout does not yet support block deletion");
+  }, `Delete IEC function ${block.name} at L${block.rowIndex}`);
+  if (edited) {
+    selectedIecElement = null;
+    selectedIecInsertion = null;
+    selectedIecBlank = { programIndex: selectedProgramIndex, rowIndex: block.rowIndex, rawX: block.rawX };
+    selectedIecRow = { programIndex: selectedProgramIndex, rowIndex: block.rowIndex };
+    renderWorkspace();
+    requestAnimationFrame(() => document.querySelector(".iec-layout-blank-cell")?.focus({ preventScroll: true }));
+  }
+}
+
+function groupIecInstructionOperand(value) {
+  if (!/\s/.test(value)) return value;
+  const text = value.trim();
+  if (text.startsWith("(")) {
+    let depth = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "(") depth++;
+      if (text[i] === ")") depth--;
+      if (depth === 0) return i === text.length - 1 ? text : `(${text})`;
+    }
+  }
+  return `(${text})`;
+}
+
 function showIecFunctionInput(item, body) {
   const link = (body.iecFunctionOperandLinks || []).find(link => link.recordOffset === item.iecRecordOffset);
   const block = (body.iecFunctions || []).find(block => block.nameOffset === item.offset || block.recordOffset === link?.targetRecordOffset);
@@ -1686,19 +1965,54 @@ function showIecFunctionInput(item, body) {
       || (a.referenceOrdinal ?? 0) - (b.referenceOrdinal ?? 0)).map(pin => {
     const link = (body.iecFunctionOperandLinks || []).find(link => link.targetRecordOffset === block.recordOffset && link.ordinal === pin.referenceOrdinal);
     const source = link && (body.sourceStrings || []).find(source => source.iecRecordOffset === link.recordOffset && source.isIecFunctionOperand);
-    return source ? { pin, source } : null;
+    return source ? { pin, source, promptValue: groupIecInstructionOperand(source.value) } : null;
   }).filter(Boolean);
+  if (block.name === "TON" && block.instance && fields.length === 1
+    && (body.iecScalarChainDeletionSites || []).some(site => site.blockOffset === block.recordOffset)) {
+    const choice = { mnemonic: "TON", operandCount: 2,
+      operandRules: [{label:"Instance",dataTypes:["TON"],allowsConstant:false},
+        {label:"Preset time",dataTypes:["TIME"]}],
+      suggestions: (current.summary.localVariables?.[selectedProgramIndex] || [])
+        .filter(symbol => symbol.isInstance && symbol.typeReference === "TON")
+        .map(symbol => ({value:symbol.name,dataType:"TON",description:"TON instance"})) };
+    return requestLadderInstruction({ choices: [choice],
+      value: ["TON", block.instance, fields[0].promptValue].join(" "), mode: "edit", iec: true,
+      title: `Edit TON · ${block.instance}`, focusSelector: `.iec-layout-marker[data-iec-offset="${block.nameOffset}"]`,
+      build: (choice, operands, bytes, program) => {
+        if (operands[0] === block.instance && operands[1] === fields[0].promptValue) return bytes;
+        return replace_xgwx_iec_ld_scalar_chain_function(bytes, program, block.recordOffset,
+          "TON", "TON", JSON.stringify(operands));
+      } });
+  }
   const family = ["ADD", "SUB", "MUL", "DIV"].includes(block.name) ? ["ADD", "SUB", "MUL", "DIV"]
     : ["EQ", "GT", "GE", "LT", "LE"].includes(block.name) ? ["EQ", "GT", "GE", "LT", "LE"] : [block.name];
-  const choices = family.map(mnemonic => ({ mnemonic, operandCount: fields.length,
+  let scalarReplacement = null;
+  if (scalarIecCommands().some(choice => choice.mnemonic === block.name)) {
+    try {
+      delete_xgwx_iec_ld_branch_function(current.file.bytes, selectedProgramIndex, block.recordOffset, block.name);
+      scalarReplacement = replace_xgwx_iec_ld_branch_function;
+    } catch {
+      if ((body.iecScalarChainDeletionSites || []).some(site => site.blockOffset === block.recordOffset)) {
+        scalarReplacement = replace_xgwx_iec_ld_scalar_chain_function;
+      }
+    }
+  }
+  const wiredComparison = family[0] === "EQ" && fields.length === 2;
+  const choices = scalarReplacement ? (wiredComparison ? scalarIecCommands(true).filter(choice =>
+    family.includes(choice.mnemonic)) : scalarIecCommands()) : family.map(mnemonic => ({ mnemonic, operandCount: fields.length,
     operandRules: fields.map(({pin}) => iecPinRule(pin)) }));
-  return requestLadderInstruction({ choices, value: [block.name, ...fields.map(field => field.source.value)].join(" "), mode: "edit", iec: true,
+  return requestLadderInstruction({ choices, value: [block.name, ...fields.map(field => field.promptValue)].join(" "), mode: "edit", iec: true,
     title: `Edit ${block.name}${block.instance ? ` · ${block.instance}` : ""}`, focusSelector: `.iec-layout-marker[data-iec-offset="${block.nameOffset}"]`,
     build: (choice, operands, bytes, program) => {
       if (!fields.length) throw new Error("This function's operands are read only");
+      if (scalarReplacement && (choice.mnemonic !== block.name
+        || operands.some((operand, index) => operand !== fields[index].promptValue))) {
+        return scalarReplacement(bytes, program, block.recordOffset, block.name,
+          choice.mnemonic, JSON.stringify(operands));
+      }
       let candidate = bytes;
       if (choice.mnemonic !== block.name) candidate = (family[0] === "ADD" ? update_xgwx_iec_ld_arithmetic_function : update_xgwx_iec_ld_comparison_function)(candidate, program, block.nameOffset, block.name, choice.mnemonic);
-      const edits = fields.map((field, index) => ({ ...field.source, replacement: operands[index] })).sort((a,b) => b.offset - a.offset);
+      const edits = fields.map((field, index) => ({ ...field.source, replacement: operands[index] === field.promptValue ? field.source.value : operands[index] })).sort((a,b) => b.offset - a.offset);
       for (const edit of edits) if (edit.replacement !== edit.value) candidate = update_xgwx_iec_ld_function_operand(candidate, program, edit.offset, edit.value, edit.replacement);
       return candidate;
     } });
@@ -1905,8 +2219,8 @@ function renderIecProgramSource(body) {
       && item.iecRowIndex === 67 && item.value === "EQ"
       ? { blockOffset: item.iecRecordOffset, rowIndex: 67 }
       : null;
-    const heatingDeletionKind = selectedProgramIndex === 6
-      && item.isIecFunctionName && item.iecGroupIndex === 13 && item.value === "EQ"
+    const heatingDeletionKind = item.isIecFunctionName && item.value === "EQ"
+      && item.iecPosition?.[0] === 19
       ? [
         ["head", delete_xgwx_iec_ld_heating_chain_head],
         ["middle", delete_xgwx_iec_ld_heating_chain_middle],
@@ -1928,13 +2242,22 @@ function renderIecProgramSource(body) {
     const heatingChainX3Deletion = heatingDeletionKind === "x3" && heatingDeletion;
     const heatingChainContactDeletion = heatingDeletionKind === "contact" && heatingDeletion;
     const heatingChainX15Deletion = heatingDeletionKind === "x15" && heatingDeletion;
-    const functionDeletion = terminalFunctionDeletion || standaloneFunctionDeletion || functionCellDeletion || connectedArithmeticDeletion || eqChainHeadDeletion || heatingChainHeadDeletion || heatingChainMiddleDeletion || heatingChainX3Deletion || heatingChainContactDeletion || heatingChainX15Deletion;
+    const branchedArithmeticDeletion = item.isIecFunctionName && ["ADD", "SUB", "MUL", "DIV"].includes(item.value)
+      ? (() => {
+        try {
+          delete_xgwx_iec_ld_branched_arithmetic(current.file.bytes, selectedProgramIndex, item.iecRecordOffset, item.value);
+          return { blockOffset: item.iecRecordOffset, rowIndex: item.iecRowIndex };
+        } catch { return null; }
+      })() : null;
+    const functionDeletion = branchedArithmeticDeletion || terminalFunctionDeletion || standaloneFunctionDeletion || functionCellDeletion || connectedArithmeticDeletion || eqChainHeadDeletion || heatingChainHeadDeletion || heatingChainMiddleDeletion || heatingChainX3Deletion || heatingChainContactDeletion || heatingChainX15Deletion;
     if (functionDeletion) {
       const functionBlock = functionByOffset.get(functionDeletion.blockOffset);
       if (functionBlock?.name === item.value) {
         const deleteButton = button("Delete block", "secondary-button", async () => {
           await applyEdit(
-            () => (terminalFunctionDeletion
+            () => (branchedArithmeticDeletion
+              ? delete_xgwx_iec_ld_branched_arithmetic
+              : terminalFunctionDeletion
               ? delete_xgwx_iec_ld_terminal_function
               : standaloneFunctionDeletion
                 ? delete_xgwx_iec_ld_standalone_function
@@ -1962,7 +2285,9 @@ function renderIecProgramSource(body) {
           );
         });
         deleteButton.textContent = "Delete block";
-        deleteButton.title = terminalFunctionDeletion
+        deleteButton.title = branchedArithmeticDeletion
+          ? `Remove ${functionBlock.name} and its pin records, close one row, and retain the external branch spine`
+          : terminalFunctionDeletion
           ? `Remove ${functionBlock.name}, its preceding wire, and ${functionDeletion.pinCount} pin rows`
           : standaloneFunctionDeletion
             ? `Remove the standalone ${functionBlock.name} group and its ${functionDeletion.pinCount + 1} stored rows`
@@ -1979,6 +2304,9 @@ function renderIecProgramSource(body) {
                   : `Remove this EQ and its pin records, close one row, and preserve the shared vertical feed`;
         action.append(deleteButton);
       }
+    }
+    if (item.isIecFunctionName && (body.iecScalarChainDeletionSites || []).some(site => site.blockOffset === item.iecRecordOffset)) {
+      action.append(button("Delete block", "secondary-button", () => deleteIecFunction(item, body)));
     }
     return { row, item };
   });
@@ -2553,7 +2881,7 @@ function renderIecStandaloneFunctionInsertion(body) {
 }
 
 function renderIecFunctionCellInsertion(body) {
-  const sites = body.iecFunctionCellInsertionSites || [];
+  const sites = (body.iecFunctionCellInsertionSites || []).filter(site => (site.functionName || "FF") === "FF");
   const instances = (current.summary.localVariables?.[selectedProgramIndex] || [])
     .filter((symbol) => symbol.isInstance && symbol.typeReference === "FF");
   if (!sites.length || !instances.length) return null;
@@ -3365,7 +3693,7 @@ function renderIecHorizontalWireRepair(body) {
   const sites = body.iecHorizontalWireRepairSites || [];
   if (!sites.length) return null;
   const section = element("section", "iec-insert-contact");
-  section.append(element("h3", "", "Reconnect deleted-contact gap"));
+  section.append(element("h3", "", "Reconnect horizontal wire gap"));
   const form = document.createElement("form");
   const label = element("label", "", "Wire gap");
   const select = document.createElement("select");
@@ -3424,11 +3752,20 @@ function renderIecHorizontalWireDeletion(body) {
 }
 
 function planIecBranchRemoval(body, segment) {
-  let bytes = edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
-    segment.groupIndex, segment.startRowIndex, segment.endRowIndex, segment.x, true, false);
+  let bytes;
+  try {
+    bytes = edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
+      segment.groupIndex, segment.startRowIndex, segment.endRowIndex, segment.x, true, false);
+  } catch {
+    bytes = edit_xgwx_iec_ld_vertical_wire(current.file.bytes, selectedProgramIndex,
+      segment.groupIndex, segment.startRowIndex, segment.endRowIndex, segment.x, true, false);
+    return { bytes, preservedRows: true, removedFeedAndTail: false, removedOpenTail: false };
+  }
   const updated = parse_xgwx(bytes).ladder.find(program => program.programIndex === selectedProgramIndex);
-  const endpoints = updated?.iecCircuitGraph?.openBranchEndpoints || [];
-  const wasOpen = (body.iecCircuitGraph?.openBranchEndpoints || []).length > 0;
+  const endpoints = (updated?.iecCircuitGraph?.openBranchEndpoints || [])
+    .filter(point => point.groupIndex === segment.groupIndex);
+  const wasOpen = (body.iecCircuitGraph?.openBranchEndpoints || [])
+    .some(point => point.groupIndex === segment.groupIndex);
   if (!wasOpen && endpoints.length === 1) {
     const point = endpoints[0];
     const tail = updated.iecGeometry.vertical.find(branch => branch.groupIndex === point.groupIndex
@@ -3441,24 +3778,48 @@ function planIecBranchRemoval(body, segment) {
   return { bytes, removedFeedAndTail: false, removedOpenTail: wasOpen };
 }
 
+function deleteIecVerticalWireBytes(body, wire) {
+  try {
+    return edit_xgwx_iec_ld_vertical_wire(current.file.bytes, selectedProgramIndex,
+      wire.groupIndex, wire.startRowIndex, wire.endRowIndex, wire.x, true, false);
+  } catch (error) {
+    const endRecords = (body.iecRecords || []).filter(record => record.groupIndex === wire.groupIndex
+      && record.rowIndex === wire.endRowIndex);
+    if (endRecords.length !== 1 || endRecords[0].kind !== "Branch end") throw error;
+    return edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
+      wire.groupIndex, wire.startRowIndex, wire.endRowIndex, wire.x, true, false);
+  }
+}
+
+function addIecBranchBytes(pair, x) {
+  if (pair.extendBlankRow) {
+    return extend_xgwx_iec_ld_vertical_wire(current.file.bytes, selectedProgramIndex,
+      pair.groupIndex, pair.startRowIndex, x);
+  }
+  if (pair.lowerGroupIndex !== undefined && pair.lowerGroupIndex !== pair.groupIndex) {
+    return connect_xgwx_iec_ld_groups(current.file.bytes, selectedProgramIndex,
+      pair.groupIndex, pair.startRowIndex, pair.lowerGroupIndex, pair.endRowIndex, x);
+  }
+  try {
+    return edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
+      pair.groupIndex, pair.startRowIndex, pair.endRowIndex, x, false, true);
+  } catch {
+    return edit_xgwx_iec_ld_vertical_wire(current.file.bytes, selectedProgramIndex,
+      pair.groupIndex, pair.startRowIndex, pair.endRowIndex, x, false, true);
+  }
+}
+
 function renderIecBranchEditing(body) {
   const rows = body.iecRows || [];
   const records = body.iecRecords || [];
   const segments = body.iecGeometry?.vertical || [];
-  if (!segments.length || rows.length < 2) return null;
+  if (rows.length < 2) return null;
 
-  const simpleKinds = new Set([
-    "Long wire", "Short wire", "Contact", "Coil", "Branch start", "Branch end",
-  ]);
-  const simpleRow = (row) => records
-    .filter((record) => record.groupIndex === row.groupIndex && record.rowIndex === row.rowIndex)
-    .every((record) => simpleKinds.has(record.kind));
   const pairs = rows.slice(0, -1).flatMap((row, index) => {
     const next = rows[index + 1];
-    return next.groupIndex === row.groupIndex
-      && next.rowIndex === row.rowIndex + 1
-      && simpleRow(row) && simpleRow(next)
-      ? [{ groupIndex: row.groupIndex, startRowIndex: row.rowIndex, endRowIndex: next.rowIndex }]
+    return next.rowIndex === row.rowIndex + 1
+      ? [{ groupIndex: row.groupIndex, lowerGroupIndex: next.groupIndex,
+        startRowIndex: row.rowIndex, endRowIndex: next.rowIndex }]
       : [];
   });
   let ffBranchOutputRow = null;
@@ -3669,6 +4030,7 @@ function renderIecBranchEditing(body) {
   const removeStatus = element("p", "muted");
   const validateRemove = () => {
     const segment = segments[Number(existing.value)];
+    if (!segment) { remove.disabled = true; removeStatus.textContent = "No vertical wire is present."; return; }
     try {
       const plan = planIecBranchRemoval(body, segment);
       remove.textContent = plan.removedFeedAndTail ? "Remove terminal feed and tail"
@@ -3679,12 +4041,14 @@ function renderIecBranchEditing(body) {
         candidate.groupIndex === segment.groupIndex
           && candidate.startRowIndex === segment.startRowIndex
           && candidate.endRowIndex === segment.endRowIndex).length;
-      removeStatus.textContent = plan.removedFeedAndTail
+      removeStatus.textContent = plan.preservedRows
+        ? "Removes only the paired vertical wire records. Shared function rows remain in place; open wire endpoints stay editable."
+        : plan.removedFeedAndTail
         ? "Deletes the terminal contact feed and its open vertical tail as one edit. Function blocks stay in place."
         : plan.removedOpenTail ? "Removes the open vertical tail back to its first horizontal connection. Function blocks stay in place."
         : parallelCount > 1
         ? "Another parallel segment keeps these rows in the same native group."
-        : "Removing this final segment also removes its captured contact-only branch row and shifts later rows, matching XG5000.";
+        : "Removes the supported branch row, reconnects a continuing spine, and shifts later rows as XG5000 does.";
     } catch (error) {
       remove.disabled = true;
       removeStatus.textContent = String(error);
@@ -3706,7 +4070,9 @@ function renderIecBranchEditing(body) {
   pairs.forEach((pair, index) => {
     const option = document.createElement("option");
     option.value = String(index);
-    option.textContent = `group ${pair.groupIndex + 1} (index ${pair.groupIndex}) · L${pair.startRowIndex}–L${pair.endRowIndex}`;
+    option.textContent = `${pair.lowerGroupIndex !== pair.groupIndex
+      ? `join networks ${pair.groupIndex + 1} and ${pair.lowerGroupIndex + 1}`
+      : `network ${pair.groupIndex + 1}`} · L${pair.startRowIndex}–L${pair.endRowIndex}`;
     pairSelect.append(option);
   });
   pairLabel.append(pairSelect);
@@ -3736,10 +4102,11 @@ function renderIecBranchEditing(body) {
       return;
     }
     try {
-      edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
-        pair.groupIndex, pair.startRowIndex, pair.endRowIndex, x, false, true);
+      addIecBranchBytes(pair, x);
       add.disabled = false;
-      addStatus.textContent = "Ready to add a paired branch start and end record.";
+      addStatus.textContent = pair.lowerGroupIndex !== pair.groupIndex
+        ? "Connects the adjacent networks while retaining their rows and elements. The joined network is disabled if either network is disabled."
+        : "Ready to add a paired branch start and end record.";
     } catch (error) {
       add.disabled = true;
       addStatus.textContent = String(error);
@@ -3752,17 +4119,47 @@ function renderIecBranchEditing(body) {
     if (add.disabled) return;
     const pair = pairs[Number(pairSelect.value)];
     const x = Number(boundary.value);
-    await applyEdit(() => edit_xgwx_iec_ld_branch_segment(
-      current.file.bytes, selectedProgramIndex, pair.groupIndex,
-      pair.startRowIndex, pair.endRowIndex, x, false, true,
-    ), `Add IEC branch at x ${x} between L${pair.startRowIndex} and L${pair.endRowIndex}`);
+    await applyEdit(() => addIecBranchBytes(pair, x), `Add IEC branch at x ${x} between L${pair.startRowIndex} and L${pair.endRowIndex}`);
   });
   addForm.append(pairLabel, boundaryLabel, add);
+
+  const splitPairs = pairs.filter(pair => pair.lowerGroupIndex === pair.groupIndex
+    && !(body.iecCircuitGraph?.edges || []).some(edge => edge.start.groupIndex === pair.groupIndex
+      && edge.start.rowIndex <= pair.startRowIndex && edge.end.rowIndex >= pair.endRowIndex)
+    && !(body.iecCircuitGraph?.occupiedAreas || []).some(area => area.groupIndex === pair.groupIndex
+      && area.startRowIndex <= pair.startRowIndex && area.endRowIndex >= pair.endRowIndex))
+    .filter(pair => {
+      try { split_xgwx_iec_ld_group(current.file.bytes, selectedProgramIndex,
+        pair.groupIndex, pair.startRowIndex, pair.endRowIndex); return true; }
+      catch { return false; }
+    });
+  if (splitPairs.length) {
+    const form = document.createElement("form");
+    const label = element("label", "", "Disconnected boundary");
+    const select = document.createElement("select");
+    select.setAttribute("aria-label", "IEC network split boundary");
+    splitPairs.forEach((pair, index) => {
+      const option = document.createElement("option"); option.value = String(index);
+      option.textContent = `network ${pair.groupIndex + 1} · L${pair.startRowIndex}–L${pair.endRowIndex}`;
+      select.append(option);
+    });
+    label.append(select);
+    const submit = button("Separate networks", "primary-button", () => {});
+    submit.type = "submit"; submit.textContent = "Separate networks";
+    form.addEventListener("submit", async event => {
+      event.preventDefault(); const pair = splitPairs[Number(select.value)];
+      await applyEdit(() => split_xgwx_iec_ld_group(current.file.bytes, selectedProgramIndex,
+        pair.groupIndex, pair.startRowIndex, pair.endRowIndex),
+      `Separate IEC networks between L${pair.startRowIndex} and L${pair.endRowIndex}`);
+    });
+    form.append(label, submit);
+    section.append(form, element("p", "muted", "Separates disconnected row ranges without moving elements. Both networks keep the current execution setting. A wire or function body cannot cross this boundary."));
+  }
 
   validateRemove();
   validateAdd();
   section.append(removeForm, removeStatus, addForm, addStatus,
-    element("p", "muted", "Removal supports validated lower contact rows and terminal contact feeds. Open terminal tails are removed through their last segment. Addition is limited to decoded contact, coil, and wire rows in one native group."));
+    element("p", "muted", "Removal supports validated lower contact rows and terminal contact feeds. Open terminal tails are removed through their last segment. Addition connects existing electrical points and can join adjacent networks."));
   return section;
 }
 
@@ -3955,8 +4352,10 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     if (rowIndex === undefined) return;
     const column = ldCellColumn(cell.rawX);
     const width = (LD_RIGHT_RAIL - LD_LEFT_RAIL) / LD_COLUMN_COUNT;
+    const span = cell.kind === "Comparison" && ladder.comparisonChoices?.some(choice => choice.mnemonic === cell.value)
+      ? cell.operands.length + 1 : 1;
     svg.append(svgLine(LD_LEFT_RAIL + column * width, ldRowY(rowIndex),
-      LD_LEFT_RAIL + (column + 1) * width, ldRowY(rowIndex), "wire"));
+      LD_LEFT_RAIL + (column + span) * width, ldRowY(rowIndex), "wire"));
   });
   (ladder.verticalLines || []).forEach((line) => {
     const start = rowIndexes.get(line.rawYStart);
@@ -4102,8 +4501,8 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     node.style.left = `${ldCellX(ldCellColumn(cell.rawX))}px`;
     if (cell.kind === "Comparison" && ladder.comparisonChoices?.some(choice => choice.mnemonic === cell.value)) {
       node.classList.add("comparison");
-      node.style.width = `${3 * (LD_RIGHT_RAIL - LD_LEFT_RAIL) / LD_COLUMN_COUNT - 10}px`;
-      node.style.left = `${ldCellX(ldCellColumn(cell.rawX) + 1)}px`;
+      node.style.width = `${(cell.operands.length + 1) * (LD_RIGHT_RAIL - LD_LEFT_RAIL) / LD_COLUMN_COUNT - 10}px`;
+      node.style.left = `${ldCellX(ldCellColumn(cell.rawX) + cell.operands.length / 2)}px`;
     }
     node.style.top = `${ldRowY(rowIndex)}px`;
     node.title = cell.contact && cell.sourceText
@@ -4681,7 +5080,9 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
       instructionSelect.addEventListener("change", () => {
         const choice = [...(ladder.instructionChoices || []), ...(ladder.comparisonChoices || [])].find(item => item.mnemonic === instructionSelect.value);
         if (!choice) return;
-        const currentParts = source.value.split(",").slice(1).map(value => value.trim());
+        const parts = nativeInstructionParts(source.value);
+        if (!parts) return;
+        const currentParts = parts.slice(1);
         const operands = Array.from({ length: choice.operandCount }, (_, index) => currentParts[index] || "0");
         if (currentParts.length && operands.length) operands[operands.length - 1] = currentParts[currentParts.length - 1];
         source.value = [choice.mnemonic, ...operands].join(",");
@@ -5261,6 +5662,7 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
       }
     }
   });
+  addButton.textContent = "Add variable";
   const validation = element("div", "validation-summary");
   const validate = () => {
     const siblings = localTables[Number(program.value)] || [];
@@ -5304,6 +5706,7 @@ function renderVariableInspector(inspector, variable, index) {
         variable.name, name.value,
       ), `Rename IEC local symbol ${variable.name}`);
     });
+    rename.textContent = "Rename variable";
     const validateName = () => {
       const valid = name.value !== variable.name && name.value.length > 0
         && name.value.length <= 255 && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(name.value)
@@ -5317,7 +5720,21 @@ function renderVariableInspector(inspector, variable, index) {
     name.addEventListener("input", validateName);
     validateName();
     form.append(nameValidation, rename);
+    const numericMapping = ({
+      BYTE: ["%MB", 8], SINT: ["%MB", 8], USINT: ["%MB", 8],
+      WORD: ["%MW", 16], INT: ["%MW", 16], UINT: ["%MW", 16], DATE: ["%MW", 16],
+      DWORD: ["%MD", 32], DINT: ["%MD", 32], UDINT: ["%MD", 32], REAL: ["%MD", 32],
+      TIME: ["%MD", 32], TIME_OF_DAY: ["%MD", 32],
+      LWORD: ["%ML", 64], LINT: ["%ML", 64], ULINT: ["%ML", 64], LREAL: ["%ML", 64], DATE_AND_TIME: ["%ML", 64],
+    })[variable.dataType];
+    const mappingWidth = numericMapping?.[1] || 1;
     const encodedBit = (value) => {
+      if (numericMapping) {
+        const match = /^%M([BWDL])([0-9]+)$/.exec(value);
+        if (!match || `%M${match[1]}` !== numericMapping[0]) return null;
+        const bit = Number(match[2]) * mappingWidth;
+        return Number.isInteger(bit) && bit <= 0xffffffff ? bit : null;
+      }
       const simple = /^%[MQ]X([0-9]+)$/.exec(value);
       if (simple) {
         const bit = Number(simple[1]);
@@ -5330,11 +5747,16 @@ function renderVariableInspector(inspector, variable, index) {
       const encoded = slot * 64 + bit;
       return Number.isInteger(slot) && Number.isInteger(bit) && bit < 64 && encoded <= 0xffffffff ? encoded : null;
     };
-    const mapped = variable.dataType === "BOOL" && encodedBit(variable.address || "") !== null;
-    const assignable = variable.dataType === "BOOL" && !variable.isInstance
-      && !variable.address && variable.storageClass === ""
-      && variable.allocationNumber == null && variable.allocationWidth == null;
+    const mapped = (variable.dataType === "BOOL" || numericMapping) && encodedBit(variable.address || "") !== null;
+    const automaticMapping = !variable.isInstance && !variable.address && variable.storageClass === "A"
+      && ["BOOL", "INT", "UDINT", "TIME"].includes(variable.dataType)
+      && Number.isInteger(variable.allocationNumber) && variable.allocationNumber >= 0
+      && variable.allocationNumber < 0xffffffff && variable.allocationWidth === mappingWidth;
+    const assignable = (variable.dataType === "BOOL" || numericMapping) && !variable.isInstance
+      && (automaticMapping || (!variable.address && variable.storageClass === ""
+        && variable.allocationNumber == null && variable.allocationWidth == null));
     const address = property(form, "Address", variable.address, !(mapped || assignable));
+    address.setAttribute("aria-label", "IEC local address");
     if (variable.typeReference) property(form, "Type reference", variable.typeReference, true);
     if (variable.dataType && !variable.isInstance && !variable.address) {
       const typeField = element("label", "property-field");
@@ -5357,6 +5779,7 @@ function renderVariableInspector(inspector, variable, index) {
         ), `Edit IEC local type ${variable.name}`);
       });
       const typeValidation = element("div", "validation-summary", "Changing type clears this variable's allocation. Program references may need compatible edits.");
+      typeApply.textContent = "Apply type";
       typeApply.disabled = true;
       type.addEventListener("change", () => { typeApply.disabled = type.value === variable.dataType; });
       form.append(typeValidation, typeApply);
@@ -5375,6 +5798,7 @@ function renderVariableInspector(inspector, variable, index) {
         variable.name, variable.description || "", description.value,
       ), `Edit IEC local description ${variable.name}`);
     });
+    descriptionApply.textContent = "Apply comment";
     const validateDescription = () => {
       const changed = description.value !== (variable.description || "");
       const valid = utf16Length(description.value) <= 255 && !/\p{Cc}/u.test(description.value);
@@ -5395,22 +5819,25 @@ function renderVariableInspector(inspector, variable, index) {
           variable.name, variable.address || "", address.value,
         ), `Edit IEC local address ${variable.name}`);
       });
+      apply.textContent = "Apply address";
       const validate = () => {
         const bit = encodedBit(address.value);
         const area = mapped ? variable.address.slice(0, 3) : address.value.slice(0, 3);
         const valid = address.value !== (variable.address || "")
           && utf16Length(address.value) <= 255
-          && ["%MX", "%IX", "%QX"].includes(area)
+          && (numericMapping ? area === numericMapping[0] : (automaticMapping ? area === "%MX" : ["%MX", "%IX", "%QX"].includes(area)))
           && address.value.startsWith(area)
           && bit !== null && bit !== encodedBit(variable.address)
           && !siblings.some((symbol, index) => index !== variable.localVariableIndex
-            && symbol.address?.startsWith(area)
-            && encodedBit(symbol.address) === bit);
+            && symbol.address && symbol.storageClass === area[1]
+            && (symbol.allocationNumber == null || symbol.allocationWidth == null
+              || (bit < symbol.allocationNumber + symbol.allocationWidth
+                && symbol.allocationNumber < bit + mappingWidth)));
         const unchanged = address.value === (variable.address || "");
-        validation.textContent = unchanged ? (mapped ? "Current mapped address." : "Enter a BOOL bit address to map this variable.") : valid
-          ? "Address area and bit mapping are valid."
-          : mapped ? "Use a different, unused bit address in the same area."
-            : "Use an unused %MX, %IX, or %QX bit address.";
+        validation.textContent = unchanged ? (mapped ? "Current mapped address." : `Enter a ${numericMapping ? numericMapping[0] : "BOOL bit"} address to map this variable.`) : valid
+          ? "Address area and allocation range are valid."
+          : mapped ? "Use a different address in the same area without overlapping mapped variables."
+            : numericMapping ? `Use an unused ${numericMapping[0]} address.` : automaticMapping ? "Use an unused %MX bit address." : "Use an unused %MX, %IX, or %QX bit address.";
         validation.classList.toggle("invalid", !valid && !unchanged);
         apply.disabled = !valid;
       };
@@ -5424,6 +5851,7 @@ function renderVariableInspector(inspector, variable, index) {
             variable.name, variable.address, "",
           ), `Clear IEC local address ${variable.name}`);
         });
+        clear.textContent = "Clear address";
         form.append(clear);
       }
     }
@@ -5439,9 +5867,10 @@ function renderVariableInspector(inspector, variable, index) {
         variable.name,
       ), `Delete IEC local variable ${variable.name}`);
     });
+    deleteButton.textContent = "Delete variable";
     deleteButton.disabled = referenced;
     form.append(deleteValidation, deleteButton);
-    form.append(element("p", "muted", "Clear a mapped BOOL address before changing its type. Function instance types cannot be changed here yet."));
+    form.append(element("p", "muted", "Clear a mapped address before changing its type. Function instance types cannot be changed here yet."));
     inspector.append(form);
     return;
   }

@@ -29,7 +29,8 @@
     }
   },
   "activationEvents": [
-    "onCustomEditor:xgwx.workspaceViewer"
+    "onCustomEditor:xgwx.workspaceViewer",
+    "onStartupFinished"
   ],
   "contributes": {
     "customEditors": [

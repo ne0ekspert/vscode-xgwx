@@ -1875,10 +1875,52 @@ form.iec-rung-creation {
 
 
 .ld-cell.instruction.comparison .ld-operands {
+  position: absolute;
+  top: calc(50% + 14px);
+  left: 50%;
+  transform: translateX(-50%);
   max-width: 100%;
   overflow: visible;
   font-size: 11px;
 }
 .ld-cell.instruction.comparison .ld-glyph {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   min-width: 32px;
+}
+
+.ld-cell.instruction.comparison::before {
+  top: 50%;
+}
+
+
+.iec-layout-marker.vertical-wire {
+  box-sizing: border-box;
+  width: 12px;
+  min-height: 0;
+  padding: 0;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+}
+
+.iec-layout-marker.vertical-wire:hover,
+.iec-layout-marker.vertical-wire:focus-visible,
+.iec-layout-marker.vertical-wire.selected {
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 20%, transparent);
+}
+
+.iec-layout-marker.vertical-gap {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border-color: var(--vscode-focusBorder);
+  border-radius: 50%;
+  line-height: 16px;
+  text-align: center;
 }

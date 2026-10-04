@@ -28,6 +28,7 @@ test("registers a default editable XGWX custom editor", () => {
   assert.equal(editor.priority, "default");
   assert.deepEqual(editor.selector, [{ filenamePattern: "*.xgwx" }]);
   assert.equal(manifest.capabilities.untrustedWorkspaces.supported, true);
+  assert.ok(manifest.activationEvents.includes("onStartupFinished"));
 });
 
 test("ships the parser assets used by the webview", () => {
