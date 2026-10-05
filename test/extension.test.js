@@ -561,3 +561,31 @@ test("IEC instruction prompt completes inside grouped operands and advances to d
   await picker.accepted();
   assert.deepEqual(await result, { command: "MOVE", operands: ["(%MW0 MOD 7 + 1)", "%MW1000"] });
 });
+
+test('variable popup uses native text input validation and a cancellable swap notification', async () => {
+  let receive, options, choice = 'Cancel';
+  const messages = [], notifications = [];
+  mockVscode.window = {
+    showInputBox: async value => { options = value; return 'P00001'; },
+    showInformationMessage: async (...args) => { notifications.push(args); return choice; },
+  };
+  const document = new XgwxDocument(uri('/workspace/variables.xgwx'), [1,2,3]);
+  const provider = new XgwxEditorProvider({});
+  const panel = { visible: true, webview: { cspSource:'test', asWebviewUri:value=>value,
+    onDidReceiveMessage(callback){receive=callback;return{dispose(){}};},
+    async postMessage(message){messages.push(message);}}, reveal(){}, onDidDispose(){} };
+  await provider.resolveCustomEditor(document, panel);
+  await receive({type:'promptVariableField',requestId:31,title:'Edit address',value:'P00000',prompt:'Address'});
+  assert.equal(options.value, 'P00000');
+  const validating = options.validateInput('P00001');
+  const validation = messages.at(-1);
+  await receive({type:'ladderInstructionValidationResult',validationId:validation.validationId,error:'Duplicate'});
+  assert.equal(await validating, 'Duplicate');
+  await receive({type:'confirmVariableSwap',requestId:32,message:'Swap addresses?'});
+  assert.deepEqual(notifications[0], ['Swap addresses?', 'Swap addresses', 'Cancel']);
+  assert.equal(messages.at(-1).value, false);
+  choice = 'Swap addresses';
+  await receive({type:'confirmVariableSwap',requestId:33,message:'Swap addresses?'});
+  assert.equal(messages.at(-1).value, true);
+  assert.deepEqual([...document.bytes], [1,2,3]);
+});

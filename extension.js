@@ -77,6 +77,23 @@ class XgwxEditorProvider {
       } else if (message?.type === "ladderInstructionValidationResult") {
         const resolve = validations.get(message.validationId);
         if (resolve) { validations.delete(message.validationId); resolve(message.error || undefined); }
+      } else if (message?.type === "promptVariableField") {
+        const value = await vscode.window.showInputBox({
+          title: message.title, value: message.value || "", prompt: message.prompt,
+          ignoreFocusOut: true,
+          validateInput: value => new Promise(resolve => {
+            const validationId = ++nextValidationId;
+            validations.set(validationId, resolve);
+            panel.webview.postMessage({ type: "validateLadderInstruction", requestId: message.requestId, validationId, value });
+          }),
+        });
+        await new Promise(resolve => setImmediate(resolve));
+        if (this.editors.has(editor) && panel.visible) panel.reveal(undefined, false);
+        await panel.webview.postMessage({ type: "iecContactInputResult", requestId: message.requestId, value: value ?? null });
+      } else if (message?.type === "confirmVariableSwap") {
+        const choice = await vscode.window.showInformationMessage(message.message, "Swap addresses", "Cancel");
+        if (this.editors.has(editor) && panel.visible) panel.reveal(undefined, false);
+        await panel.webview.postMessage({ type: "iecContactInputResult", requestId: message.requestId, value: choice === "Swap addresses" });
       } else if (message?.type === "promptLadderInstruction") {
         const validate = value => new Promise(resolve => {
           const validationId = ++nextValidationId;

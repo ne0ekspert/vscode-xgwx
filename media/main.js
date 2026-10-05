@@ -109,6 +109,7 @@ import {
   planLadderPaste,
 } from "./ladder-clipboard.js";
 import { groupModuleOptions } from "./module-option-groups.js";
+import { buildVariableEdit, variableAddressConflict } from "./variable-edit.js";
 import { iecGapOffsets } from "./iec-layout-positions.js";
 import {
   COIL_ELEMENT_CHOICES,
@@ -1129,7 +1130,8 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const top = 32;
   const x = (storedX) => left + storedX * scale;
   const gapOffset = iecGapOffsets(body);
-  const visualX = (rowIndex, storedX) => x(storedX - gapOffset(rowIndex, storedX));
+  // Element anchors are one unit inside their cell; branch X is already a boundary.
+  const visualX = (rowIndex, storedX) => x(storedX - 1 - gapOffset(rowIndex, storedX));
   const y = (rowIndex) => top + rowIndex * pitch;
   const lastEditableRow = iecEditableLastRow(body);
   const rowByIndex = new Map(rows.map((row) => [row.rowIndex, row]));
@@ -1263,10 +1265,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     // LongWire stores the last occupied cell anchor; ShortWire geometry already
     // includes the following boundary. Both must reach the next element's EN.
     const longWire = wireKinds.get(wire.offset) === "Long wire" || wire.startX === wire.endX;
-    const incomingBranch = (body.iecGeometry?.vertical || []).some(branch =>
-      branch.groupIndex === wire.groupIndex && branch.x === wire.startX - 1
-        && branch.startRowIndex <= wire.rowIndex && branch.endRowIndex >= wire.rowIndex);
-    line(visualX(wire.rowIndex, wire.startX - (incomingBranch ? 1 : 0)), y(wire.rowIndex),
+    line(visualX(wire.rowIndex, wire.startX), y(wire.rowIndex),
       visualX(wire.rowIndex, wire.endX + (longWire ? 3 : 0)), y(wire.rowIndex), "wire");
   }
   for (const wire of body.iecGeometry?.vertical || []) {
@@ -1462,8 +1461,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     const block = isFunction ? blockByNameOffset.get(item.offset) : owner;
     const ownerOffset = block ? gapOffset(block.rowIndex, block.rawX) : null;
     const storedX = item.iecPosition?.[0] ?? 1;
-    marker.style.left = `${isComment ? x(0) : x(storedX - (ownerOffset ?? gapOffset(item.iecRowIndex, storedX)))
-      + (isOperand && link?.isOutput ? 4 : 0)}px`;
+    marker.style.left = `${isComment ? x(0) : x(storedX - 1 - (ownerOffset ?? gapOffset(item.iecRowIndex, storedX)))}px`;
     marker.style.top = `${(kind === "contact" || kind === "coil") ? y(item.iecRowIndex)
       : y(item.iecRowIndex) - (isComment ? 20 : isOperand ? 18 : 22)}px`;
     if (kind === "contact" || kind === "coil" || kind === "function") {
@@ -1529,12 +1527,12 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     const blockOffset = gapOffset(block.rowIndex, block.rawX);
     for (const port of functionPins(block)) {
       const pin = element("span", `iec-layout-pin ${port.direction}`);
-      pin.style.left = `${x(port.rawX - blockOffset) - 4}px`;
+      pin.style.left = `${x(port.rawX - 1 - blockOffset) - 4}px`;
       pin.style.top = `${y(port.rowIndex) - 4}px`;
       pin.title = `${block.name}.${port.name} · ${port.direction} · ${functionPinType(port)} · L${port.rowIndex}${port.referenceOrdinal == null ? "" : ` · reference ${port.referenceOrdinal}`}`;
       pin.setAttribute("aria-hidden", "true");
       const label = element("span", `iec-layout-pin-label ${port.direction}`, port.name);
-      label.style.left = `${x(port.rawX - blockOffset) + (port.direction === "input" ? 6 : -6)}px`;
+      label.style.left = `${x(port.rawX - 1 - blockOffset) + (port.direction === "input" ? 6 : -6)}px`;
       label.style.top = `${y(port.rowIndex) - 8}px`;
       label.title = pin.title;
       board.append(pin, label);
@@ -5604,6 +5602,13 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
       row.className = selectedVariableIndex === index ? "selected" : "";
       row.tabIndex = 0;
       appendCells(row, [variable.location, variable.name, variable.address, variable.dataType, variable.description]);
+      row.dataset.variableIndex = String(index);
+      for (const [column, field] of [[1, "name"], [2, "address"], [4, "description"]]) {
+        const cell = row.cells[column];
+        cell.dataset.variableField = field;
+        cell.title = `Double-click to edit ${field === "description" ? "comment" : field}`;
+        cell.addEventListener("dblclick", () => editVariableField(variable, field, index));
+      }
       const select = () => {
         selectedVariableIndex = index;
         table.querySelectorAll("tbody tr").forEach((item) => item.classList.toggle("selected", item === row));
@@ -5687,6 +5692,58 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
   renderVariableInspector(inspector, variables[selectedVariableIndex] || null, selectedVariableIndex);
 }
 
+let variablePromptOpen = false;
+
+async function editVariableField(variable, field, index) {
+  if (variablePromptOpen) return;
+  variablePromptOpen = true;
+  const source = current.file.bytes, fileUri = current.file.uri, summary = current.summary;
+  const label = field === "description" ? "comment" : field;
+  const ensureCurrent = () => {
+    if (current?.file.uri !== fileUri || current.file.bytes !== source) throw new Error("Variables changed. Reopen the field editor.");
+  };
+  const request = (type, details, validate) => new Promise(resolve => {
+    const requestId = ++nextContactPromptId;
+    pendingContactPrompts.set(requestId, { resolve, validate, restoreFocus: false });
+    vscode.postMessage({ type, requestId, ...details });
+  });
+  try {
+    const validate = value => {
+      ensureCurrent();
+      if (field === "name") {
+        const siblings = variable.localProgramIndex == null ? summary.variables : summary.localVariables[variable.localProgramIndex];
+        const ownIndex = variable.localVariableIndex ?? variable.globalVariableIndex;
+        if (siblings.some((v, i) => i !== ownIndex && v.name?.toLocaleLowerCase() === value.toLocaleLowerCase())) throw new Error("Variable name is already in use.");
+      }
+      return buildVariableEdit(source, variable, field, value, summary, true);
+    };
+    const value = await request("promptVariableField", {
+      title: `Edit variable ${label} · ${variable.name}`,
+      value: variable[field] || "",
+      prompt: field === "address" ? "Enter a device address. An occupied address offers a swap."
+        : `Enter the variable ${label} (up to 255 UTF-16 units).`,
+    }, validate);
+    if (value == null) return;
+    ensureCurrent();
+    const conflict = field === "address" && value.trim().toUpperCase() !== (variable.address || "").toUpperCase()
+      && variableAddressConflict(variable, value, summary);
+    if (conflict) {
+      const swap = await request("confirmVariableSwap", {
+        message: `${value.trim().toUpperCase()} is occupied by ${conflict.name}. Swap addresses with ${variable.name}?`,
+      });
+      if (!swap) return;
+    }
+    await applyEdit(() => validate(value), `${conflict ? "Swap addresses" : `Edit variable ${label}`} · ${variable.name}`);
+  } catch (error) {
+    vscode.postMessage({ type: "showError", message: String(error) });
+  } finally {
+    variablePromptOpen = false;
+    requestAnimationFrame(() => {
+      if (current?.file.uri === fileUri) document.querySelector(`[data-variable-index="${index}"]`)?.focus({ preventScroll: true });
+    });
+  }
+}
+
 function renderVariableInspector(inspector, variable, index) {
   inspector.replaceChildren(inspectorHeading("VARIABLE"));
   if (!variable) {
@@ -5710,7 +5767,7 @@ function renderVariableInspector(inspector, variable, index) {
     const validateName = () => {
       const valid = name.value !== variable.name && name.value.length > 0
         && name.value.length <= 255 && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(name.value)
-        && !siblings.some((symbol, index) => index !== variable.localVariableIndex && symbol.name === name.value);
+        && !siblings.some((symbol, index) => index !== variable.localVariableIndex && symbol.name.toLocaleLowerCase() === name.value.toLocaleLowerCase());
       nameValidation.textContent = name.value === variable.name ? "Current symbol name." : valid
         ? "Program references will be updated with the symbol."
         : "Use a unique identifier of at most 255 characters.";
@@ -5907,29 +5964,34 @@ function renderVariableInspector(inspector, variable, index) {
   const controls = [name, addressArea, addressNumber, dataType, description];
   const validate = () => {
     const lengthFields = [
-      ["Name", name.value, variable.name],
       ["Area", addressArea.value, variable.addressArea],
       ["Type", dataType.value, variable.dataType],
-      ["Description", description.value, variable.description],
     ];
+    const invalidText = [name.value, description.value].some(value => utf16Length(value) > 255 || /\p{Cc}/u.test(value));
     const invalidField = lengthFields.find(([, value, original]) => utf16Length(value) !== utf16Length(original || ""));
     const number = Number(addressNumber.value);
     const invalidNumber = !Number.isInteger(number) || number < 0 || number > 0xffffffff;
+    const duplicateName = !name.value || (current.summary.variables || []).some((symbol, symbolIndex) =>
+      symbolIndex !== variable.globalVariableIndex && symbol.name?.toLocaleLowerCase() === name.value.toLocaleLowerCase());
     const changed = name.value !== (variable.name || "")
       || addressArea.value !== (variable.addressArea || "")
       || number !== variable.addressNumber
       || dataType.value !== (variable.dataType || "")
       || description.value !== (variable.description || "");
 
-    if (invalidField) {
+    if (duplicateName) {
+      validation.textContent = "Variable name must be nonempty and unique.";
+    } else if (invalidText) {
+      validation.textContent = "Name and comment allow up to 255 UTF-16 units and no control characters.";
+    } else if (invalidField) {
       validation.textContent = `${invalidField[0]} must remain ${utf16Length(invalidField[2] || "")} UTF-16 units.`;
     } else if (invalidNumber) {
       validation.textContent = "Address number must be an integer from 0 to 4294967295.";
     } else {
-      validation.textContent = "String fields keep their encoded length; address number may change freely.";
+      validation.textContent = "Name and comment allow up to 255 UTF-16 units. Area and type keep their encoded length.";
     }
-    validation.classList.toggle("invalid", Boolean(invalidField || invalidNumber));
-    apply.disabled = !changed || Boolean(invalidField || invalidNumber);
+    validation.classList.toggle("invalid", Boolean(duplicateName || invalidText || invalidField || invalidNumber));
+    apply.disabled = !changed || Boolean(duplicateName || invalidText || invalidField || invalidNumber);
   };
   controls.forEach((control) => control.addEventListener("input", validate));
   validate();

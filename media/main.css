@@ -1278,6 +1278,7 @@ button.tree-row:hover,
 
 .iec-layout-marker.contact,
 .iec-layout-marker.coil {
+  box-sizing: border-box;
   display: block;
   width: 72px;
   height: 54px;
@@ -1325,6 +1326,7 @@ button.tree-row:hover,
 }
 
 .iec-layout-blank-cell {
+  box-sizing: border-box;
   position: absolute;
   z-index: 2;
   width: 72px;
@@ -1474,19 +1476,16 @@ button.tree-row:hover,
 }
 
 .iec-layout-marker.operand {
-  width: 68px;
+  box-sizing: border-box;
+  width: 72px;
   min-height: 31px;
   padding: 3px 4px;
   border-style: dashed;
   text-align: center;
 }
 
-.iec-layout-marker.coil {
-  width: 96px;
-  transform: translate(-45%, -50%);
-}
-
 .iec-layout-pin {
+  box-sizing: border-box;
   position: absolute;
   z-index: 2;
   width: 8px;
@@ -1923,4 +1922,8 @@ form.iec-rung-creation {
   border-radius: 50%;
   line-height: 16px;
   text-align: center;
+}
+
+[data-variable-field] {
+  cursor: text;
 }

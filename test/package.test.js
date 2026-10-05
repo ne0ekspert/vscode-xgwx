@@ -32,7 +32,7 @@ test("registers a default editable XGWX custom editor", () => {
 });
 
 test("ships the parser assets used by the webview", () => {
-  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/ladder-clipboard.js", "media/module-option-groups.js", "media/iec-layout-positions.js", "media/main.js", "media/main.css"]) {
+  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/ladder-clipboard.js", "media/module-option-groups.js", "media/iec-layout-positions.js", "media/variable-edit.js", "media/main.js", "media/main.css"]) {
     const stat = fs.statSync(path.join(root, asset));
     assert.ok(stat.size > 0, `${asset} should not be empty`);
   }

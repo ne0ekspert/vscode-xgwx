@@ -417,8 +417,9 @@ powered by the sibling `libxgwx` project during development.
   hiding them.
 - Displays each module's physical slot range and rejects overlapping multi-slot
   selections such as XGF-TC4UD.
-- Edits variable name, address area/number, data type, and description. Variable
-  string fields retain their UTF-16 length to preserve opaque symbol records.
+- Edits variable name, address area/number, data type, and description. Names
+  and comments may grow or shrink up to 255 UTF-16 units; address-area and
+  data-type text retains its encoded length.
 - Participates in VS Code Save, Save As, Revert, Undo/Redo, and hot-exit backup.
 - Shows program and network summaries.
 - Provides an explicit refresh action for the current editor document.
@@ -1331,3 +1332,18 @@ right output position of the same physical row, including lower branch rows.
 Contacts still use the selected cell, and P/N remain contact pulse commands
 in interior cells (use OUTP/OUTN for pulse coils). Existing outputs are
 protected by the writer's occupied-cell checks.
+
+### Editing variable table fields
+
+Double-click a variable's **Name**, **Address**, or **Comment** cell to open
+VS Code's text input. Names are unique without regard to case among global
+variables, or within an IEC program's local table. Invalid names and unsupported
+edits stay in the prompt with a validation message.
+
+An occupied address offers a **Swap addresses / Cancel** notification. Swap
+changes both addresses as one undoable edit; Cancel and dismiss leave the file
+unchanged. IEC swaps require two mapped variables with matching areas and
+allocation widths. Ambiguous or incompatible mappings remain guarded.
+Global and IEC names and comments may grow or shrink up to 255 UTF-16 units.
+Empty comments are supported; names remain nonempty and unique. Address-area
+and data-type changes retain their existing writer restrictions.
