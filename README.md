@@ -1373,3 +1373,14 @@ allocation widths. Ambiguous or incompatible mappings remain guarded.
 Global and IEC names and comments may grow or shrink up to 255 UTF-16 units.
 Empty comments are supported; names remain nonempty and unique. Address-area
 and data-type changes retain their existing writer restrictions.
+
+
+### Growing ladder canvas
+
+XGK blank rows grow as you scroll, up to 65,535 physical rows. Blank cells are
+rendered around the visible area, keeping large sparse programs responsive.
+Double-click or Enter inserts directly at the selected cell; scrolling alone
+never changes the file. XGK coordinate handling and the extended row-count
+header were verified in native XG5000 at physical rows 256 and 65534 with zero
+Check Program errors or warnings and byte-identical program payloads after
+Save As. IEC retains its separately validated coordinate range.

@@ -1,3 +1,4 @@
+import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
   cpu_catalog,
@@ -128,6 +129,9 @@ import {
 const vscode = acquireVsCodeApi();
 const app = document.querySelector("#app");
 const wasmReady = init();
+const ladderCanvasExtents = new Map();
+const ladderCanvasScroll = new Map();
+const canvasExtentKey = () => `${current.file.uri}:${selectedProgramIndex}`;
 const LD_COLUMN_COUNT = 10;
 const LD_VIEW_WIDTH = 900;
 const LD_LEFT_RAIL = 34;
@@ -229,6 +233,11 @@ window.addEventListener("message", async ({ data }) => {
 vscode.postMessage({ type: "ready" });
 
 async function loadWorkspace(file) {
+  const viewport = app.querySelector(".iec-layout-viewport, .ld-viewport");
+  if (current && viewport && activeView === "programs") ladderCanvasScroll.set(canvasExtentKey(), {
+    top: viewport.scrollTop, left: viewport.scrollLeft,
+    editorTop: app.querySelector(".editor-canvas")?.scrollTop ?? 0,
+  });
   renderLoading(`Parsing ${file.fileName}…`);
   try {
     if (current?.file.uri !== file.uri) {
@@ -266,9 +275,10 @@ function renderWorkspace() {
   const oldShell = app.querySelector(".editor-shell");
   const sameProgram = activeView === "programs" && oldShell?.dataset.view === activeView
     && oldShell.dataset.programIndex === String(selectedProgramIndex);
-  const oldLayout = sameProgram ? app.querySelector(".iec-layout-viewport") : null;
+  const oldLayout = sameProgram ? app.querySelector(".iec-layout-viewport, .ld-viewport") : null;
   const scroll = oldLayout ? { top: oldLayout.scrollTop, left: oldLayout.scrollLeft,
-    editorTop: app.querySelector(".editor-canvas")?.scrollTop ?? 0 } : null;
+    editorTop: app.querySelector(".editor-canvas")?.scrollTop ?? 0 }
+    : activeView === "programs" ? ladderCanvasScroll.get(canvasExtentKey()) : null;
   app.replaceChildren();
 
   const shell = element("div", "editor-shell");
@@ -280,7 +290,7 @@ function renderWorkspace() {
     renderStatusBar(summary),
   );
   app.append(shell);
-  const layout = scroll && shell.querySelector(".iec-layout-viewport");
+  const layout = scroll && shell.querySelector(".iec-layout-viewport, .ld-viewport");
   if (layout) {
     layout.scrollTop = scroll.top;
     layout.scrollLeft = scroll.left;
@@ -998,13 +1008,19 @@ function renderProgramsEditor(canvas, inspector, programs) {
 
   if (ladder?.structuralEditing && !ladder.rungs.length) ladder.rungs = [{ rawY: 0 }];
   if (ladder) {
+    if (ladder.structuralEditing) {
+      const storedLast = Math.max(-4, ...ladder.rungs.map(row => row.rawY), ...(ladder.rungComments || []).map(row => row.rawY));
+      ladder.canvasRowValues = xgkCanvasRowValues(ladder, Math.min(65535, Math.max(
+        storedLast / 4 + 17, ladderCanvasExtents.get(canvasExtentKey()) || 0,
+        (selectedLadderFocus?.rawY || 0) / 4 + 2)));
+    }
     if (selectedLadderComment && !(ladder.rungComments || []).some((comment) => (
       selectedLadderComment.kind === "Rung" && comment.rawY === selectedLadderComment.rawY
     ))) {
       selectedLadderComment = null;
     }
-    const rowValues = ladder.rungs.map((rung) => rung.rawY);
-    if (selectedLadderFocus && !rowValues.includes(selectedLadderFocus.rawY)) {
+    const rowValues = xgkCanvasRowValues(ladder);
+    if (selectedLadderFocus && (selectedLadderFocus.rawY < 0 || selectedLadderFocus.rawY >= 65535 * 4)) {
       resetLadderSelection();
     }
     if (selectedLadderFocus) {
@@ -1013,7 +1029,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
       selectedBlankCell = focusedCell ? null : selectedLadderFocus;
     }
     const selectPosition = (position, extend = false) => {
-      const rowIndex = rowValues.indexOf(position.rawY);
+      const rowIndex = xgkCanvasRowValues(ladder).indexOf(position.rawY);
       if (rowIndex < 0) return;
       const normalized = { rawY: position.rawY, rowIndex, column: position.column };
       selectedLadderComment = null;
@@ -1090,7 +1106,7 @@ function iecEditableLastRow(body) {
 function iecOccupiedCell(body, rowIndex, rawX) {
   const rows = body.iecRows || [];
   if (rowIndex < 0
-    || rowIndex > iecEditableLastRow(body)
+    || rowIndex >= 16383
     || rawX < 1 || rawX > 97 || (rawX - 1) % 3 !== 0) return true;
   if ((body.sourceStrings || []).some((item) => item.isIecComment
     && item.iecRowIndex === rowIndex)) return true;
@@ -1136,7 +1152,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   // Element anchors are one unit inside their cell; branch X is already a boundary.
   const visualX = (rowIndex, storedX) => x(storedX - 1 - gapOffset(rowIndex, storedX));
   const y = (rowIndex) => top + rowIndex * pitch;
-  const lastEditableRow = iecEditableLastRow(body);
+  let lastEditableRow = Math.max(iecEditableLastRow(body), selectedIecBlank?.programIndex === selectedProgramIndex ? selectedIecBlank.rowIndex : 0);
   const rowByIndex = new Map(rows.map((row) => [row.rowIndex, row]));
   const viewport = element("div", "iec-layout-viewport");
   const board = element("div", "iec-layout-board");
@@ -1176,30 +1192,36 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       : `Empty L${rowIndex} selected. Ctrl+V pastes the copied network.`;
     selectNetworkRow(rowIndex);
   };
-  for (let rowIndex = 0; rowIndex <= lastEditableRow; rowIndex += 1) {
-    const isCommentRow = commentRows.has(rowIndex);
-    const isEmpty = !rowByIndex.has(rowIndex);
-    const labelText = isCommentRow ? "설명문" : `L${rowIndex}`;
-    const label = button(labelText,
-      `iec-layout-row${isCommentRow ? " comment" : ""}${isEmpty ? " empty" : ""}`,
-      () => selectRow(rowIndex));
-    label.textContent = labelText;
-    label.dataset.rowIndex = String(rowIndex);
-    label.classList.toggle("selected", selectedIecRow?.programIndex === selectedProgramIndex
-      && selectedIecRow.rowIndex === rowIndex);
-    label.setAttribute("aria-label", `${isEmpty ? "Empty row" : "IEC row"} L${rowIndex}`);
-    if (isEmpty) {
-      const open = () => showIecBlankInput(body, { rowIndex, rawX: 1 },
-        `.iec-layout-row[data-row-index="${rowIndex}"]`);
-      label.addEventListener("dblclick", (event) => { event.preventDefault(); void open(); });
-      label.addEventListener("keydown", (event) => {
-        if (event.key !== "Enter" || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
-        event.preventDefault(); event.stopPropagation(); void open();
-      });
+  const renderRowLabels = (first, last) => {
+    board.querySelectorAll(".iec-layout-row").forEach(label => {
+      if (label !== document.activeElement) label.remove();
+    });
+    for (let rowIndex = first; rowIndex <= last; rowIndex += 1) {
+      if (board.querySelector(`.iec-layout-row[data-row-index="${rowIndex}"]`)) continue;
+      const isCommentRow = commentRows.has(rowIndex);
+      const isEmpty = !rowByIndex.has(rowIndex);
+      const labelText = isCommentRow ? "설명문" : `L${rowIndex}`;
+      const label = button(labelText,
+        `iec-layout-row${isCommentRow ? " comment" : ""}${isEmpty ? " empty" : ""}`,
+        () => selectRow(rowIndex));
+      label.textContent = labelText;
+      label.dataset.rowIndex = String(rowIndex);
+      label.classList.toggle("selected", selectedIecRow?.programIndex === selectedProgramIndex
+        && selectedIecRow.rowIndex === rowIndex);
+      label.setAttribute("aria-label", `${isEmpty ? "Empty row" : "IEC row"} L${rowIndex}`);
+      if (isEmpty) {
+        const open = () => showIecBlankInput(body, { rowIndex, rawX: 1 },
+          `.iec-layout-row[data-row-index="${rowIndex}"]`);
+        label.addEventListener("dblclick", (event) => { event.preventDefault(); void open(); });
+        label.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+          event.preventDefault(); event.stopPropagation(); void open();
+        });
+      }
+      label.style.top = `${y(rowIndex) - 9}px`;
+      board.append(label);
     }
-    label.style.top = `${y(rowIndex) - 9}px`;
-    board.append(label);
-  }
+  };
   board.addEventListener("keydown", event => {
     if (event.key !== "F6" || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     const cell = event.target.closest("[data-row-index][data-raw-x]");
@@ -1550,10 +1572,14 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     blankIndicator.dataset.rowIndex = String(position.rowIndex);
     blankIndicator.dataset.rawX = String(position.rawX);
     blankIndicator.setAttribute("aria-label", `Empty IEC cell L${position.rowIndex} x${position.rawX}`);
-    if (focus) blankIndicator.focus({ preventScroll: true });
+    if (focus) {
+      blankIndicator.focus({ preventScroll: true });
+      blankIndicator.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   };
   const selectBlankPosition = (position) => {
     if (iecOccupiedCell(body, position.rowIndex, position.rawX)) return;
+    growingCanvas.ensureRow(position.rowIndex);
     selectRow(position.rowIndex);
     selectBlank(position);
     showBlank(position, true);
@@ -1663,6 +1689,17 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     document.addEventListener("pointermove", move);
     document.addEventListener("pointerup", up);
     document.addEventListener("pointercancel", up);
+  });
+  const growingCanvas = attachGrowingCanvas(viewport, {
+    initialRows: lastEditableRow + 1, maxRows: 16383, pitch, top,
+    rememberedRows: ladderCanvasExtents.get(canvasExtentKey()),
+    resize: count => {
+      lastEditableRow = count - 1;
+      board.style.height = `${y(count - 1) + pitch}px`;
+      svg.setAttribute("viewBox", `0 0 ${x(100) + 32} ${y(count - 1) + pitch}`);
+      ladderCanvasExtents.set(canvasExtentKey(), count);
+    },
+    renderWindow: renderRowLabels,
   });
   viewport.append(board);
   section.append(viewport);
@@ -4179,7 +4216,7 @@ function ladderCellAtPosition(ladder, position) {
 }
 
 function currentLadderSelection(ladder) {
-  const rowValues = ladder.rungs.map((rung) => rung.rawY);
+  const rowValues = xgkCanvasRowValues(ladder);
   const keys = ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus);
   const decodedCells = ladder.cells.filter((cell) => keys.has(ladderPositionKey({
     rawY: cell.rawY,
@@ -4217,9 +4254,8 @@ function syncLadderCommentSelectionClasses(canvas, comment) {
 function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelection) {
   const viewport = element("div", "ld-viewport");
   const board = element("div", "ld-board");
-  const rowValues = ladder.rungs.map((rung) => rung.rawY);
-  const selectedKeys = ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus);
-  const activeKey = selectedLadderFocus ? ladderPositionKey(selectedLadderFocus) : null;
+  const rowValues = xgkCanvasRowValues(ladder);
+  let selectedKeys = ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus);
   const rungNumbers = new Map(rowValues.map((rawY, index) => [rawY, index]));
   const layoutRows = buildLdLayoutRows(rowValues, ladder.rungComments || []);
   const rowIndexes = new Map(layoutRows
@@ -4231,6 +4267,7 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
 
   let dragSelecting = false;
   let dragMoved = false;
+  let growingCanvas = null;
   const focusCursor = (cursor, extend = false) => {
     if (!cursor) return;
     if (cursor.type === "comment") {
@@ -4242,15 +4279,17 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     }
     const position = { rawY: cursor.rawY, column: cursor.column };
     selectPosition(position, extend);
+    growingCanvas?.showRow(rowIndexes.get(position.rawY));
     board.querySelector(`[data-ladder-key="${ladderPositionKey(position)}"]`)?.focus();
   };
   const bindSelection = (node, position) => {
     const key = ladderPositionKey(position);
     let preserveSelectionOnFocus = false;
     node.dataset.ladderKey = key;
-    node.classList.toggle("selected", selectedKeys.has(key));
-    node.classList.toggle("active", activeKey === key);
-    node.setAttribute("aria-selected", String(selectedKeys.has(key)));
+    const selected = selectedKeys.has(key);
+    node.classList.toggle("selected", selected);
+    node.classList.toggle("active", ladderPositionKey(selectedLadderFocus || {}) === key);
+    node.setAttribute("aria-selected", String(selected));
     node.addEventListener("pointerdown", (event) => {
       if (event.button === 2) {
         preserveSelectionOnFocus = ladderSelectionKeys(
@@ -4322,6 +4361,7 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
       }
       if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
         event.preventDefault();
+        if (event.key === "ArrowDown" && position.rawY === rowValues.at(-1)) growingCanvas?.ensureRow(layoutRows.length);
         focusCursor(moveLadderCursor(layoutRows, {
           type: "rung", rawY: position.rawY, column: position.column,
         }, event.key, LD_COLUMN_COUNT), event.shiftKey);
@@ -4372,27 +4412,44 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     board.append(label);
   }
 
-  rowValues.forEach((rawY, rungIndex) => {
+  const occupied = new Set((ladder.cells || []).map(cell => ldBlankKey(cell.rawY, ldCellColumn(cell.rawX))));
+  const blankRows = new Map();
+  const appendBlankRow = (rawY, rungIndex) => {
+    const nodes = [];
+    blankRows.set(rawY, nodes);
     const label = element("span", "ld-rung-label", rungIndex + 1);
     label.style.top = `${ldRowY(rowIndexes.get(rawY))}px`;
+    nodes.push(label);
     board.append(label);
-  });
 
-  const occupied = new Set((ladder.cells || []).map((cell) => ldBlankKey(cell.rawY, ldCellColumn(cell.rawX))));
-  rowValues.forEach((rawY, rungIndex) => {
+
     const displayRowIndex = rowIndexes.get(rawY);
     for (let column = 0; column < LD_COLUMN_COUNT; column += 1) {
       const key = ldBlankKey(rawY, column);
       if (occupied.has(key)) continue;
       const blank = { rawY, rowIndex: rungIndex, column };
       const node = button(`Blank cell, rung ${rungIndex + 1}, column ${column + 1}`, "ld-blank-cell", () => {});
+      nodes.push(node);
       node.dataset.blankKey = key;
       bindSelection(node, blank);
       node.style.left = `${ldCellX(column)}px`;
       node.style.top = `${ldRowY(displayRowIndex)}px`;
       board.append(node);
     }
-  });
+  };
+  const renderBlankWindow = (first, last) => {
+    selectedKeys = ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus);
+    const visible = new Set(layoutRows.slice(first, last + 1).filter(row => row.type === "rung").map(row => row.rawY));
+    for (const [rawY, nodes] of blankRows) {
+      if (visible.has(rawY)) continue;
+      nodes.forEach(node => node.remove());
+      blankRows.delete(rawY);
+    }
+    for (const rawY of visible) {
+      if (!blankRows.has(rawY)) appendBlankRow(rawY, rowValues.indexOf(rawY));
+    }
+  };
+  if (!ladder.structuralEditing) renderBlankWindow(0, layoutRows.length - 1);
 
   layoutRows.forEach((row, layoutIndex) => {
     if (row.type !== "comment") return;
@@ -4522,6 +4579,25 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     board.append(node);
   });
 
+  if (ladder.structuralEditing) growingCanvas = attachGrowingCanvas(viewport, {
+    initialRows: layoutRows.length, maxRows: 65535, pitch: LD_ROW_HEIGHT, top: LD_FIRST_ROW_Y,
+    renderWindow: renderBlankWindow,
+    resize: count => {
+      const previous = new Set(rowValues);
+      const extended = xgkCanvasRowValues(ladder, count);
+      for (const rawY of extended.filter(rawY => !previous.has(rawY))) {
+        rowValues.push(rawY);
+        rowIndexes.set(rawY, layoutRows.length);
+        layoutRows.push({ type: "rung", rawY });
+      }
+      ladder.canvasRowValues = rowValues;
+      const height = LD_FIRST_ROW_Y + layoutRows.length * LD_ROW_HEIGHT;
+      board.style.height = `${height}px`;
+      svg.setAttribute("viewBox", `0 0 ${LD_VIEW_WIDTH} ${height}`);
+      svg.querySelectorAll(".rail").forEach(rail => rail.setAttribute("y2", ldRowY(layoutRows.length - 1) + 24));
+      ladderCanvasExtents.set(canvasExtentKey(), count);
+    },
+  });
   viewport.append(board);
   return viewport;
 }
@@ -4566,7 +4642,7 @@ function normalizedLadderCells(ladder) {
 
 function selectedLadderClipboard(ladder) {
   return captureLadderSelection(
-    ladder.rungs.map((rung) => rung.rawY),
+    xgkCanvasRowValues(ladder),
     selectedLadderAnchor,
     selectedLadderFocus,
     normalizedLadderCells(ladder),
@@ -4576,7 +4652,7 @@ function selectedLadderClipboard(ladder) {
 function ladderPasteEdits(ladder, position) {
   return planLadderPaste(
     ladderClipboard,
-    ladder.rungs.map((rung) => rung.rawY),
+    xgkCanvasRowValues(ladder),
     position,
     normalizedLadderCells(ladder),
     LD_COLUMN_COUNT,
@@ -5358,7 +5434,7 @@ function renderIecContactInsertion(section, site, initialX = null) {
 async function applyEdit(update, label, beforeRender) {
   try {
     const editorPane = app.querySelector(".editor-canvas");
-    const iecViewport = app.querySelector(".iec-layout-viewport");
+    const iecViewport = app.querySelector(".iec-layout-viewport, .ld-viewport");
     const scroll = activeView === "programs" ? {
       editorTop: editorPane?.scrollTop ?? 0,
       layoutTop: iecViewport?.scrollTop ?? 0,
@@ -5381,7 +5457,7 @@ async function applyEdit(update, label, beforeRender) {
     renderWorkspace();
     if (scroll) {
       const refreshedEditor = app.querySelector(".editor-canvas");
-      const refreshedLayout = app.querySelector(".iec-layout-viewport");
+      const refreshedLayout = app.querySelector(".iec-layout-viewport, .ld-viewport");
       if (refreshedEditor) refreshedEditor.scrollTop = scroll.editorTop;
       if (refreshedLayout) {
         refreshedLayout.scrollTop = scroll.layoutTop;

@@ -659,8 +659,8 @@ button.tree-row:hover,
 
 .ld-viewport {
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  max-height: 560px;
+  overflow: auto;
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-editor-background);
 }
