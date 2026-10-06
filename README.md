@@ -41,6 +41,15 @@ powered by the sibling `libxgwx` project during development.
   ignores the socket count and uses 64 connections.
   Edits participate in Save and Undo/Redo. Protocol identities and undecoded
   communication settings remain read-only.
+- Edits Cnet ports for XGL-C22A/B, XGL-CH2A/B, and XGL-C42A/B from the
+  network sidebar: electrical mode, baud rate, operation mode, station,
+  data/stop/parity bits, response wait, delay, inter-character wait, parity-error
+  acceptance, and termination resistance. Related changes use **Apply Cnet
+  settings** as one undoable transaction. Selecting Modbus ASCII/RTU sets the
+  required data-bit count; repeater mode synchronizes both baud rates.
+  New Cnet modules receive captured native port defaults. Other Cnet hardware
+  layouts remain read-only until validated. Modbus address maps, modem
+  initialization commands, and P2P program creation are not edited here.
 - Edits program name, task, and comment metadata.
 - Identifies XGI CPU models and shows the stored language of each program.
   IEC `ProjectType 2` programs show a scrollable layout of captured row

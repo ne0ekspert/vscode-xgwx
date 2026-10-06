@@ -960,6 +960,24 @@ export function edit_xgwx_browser_network(bytes, patch) {
 }
 
 /**
+ * Apply a batch of native Cnet serial-port changes atomically.
+ * @param {Uint8Array} bytes
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_cnet_settings(bytes, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_cnet_settings(ptr0, len0, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Apply supported changes to one network and return rewritten bytes.
  * @param {Uint8Array} bytes
  * @param {any} patch

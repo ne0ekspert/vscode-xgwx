@@ -89,6 +89,7 @@ import init, {
   update_xgwx_network,
   update_xgwx_network_module,
   edit_xgwx_fenet_field,
+  edit_xgwx_cnet_settings,
   update_xgwx_program,
   update_xgwx_variable,
   xgk_module_catalog,
@@ -5518,6 +5519,7 @@ function appendNetworkConfigurationFields(form, module, summary) {
   // XG5000 can renumber bases and slots, so configuration records are joined
   // using the stable NetworkModule Id / XGPD Type relationship.
   const fenet = findNetworkConfiguration(summary.fenet, module);
+  const cnet = findNetworkConfiguration(summary.cnet, module);
   const hardwareModule = (summary.hardware?.modules || []).find((item) => (
     item.base === module.base && item.slot === module.slot
   ));
@@ -5525,7 +5527,7 @@ function appendNetworkConfigurationFields(form, module, summary) {
     entry.id === module.id && entry.subType === hardwareModule.subType
   ));
 
-  if (!fenet && catalogEntry?.visibleOptions?.length) {
+  if (!fenet && !cnet && catalogEntry?.visibleOptions?.length) {
     form.append(element("div", "network-config-heading", "Network device settings"));
     catalogEntry.visibleOptions.forEach((option, index) => {
       property(form, moduleOptionLabel(option, index), formatModuleOptionDefault(option.defaultValue, index), true);
@@ -5660,24 +5662,132 @@ function appendNetworkConfigurationFields(form, module, summary) {
     }
   }
 
-  const cnet = findNetworkConfiguration(summary.cnet, module);
-  if (cnet) {
-    form.append(element("div", "network-config-heading", "Cnet configuration"));
-    property(form, "Station", cnet.stationNo, true);
-    (cnet.ports || []).forEach((port, index) => {
-      form.append(element("div", "network-config-heading", `Port ${index + 1}`));
-      [
-        ["Station", port.stationNo],
-        ["Mode", port.mode],
-        ["Baud rate", port.baudRate],
-        ["Data bits", port.dataBits],
-        ["Stop bits", port.stopBits],
-        ["Parity", port.parity],
-        ["RX timeout", port.rxTimeout],
-      ].forEach(([label, value]) => property(form, label, value, true));
-    });
-  }
+  if (cnet) appendCnetConfigurationFields(form, module, cnet);
 }
+
+function appendCnetConfigurationFields(form, module, cnet) {
+  form.append(element("div", "network-config-heading", "Cnet configuration"));
+  const exact = cnet.base === module.base && cnet.slot === module.slot
+    && [32768, 32769, 32770].includes(cnet.subType) && cnet.ports?.length === 2
+    && cnet.ports.every(port => [0, 2, 3, 4, 7].includes(port.driverType)
+      && Number.isInteger(port.bps) && port.bps >= 0 && port.bps < 15);
+  const source = current.file.bytes, uri = current.file.uri;
+  const fields = [];
+  const baudRates = [300, 600, 1200, 1800, 2400, 3600, 4800, 7200, 9600, 19200, 38400, 57600, 64000, 76800, 115200];
+  const drivers = [[0, "Use P2P"], [2, "XGT server"], [3, "Modbus ASCII server"], [4, "Modbus RTU server"], [7, "Smart server"]];
+  const repeater = property(form, "Repeater mode", "", !exact);
+  repeater.type = "checkbox";
+  repeater.parentElement.classList.add("property-checkbox");
+  repeater.setAttribute("aria-label", "Repeater mode");
+  repeater.checked = cnet.ports?.every(port => port.repeater === 1);
+  const repeaterKnown = cnet.ports?.every(port => [0, 1].includes(port.repeater))
+    && cnet.ports?.every(port => port.repeater === cnet.ports[0].repeater);
+  repeater.disabled = !exact || !repeaterKnown || cnet.subType === 32769;
+  if (cnet.subType === 32769) repeater.parentElement.remove();
+  repeater.readOnly = false;
+  repeater.title = "Repeater mode synchronizes both baud rates and suspends protocol services.";
+  if (!repeater.disabled) cnet.ports.forEach((port, portIndex) => fields.push({
+    control: repeater, portIndex, field: "repeater", value: String(port.repeater),
+    readValue: () => repeater.checked ? "1" : "0", label: "Repeater mode", maximum: 1,
+  }));
+  (cnet.ports || []).forEach((port, portIndex) => {
+    form.append(element("div", "network-config-heading", `Port ${portIndex + 1}`));
+    const add = (label, field, value, options = {}) => {
+      const editable = exact && value != null
+        && (!options.choices || options.choices.some(([raw]) => raw === value));
+      let control;
+      if (editable && options.choices) {
+        const group = element("label", "property-field");
+        group.append(element("span", "property-label", label));
+        control = document.createElement("select");
+        for (const [raw, text] of options.choices) {
+          const choice = element("option", "", text);choice.value = String(raw);control.append(choice);
+        }
+        control.value = String(value);group.append(control);form.append(group);
+      } else {
+        const displayed = options.choices?.find(([raw]) => raw === value)?.[1] ?? value;
+        control = property(form, label, displayed, !editable);
+        if (options.boolean) {
+          control.type = "checkbox";control.checked = value === 1;control.disabled = !editable;
+          control.readOnly = false;control.parentElement.classList.add("property-checkbox");
+        } else control.inputMode = "numeric";
+      }
+      control.setAttribute("aria-label", `Port ${portIndex + 1} ${label}`);
+      if (editable) {
+        control.dataset.cnetField = field;control.dataset.cnetPort = String(portIndex);
+        fields.push({control,portIndex,field,value:String(value),label,readValue:()=>options.boolean ? control.checked ? "1" : "0" : control.value,...options});
+      }
+    };
+    const rs232 = cnet.subType === 32769 || cnet.subType === 32770 && portIndex === 0;
+    add("Mode", "modeRaw", port.modeRaw, {choices:!exact ? [[0,"RS232C"],[1,"RS422"],[2,"RS485"]] : rs232 ? [[0,"RS232C"]] : [[1,"RS422"],[2,"RS485"]]});
+    add("Baud rate", "bps", port.bps, {choices:baudRates.map((rate,index)=>[index,String(rate)])});
+    add("Operation mode", "driverType", port.driverType, {choices:drivers});
+    add("Station", "stationNo", port.stationNo, {maximum:255});
+    add("Data bits", "dataBitRaw", port.dataBitRaw, {choices:[[0,"7 bits"],[1,"8 bits"]]});
+    add("Stop bits", "stopBitRaw", port.stopBitRaw, {choices:[[0,"1"],[1,"2"]]});
+    add("Parity", "parityRaw", port.parityRaw, {choices:[[0,"None"],[1,"Even"],[2,"Odd"]]});
+    add("Response wait (×100 ms)", "rxTimeout", port.rxTimeout, {maximum:50});
+    add("Delay (×10 ms)", "requestDelayTime", port.requestDelayTime, {maximum:255});
+    add("Inter-character wait (×10 ms)", "charTimeout", port.charTimeout, {maximum:255});
+    add("Accept parity errors", "parityErrorIgnore", port.parityErrorIgnore, {boolean:true,maximum:1});
+    add("Termination resistor", "terminatingResister", port.terminatingResister, {boolean:true,maximum:1});
+  });
+  if (!exact) {
+    form.append(element("p", "module-selection-note", "These Cnet settings have not yet been validated for editing."));
+    return;
+  }
+  const error = element("p", "module-selection-error", "");error.setAttribute("role", "alert");
+  const fieldAt = (port, field) => fields.find(item=>item.portIndex === port && item.field === field);
+  const read = (port, field) => Number(fieldAt(port,field)?.readValue());
+  const build = () => {
+    if (current.file.uri !== uri || current.file.bytes !== source) throw new Error("Networks changed. Reload the settings.");
+    return edit_xgwx_cnet_settings(source, {base:module.base,slot:module.slot,
+      changes:fields.filter(item=>item.readValue() !== item.value).map(item=>({
+        portIndex:item.portIndex,field:item.field,expectedValue:item.value,replacement:item.readValue(),
+      })),
+    });
+  };
+  const apply = button("Apply Cnet settings", "primary-button", ()=>applyEdit(build,`Edit Cnet settings at Base ${module.base}, Slot ${module.slot}`));
+  apply.textContent = "Apply Cnet settings";
+  const validate = () => {
+    try {
+      for (const item of fields) {
+        const {field,portIndex,choices,maximum,label,control}=item;
+        const driver = read(portIndex,"driverType"), mode = read(portIndex,"modeRaw");
+        control.disabled = field === "repeater" ? !repeaterKnown
+          : field === "modeRaw" && choices.length === 1
+          || field === "driverType" && repeater.checked
+          || field === "bps" && repeater.checked && portIndex === 0
+          || field === "dataBitRaw" && [3,4].includes(driver)
+          || field === "rxTimeout" && driver !== 0
+          || field === "requestDelayTime" && mode === 0
+          || field === "terminatingResister" && mode === 0;
+        const text = item.readValue();
+        if (!/^\d+$/.test(text)) throw new Error(`Port ${portIndex + 1} ${label} requires an unsigned integer.`);
+        const value = Number(text), limit = field === "stationNo" && ![3,4].includes(driver) ? 31 : maximum;
+        if (choices && !choices.some(([raw])=>raw === value)) throw new Error(`Choose a supported ${label}.`);
+        if (limit != null && value > limit) throw new Error(`Port ${portIndex + 1} ${label} must be from 0 to ${limit}.`);
+        if (field === "dataBitRaw" && (driver === 3 && value !== 0 || driver === 4 && value !== 1)) throw new Error("Modbus ASCII requires 7 data bits; Modbus RTU requires 8.");
+      }
+      error.textContent = "";apply.disabled = !fields.some(item=>item.readValue() !== item.value);
+    } catch (failure) {error.textContent = String(failure);apply.disabled = true;}
+  };
+  const normalize = item => {
+    if (item.field === "driverType") {
+      const driver = read(item.portIndex,"driverType"), bits = fieldAt(item.portIndex,"dataBitRaw");
+      if (bits && [3,4].includes(driver)) bits.control.value = driver === 3 ? "0" : "1";
+    }
+    if (repeater.checked) fieldAt(0,"bps").control.value = fieldAt(1,"bps").control.value;
+    validate();
+  };
+  const listened = new Set();
+  fields.forEach(item=>{
+    if (listened.has(item.control)) return;
+    listened.add(item.control);item.control.addEventListener("input",()=>normalize(item));
+  });
+  validate();form.append(error,apply);
+}
+
 
 function findNetworkConfiguration(configurations, module) {
   const candidates = configurations || [];
