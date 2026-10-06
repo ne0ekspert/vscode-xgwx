@@ -6,6 +6,10 @@ powered by the sibling `libxgwx` project during development.
 ## Current scope
 
 - Opens `*.xgwx` files directly as a VS Code custom editor.
+- Creates blank projects from **File → New File… → XGWX: New File**, or the
+  **XGWX: New File** command. Choose XGK ladder (XGK-CPUSN) or XGI IEC ladder
+  (XGI-CPUE), choose a new `.xgwx` path, and open `NewProgram` to start editing.
+  The native template defaults to project `NewProject` and PLC `LSPLC`.
 - Shows project counts and metadata.
 - Enables CPU choices only when the bundled writer accepts the retained hardware.
   Cross-family and compact-model conversions are disabled.
@@ -24,6 +28,19 @@ powered by the sibling `libxgwx` project during development.
   subtype, name, and default `Details`.
 - Decodes known XGI-D24A/B input-filter values from module `Details`.
 - Provides searchable module and variable tables.
+- Edits network names and module config names, aliases, and comments in the
+  sidebar text fields. Select a network module to edit
+  its FEnet IP address, subnet, gateway, DNS, and DHCP settings, grouped by
+  interface with DHCP checkboxes, including stored secondary interface fields. IPv4 octets and subnet masks are validated;
+  use **Apply FEnet settings** to apply the edited fields as one undoable change.
+  Station, driver type, receive/client timeout counts, and Glofa socket count
+  are editable too. Drivers use named choices; timeout labels show the stored
+  seconds or 10 ms unit and preserve it. Station bounds follow the existing
+  RAPIEnet mode (0–63 when disabled, otherwise 0–220); timeout counts use 2–255
+  and socket count uses 1–16. XG5000 reports that firmware V6.0 and later
+  ignores the socket count and uses 64 connections.
+  Edits participate in Save and Undo/Redo. Protocol identities and undecoded
+  communication settings remain read-only.
 - Edits program name, task, and comment metadata.
 - Identifies XGI CPU models and shows the stored language of each program.
   IEC `ProjectType 2` programs show a scrollable layout of captured row

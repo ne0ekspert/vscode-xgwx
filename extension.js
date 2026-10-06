@@ -3,6 +3,8 @@ const vscode = require("vscode");
 const picomatch = require("./media/vendor/picomatch");
 const { operandError, suggestionMatches } = require("./media/ladder-operand-rules.cjs");
 
+const { createNewWorkspace } = require("./new-workspace.cjs");
+
 const VIEW_TYPE = "xgwx.workspaceViewer";
 
 class XgwxDocument {
@@ -520,6 +522,7 @@ function activate(context) {
       webviewOptions: { retainContextWhenHidden: true },
     }),
     vscode.commands.registerCommand("xgwx.refreshViewer", () => provider.refreshActive()),
+    vscode.commands.registerCommand("xgwx.newFile", () => createNewWorkspace(context)),
   );
   void recoverStartupEditors();
 }

@@ -88,6 +88,7 @@ import init, {
   update_xgwx_module,
   update_xgwx_network,
   update_xgwx_network_module,
+  edit_xgwx_fenet_field,
   update_xgwx_program,
   update_xgwx_variable,
   xgk_module_catalog,
@@ -1081,12 +1082,13 @@ function programLanguage(body) {
 
 function iecEditableLastRow(body) {
   const rows = body.iecRows || [];
-  return rows.length ? Math.min(16383, Math.max(...rows.map((row) => row.rowIndex)) + 16) : -1;
+  return rows.length ? Math.min(16383, Math.max(...rows.map((row) => row.rowIndex)) + 16)
+    : body.iecCircuitGraph ? 0 : -1;
 }
 
 function iecOccupiedCell(body, rowIndex, rawX) {
   const rows = body.iecRows || [];
-  if (!rows.length || rowIndex < 0
+  if (rowIndex < 0
     || rowIndex > iecEditableLastRow(body)
     || rawX < 1 || rawX > 97 || (rawX - 1) % 3 !== 0) return true;
   if ((body.sourceStrings || []).some((item) => item.isIecComment
@@ -1120,7 +1122,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   section.append(element("p", "muted",
     "Single-click selects cells. Double-click or Enter opens the instruction editor. F6 draws a vertical connection beside the selected cell. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
   const rows = body.iecRows || [];
-  if (!rows.length) {
+  if (!rows.length && !body.iecCircuitGraph) {
     section.append(emptyState("No decoded IEC rows."));
     return section;
   }
@@ -5396,23 +5398,49 @@ async function applyEdit(update, label, beforeRender) {
 function renderNetworksEditor(canvas, inspector, summary) {
   const networks = summary.networks || [];
   canvas.append(editorHeader("Networks", `${networks.length} configured networks`));
-  const table = createTable(["Name", "Type", "Network type", "Modules", "Description"]);
+  canvas.append(element("p", "muted", "Select a network or module to edit its properties in the sidebar."));
+  const table = createTable(["Name", "Type", "Network type", "Modules"]);
+  const moduleHost = element("div", "network-module-table");
+  const renderModules = () => {
+    const network = networks[selectedNetworkIndex];
+    if (!network) { moduleHost.replaceChildren(); return; }
+    const modules = network.modules || [];
+    const moduleTable = createTable(["Module", "Base", "Slot", "Config name", "Alias", "Comment"]);
+    moduleTable.setAttribute("aria-label", "Network modules");
+    modules.forEach(module => {
+      const row = moduleTable.tBodies[0].insertRow();
+      row.tabIndex = 0;
+      row.dataset.networkModule = networkModuleKey(module);
+      appendCells(row, [module.name, module.base, module.slot, module.configName, module.alias, module.description]);
+      row.classList.toggle("selected", selectedNetworkModuleKey === networkModuleKey(module));
+      const select = () => {
+        selectedNetworkModuleKey = networkModuleKey(module);
+        table.querySelectorAll("tbody tr").forEach(item => item.classList.remove("selected"));
+        moduleTable.querySelectorAll("tbody tr").forEach(item => item.classList.toggle("selected", item === row));
+        renderNetworkInspector(inspector, networks, summary);
+      };
+      row.addEventListener("click", select);
+      row.addEventListener("keydown", event => { if (event.key === "Enter") select(); });
+    });
+    moduleHost.replaceChildren(element("h3", "", "Network modules"), tableContainer(moduleTable, modules.length));
+  };
   networks.forEach((network, index) => {
     const row = table.tBodies[0].insertRow();
     row.classList.toggle("selected", index === selectedNetworkIndex && !selectedNetworkModuleKey);
     row.tabIndex = 0;
-    appendCells(row, [network.name || `Network ${index + 1}`, network.typeName, network.networkType, network.modules?.length, network.description]);
+    appendCells(row, [network.name || `Network ${index + 1}`, network.typeName, network.networkType, network.modules?.length]);
     const select = () => {
       selectedNetworkIndex = index;
       selectedNetworkModuleKey = null;
-      renderWorkspace();
+      table.querySelectorAll("tbody tr").forEach(item => item.classList.toggle("selected", item === row));
+      renderModules();
+      renderNetworkInspector(inspector, networks, summary);
     };
     row.addEventListener("click", select);
-    row.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") select();
-    });
+    row.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") select(); });
   });
-  canvas.append(tableContainer(table, networks.length));
+  canvas.append(tableContainer(table, networks.length), moduleHost);
+  renderModules();
   renderNetworkInspector(inspector, networks, summary);
 }
 
@@ -5462,25 +5490,21 @@ function renderNetworkInspector(inspector, networks, summary) {
     appendNetworkConfigurationFields(form, module, summary);
   } else {
     const name = property(form, "Name", network.name, false);
-    const typeName = property(form, "Type", network.typeName, false);
-    const networkType = property(form, "Network type", network.networkType, false);
+    property(form, "Type", network.typeName, true);
+    property(form, "Network type", network.networkType, true);
     property(form, "Configured modules", network.modules?.length || 0, true);
     const apply = button("Apply network properties", "primary-button", async () => {
       await applyEdit(
         () => update_xgwx_network(current.file.bytes, selectedNetworkIndex, {
           name: name.value,
-          typeName: typeName.value,
-          networkType: networkType.value,
         }),
         `Edit network ${display(network.name, selectedNetworkIndex + 1)}`,
       );
     });
     apply.textContent = "Apply network properties";
-    const controls = [name, typeName, networkType];
+    const controls = [name];
     const validate = () => {
-      const changed = name.value !== (network.name || "")
-        || typeName.value !== (network.typeName || "")
-        || networkType.value !== (network.networkType || "");
+      const changed = name.value !== (network.name || "");
       apply.disabled = !changed;
     };
     controls.forEach((control) => control.addEventListener("input", validate));
@@ -5518,22 +5542,122 @@ function appendNetworkConfigurationFields(form, module, summary) {
   }
   if (fenet) {
     form.append(element("div", "network-config-heading", "FEnet configuration"));
-    [
-      ["Station", fenet.stationNo],
-      ["IP address", fenet.ipAddress],
-      ["Subnet mask", fenet.subnet],
-      ["Gateway", fenet.gateway],
-      ["DNS", fenet.dns],
-      ["IP address 2", fenet.ipAddress2],
-      ["Subnet mask 2", fenet.subnet2],
-      ["Gateway 2", fenet.gateway2],
-      ["DNS 2", fenet.dns2],
-      ["DHCP", fenet.dhcp],
-      ["Driver type", fenet.driverType],
-      ["Receive wait", fenet.rcvWaitTime],
-      ["Client wait", fenet.clientWaitTime],
-      ["Glofa sockets", fenet.glofaSocketCount],
-    ].forEach(([label, value]) => property(form, label, value, true));
+    const exact = fenet.base === module.base && fenet.slot === module.slot;
+    const source = current.file.bytes, uri = current.file.uri;
+    const fields = [];
+    const stationMaximum = (fenet.rapienetProtocol ?? 0) === 0 ? 63 : 220;
+    const addNumber = (label, field, minimum, maximum, unit) => {
+      const value = fenet[field];
+      const editable = exact && value != null && (unit == null || unit === 0 || unit === 1);
+      const suffix = unit == null ? "" : unit === 1 ? " (×10 ms)" : unit === 0 ? " (s)" : ` (unit ${unit})`;
+      const control = property(form, `${label}${suffix}`, value, !editable);
+      if (editable) {
+        control.inputMode = "numeric";
+        control.title = `${minimum}–${maximum}`;
+        control.dataset.networkField = field;
+        control.setAttribute("aria-label", label);
+        fields.push({ control, field, value: String(value), readValue: () => control.value, minimum, maximum, label });
+      }
+    };
+    addNumber("Station", "stationNo", 0, stationMaximum);
+    const driverChoices = [[2, "XGT server"], [5, "Modbus server"], [7, "Smart server"]];
+    const driverKnown = driverChoices.some(([value]) => value === fenet.driverType);
+    if (exact && driverKnown) {
+      const group = element("label", "property-field");
+      group.append(element("span", "property-label", "Driver type"));
+      const control = document.createElement("select");
+      control.setAttribute("aria-label", "Driver type");
+      control.dataset.networkField = "driverType";
+      for (const [value, label] of driverChoices) {
+        const option = element("option", "", label);
+        option.value = String(value);
+        control.append(option);
+      }
+      control.value = String(fenet.driverType);
+      group.append(control);
+      form.append(group);
+      fields.push({ control, field: "driverType", value: String(fenet.driverType), readValue: () => control.value, allowedValues: [2, 5, 7], label: "Driver type" });
+    } else property(form, "Driver type", fenet.driverType, true);
+    addNumber("Receive wait", "rcvWaitTime", 2, 255, fenet.rcvWaitTimeUnit ?? 0);
+    addNumber("Client wait", "clientWaitTime", 2, 255, fenet.clientWaitTimeUnit ?? 0);
+    addNumber("Glofa sockets", "glofaSocketCount", 1, 16);
+    for (const interfaceNumber of [1, 2]) {
+      form.append(element("div", "network-config-heading", `Interface ${interfaceNumber}`));
+      const suffix = interfaceNumber === 1 ? "" : "2";
+      for (const [label, name] of [["IP address", "ipAddress"], ["Subnet mask", "subnet"],
+        ["Gateway", "gateway"], ["DNS", "dns"], ["DHCP", "dhcp"]]) {
+        const field = `${name}${suffix}`;
+        const raw = fenet[field];
+        const value = typeof raw === "object" && raw ? raw.address : raw;
+        const editable = exact && value != null;
+        const control = property(form, label, value, !editable);
+        if (name === "dhcp") {
+          control.type = "checkbox";
+          control.checked = Number(value) === 1;
+          control.disabled = !editable;
+          control.readOnly = false;
+          control.parentElement.classList.add("property-checkbox");
+        }
+        if (editable) {
+          control.dataset.networkField = field;
+          control.setAttribute("aria-label", `Interface ${interfaceNumber} ${label}`);
+          const readValue = () => name === "dhcp" ? (control.checked ? "1" : "0") : control.value;
+          fields.push({ control, field, value: String(value), readValue });
+        }
+      }
+    }
+    if (fields.length) {
+      const error = element("p", "module-selection-error", "");
+      error.setAttribute("role", "alert");
+      const build = () => {
+        if (current.file.uri !== uri || current.file.bytes !== source) throw new Error("Networks changed. Reload the settings.");
+        let bytes = source;
+        for (const { field, value, readValue } of fields) {
+          const replacement = readValue();
+          if (replacement !== value) bytes = edit_xgwx_fenet_field(bytes, {
+            base: module.base, slot: module.slot, field, expectedValue: value, replacement,
+          });
+        }
+        return bytes;
+      };
+      const apply = button("Apply FEnet settings", "primary-button", () => applyEdit(build,
+        `Edit FEnet settings at Base ${module.base}, Slot ${module.slot}`));
+      apply.textContent = "Apply FEnet settings";
+      const validate = () => {
+        try {
+          for (const { field, readValue, minimum, maximum, allowedValues, label } of fields) {
+            const text = readValue();
+            if (allowedValues) {
+              if (!allowedValues.includes(Number(text))) throw new Error("Choose a supported driver type.");
+            } else if (minimum != null) {
+              if (!/^\d+$/.test(text) || Number(text) < minimum || Number(text) > maximum) {
+                throw new Error(`${label} must be an integer from ${minimum} to ${maximum}.`);
+              }
+            } else if (field.startsWith("dhcp")) {
+              if (!/^[01]$/.test(text)) throw new Error("DHCP must be 0 (disabled) or 1 (enabled).");
+            } else {
+              const octets = text.split(".").map(Number);
+              if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(text) || octets.some(value => value > 255)) {
+                throw new Error("Enter four decimal IPv4 octets from 0 to 255.");
+              }
+              if (field.startsWith("subnet")) {
+                const mask = octets.reduce((value, octet) => ((value << 8) | octet) >>> 0, 0);
+                const inverse = (~mask) >>> 0;
+                if ((inverse & ((inverse + 1) >>> 0)) !== 0) throw new Error("Subnet mask must contain contiguous leading ones.");
+              }
+            }
+          }
+          error.textContent = "";
+          apply.disabled = !fields.some(({ value, readValue }) => readValue() !== value);
+        } catch (failure) {
+          error.textContent = String(failure);
+          apply.disabled = true;
+        }
+      };
+      fields.forEach(({ control }) => control.addEventListener("input", validate));
+      validate();
+      form.append(error, apply);
+    }
   }
 
   const cnet = findNetworkConfiguration(summary.cnet, module);

@@ -558,6 +558,14 @@ button.tree-row:hover,
   height: 28px;
 }
 
+.property-checkbox input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  margin: 5px 0 0;
+  accent-color: var(--vscode-focusBorder, #007fd4);
+}
+
 .property-field input[readonly],
 .property-field textarea[readonly] {
   cursor: default;
