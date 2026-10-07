@@ -1,3 +1,4 @@
+import { moveIecCursor, iecCursorRecord } from "./iec-navigation.js";
 import { validatedEditCache } from "./validated-edit-cache.js";
 import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
 import { isLadderDeleteKey } from "./ladder-delete.js";
@@ -1167,6 +1168,9 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const rowByIndex = new Map(rows.map((row) => [row.rowIndex, row]));
   const viewport = element("div", "iec-layout-viewport");
   const board = element("div", "iec-layout-board");
+  const navigationMarkers = new Map();
+  let keyboardCursor = null;
+  let keyboardTarget = null;
   board.style.width = `${x(100) + 32}px`;
   board.style.height = `${y(lastEditableRow) + pitch}px`;
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1447,6 +1451,8 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     control.style.left = `${visualX(site.rowIndex, position)}px`;
     control.style.top = `${y(site.rowIndex)}px`;
     control.dataset.wireOffset = String(site.wireOffset);
+    control.dataset.rowIndex = String(site.rowIndex);
+    control.dataset.rawX = String(position);
     const openInsertion = () => showIecBlankInput(body, { rowIndex: site.rowIndex,
       rawX: position }, `.iec-layout-insert[data-wire-offset="${site.wireOffset}"]`);
     control.addEventListener("dblclick", (event) => { event.preventDefault(); void openInsertion(); });
@@ -1552,6 +1558,9 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       + (isOperand ? " · Double-click or Enter to edit value" + (link?.isOutput && linkedPin?.name === "OUT" ? " · Delete or Backspace removes assignment" : "")
         : ["contact", "coil", "function"].includes(kind) ? " · Double-click or Enter to edit instruction" : "");
     marker.dataset.iecOffset = String(item.offset);
+    marker.dataset.rowIndex = String(item.iecRowIndex);
+    marker.dataset.rawX = String(item.iecPosition?.[0] ?? 1);
+    navigationMarkers.set(item.iecRecordOffset, marker);
     marker.classList.toggle("inspected", selectedIecElement?.programIndex === selectedProgramIndex
       && selectedIecElement.offset === item.offset);
     marker.setAttribute("aria-label", `${description}: ${item.value}, L${item.iecRowIndex}`);
@@ -1631,6 +1640,8 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
           && area.endRowIndex >= port.rowIndex && area.startX <= port.rawX && area.endX >= port.rawX
           && area.recordOffset !== outputLink?.recordOffset);
       const pin = element(wireable || emptyOutput ? "button" : "span", `iec-layout-pin ${port.direction}${wireable || emptyOutput ? " wireable" : ""}`);
+      pin.dataset.rowIndex = String(port.rowIndex);
+      pin.dataset.rawX = String(port.rawX);
       if (emptyOutput) {
         pin.type = "button";
         pin.setAttribute("aria-label", `Assign ${block.name}.${port.name} at L${port.rowIndex}`);
@@ -1689,6 +1700,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const selectBlankPosition = (position) => {
     if (iecOccupiedCell(body, position.rowIndex, position.rawX)) return;
     growingCanvas.ensureRow(position.rowIndex);
+    board.querySelectorAll(".iec-layout-marker.selected").forEach(node => node.classList.remove("selected"));
     selectRow(position.rowIndex);
     selectBlank(position);
     showBlank(position, true);
@@ -1706,16 +1718,34 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
         rawX: Number(blankIndicator.dataset.rawX) });
       return;
     }
-    const step = {
-      ArrowLeft: [0, -3], ArrowRight: [0, 3],
-      ArrowUp: [-1, 0], ArrowDown: [1, 0],
-    }[event.key];
-    if (!step) return;
-    event.preventDefault();
-    selectBlankPosition({
-      rowIndex: Number(blankIndicator.dataset.rowIndex) + step[0],
-      rawX: Number(blankIndicator.dataset.rawX) + step[1],
-    });
+  });
+  // Keep the logical row while a multi-row block retains DOM focus. Moving
+  // down through its body must not restart from the block's first row.
+  board.addEventListener("pointerdown", () => { keyboardCursor = keyboardTarget = null; }, true);
+  board.addEventListener("keydown", event => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.target.closest("input, textarea, [contenteditable=true]")) return;
+    const target = event.target.closest("[data-row-index][data-raw-x]");
+    if (!target) return;
+    const origin = keyboardTarget === target && keyboardCursor ? keyboardCursor
+      : {rowIndex:Number(target.dataset.rowIndex),rawX:Number(target.dataset.rawX)};
+    const position = moveIecCursor(origin, event.key);
+    if (!position) return;
+    event.preventDefault(); event.stopPropagation();
+    growingCanvas.ensureRow(position.rowIndex);
+    const marker = [...navigationMarkers.values()].find(node =>
+      Number(node.dataset.rowIndex) === position.rowIndex && Number(node.dataset.rawX) === position.rawX)
+      || navigationMarkers.get(iecCursorRecord(body, position));
+    if (marker) {
+      blankIndicator.hidden = true;
+      marker.click();
+      marker.focus({preventScroll:true});
+      marker.scrollIntoView({block:"nearest",inline:"nearest"});
+      keyboardTarget = marker;
+    } else {
+      selectBlankPosition(position);
+      keyboardTarget = blankIndicator;
+    }
+    keyboardCursor = position;
   });
   const dragBlankCells = new Map();
   const clearDragBlankCells = () => {
@@ -4563,6 +4593,13 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
       if (!ladderCellAtPosition(ladder,target)) void showXgkBlankInput(ladder,target);
     });
     control.addEventListener("keydown",async event => {
+      if (!event.ctrlKey && !event.metaKey && !event.altKey
+        && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+        event.preventDefault(); event.stopPropagation();
+        if (event.key === "ArrowDown" && position.rawY === rowValues.at(-1)) growingCanvas?.ensureRow(layoutRows.length);
+        focusCursor(moveLadderCursor(layoutRows, {type:"rung",...position}, event.key, LD_COLUMN_COUNT), event.shiftKey);
+        return;
+      }
       if (!isLadderDeleteKey(event)) return;
       event.preventDefault(); event.stopPropagation();
       await applyEdit(remove,`Delete ${label}`,() => {selectedLadderAnchor = selectedLadderFocus = position;});
