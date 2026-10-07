@@ -68,12 +68,13 @@ export function iecPinRule(pin) {
     : IEC_TYPES.filter((_, index) => pin.dataTypeMask & (1 << index)),
     allowsConstant: pin.direction !== "output", requiresWritable: pin.direction === "output" };
 }
-export function scalarIecCommands(wiredComparison = false) {
+export function scalarIecCommands(wiredComparison = false, optionalOutput = false) {
   return ["MOVE", "ADD", "SUB", "MUL", "DIV", "EQ", "GT", "GE", "LT", "LE"].map(mnemonic => {
     const comparison = ["EQ", "GT", "GE", "LT", "LE"].includes(mnemonic);
     const count = mnemonic === "MOVE" || (comparison && wiredComparison) ? 2 : 3;
     const mask = mnemonic === "MOVE" || comparison ? 0x000fffff : 0x00007fe0;
-    return { mnemonic, category: "function", operandCount: count, operandRules:
+    return { mnemonic, category: "function", operandCount: count,
+      ...(comparison && optionalOutput && !wiredComparison ? {minOperandCount: 2} : {}), operandRules:
       Array.from({length: count}, (_, index) => {
         const output = index === count-1 && !(comparison && wiredComparison);
         return iecPinRule({ name: output ? "Destination" : `Source ${index+1}`,

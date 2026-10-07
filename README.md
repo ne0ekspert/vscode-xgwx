@@ -1385,6 +1385,26 @@ header were verified in native XG5000 at physical rows 256 and 65534 with zero
 Check Program errors or warnings and byte-identical program payloads after
 Save As. IEC retains its separately validated coordinate range.
 
+### Delete ladder selections
+
+Select a horizontal or vertical wire and press Delete (or Backspace) to remove
+that wire. The same keys delete selected contacts, coils, comparisons and
+application/function blocks. IEC rectangular selections delete their supported
+items in one undoable edit; if an item has an unsupported layout, the entire
+edit is rejected. Lone IEC contacts/coils can also be removed without deleting
+the physical row. Wire deletion keeps shared rows and unrelated elements and
+can leave a circuit disconnected. VS Code Undo restores the edit.
+
+IEC scalar BOOL output pins support horizontal wires. Select ENO or a comparison
+OUT and press F5 or Enter, or double-click the pin; F5 at the following blank
+cell extends the wire. Arithmetic and conversion OUT fields retain their numeric
+destination. Comparisons accept two sources and an optional BOOL destination;
+wiring OUT replaces that assignment. Unsupported block layouts remain guarded.
+
+Select an OUT value and press Delete/Backspace to remove its assignment, or clear
+it in the single-value editor. Double-click or Enter on the empty OUT pin opens
+its destination input. F5 still wires BOOL outputs; numeric OUT needs a variable.
+
 ### Ladder edit performance
 
 The browser reuses decoded ladder summaries for programs whose complete XML and

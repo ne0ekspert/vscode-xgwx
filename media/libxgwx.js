@@ -1,6 +1,31 @@
 /* @ts-self-types="./libxgwx.d.ts" */
 
 /**
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @param {number} ordinal
+ * @param {string} value
+ * @returns {Uint8Array}
+ */
+export function assign_xgwx_iec_ld_function_output_operand(bytes, program_index, block_offset, expected_name, ordinal, value) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(value, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.assign_xgwx_iec_ld_function_output_operand(ptr0, len0, program_index, block_offset, ptr1, len1, ordinal, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
  * Probe whether this container can be rewritten without returning probe bytes.
  * @param {Uint8Array} bytes
  * @returns {boolean}
@@ -379,6 +404,28 @@ export function delete_xgwx_iec_ld_function_cell(bytes, program_index, block_off
 }
 
 /**
+ * Replace a captured IEC LD function input/output expression.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_function_output_operand(bytes, program_index, offset, expected) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_function_output_operand(ptr0, len0, program_index, offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Remove one complete decoded IEC LD network, leaving its rows blank.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -526,6 +573,47 @@ export function delete_xgwx_iec_ld_horizontal_wire(bytes, program_index, wire_of
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {number} start_x
+ * @param {number} end_x
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_horizontal_wire_record(bytes, program_index, offset, start_x, end_x) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_horizontal_wire_record(ptr0, len0, program_index, offset, start_x, end_x);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} offset
+ * @param {string} expected
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_iec_ld_isolated_element(bytes, program_index, offset, expected) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_iec_ld_isolated_element(ptr0, len0, program_index, offset, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
 }
 
 /**
@@ -817,6 +905,26 @@ export function delete_xgwx_ladder_comparison(bytes, program_index, offset, expe
 }
 
 /**
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} raw_y
+ * @param {number} start_x
+ * @param {number} end_x
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_ladder_horizontal_wire(bytes, program_index, raw_y, start_x, end_x) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_ladder_horizontal_wire(ptr0, len0, program_index, raw_y, start_x, end_x);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Delete a verified XGK application from an unbranched output row.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -858,6 +966,26 @@ export function delete_xgwx_ladder_rung_comment(bytes, program_index, raw_y, exp
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} raw_x
+ * @param {number} start_y
+ * @param {number} end_y
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_ladder_vertical_wire(bytes, program_index, raw_x, start_y, end_y) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_ladder_vertical_wire(ptr0, len0, program_index, raw_x, start_y, end_y);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**
@@ -1235,6 +1363,31 @@ export function insert_xgwx_iec_ld_function_cell(bytes, program_index, insertion
     const ptr2 = passStringToWasm0(instance_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
     const len2 = WASM_VECTOR_LEN;
     const ret = wasm.insert_xgwx_iec_ld_function_cell(ptr0, len0, program_index, insertion_offset, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {number} block_offset
+ * @param {string} expected_name
+ * @param {string} pin_name
+ * @param {number} start_x
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_iec_ld_function_output_wire(bytes, program_index, block_offset, expected_name, pin_name, start_x) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(pin_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_iec_ld_function_output_wire(ptr0, len0, program_index, block_offset, ptr1, len1, ptr2, len2, start_x);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }

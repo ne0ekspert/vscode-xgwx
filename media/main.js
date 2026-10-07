@@ -1,4 +1,6 @@
 import { validatedEditCache } from "./validated-edit-cache.js";
+import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
+import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
@@ -45,11 +47,18 @@ import init, {
   split_xgwx_iec_ld_group,
   edit_xgwx_ladder_cell,
   edit_xgwx_ladder_branch,
+  delete_xgwx_ladder_horizontal_wire,
+  delete_xgwx_ladder_vertical_wire,
+  delete_xgwx_iec_ld_horizontal_wire_record,
+  delete_xgwx_iec_ld_isolated_element,
+  delete_xgwx_iec_ld_function_output_operand,
+  assign_xgwx_iec_ld_function_output_operand,
   edit_xgwx_ladder_comment,
   insert_xgwx_iec_ld_contact,
   insert_xgwx_iec_ld_comment,
   insert_xgwx_iec_ld_short_wire_contact,
   insert_xgwx_iec_ld_leading_contact,
+  insert_xgwx_iec_ld_function_output_wire,
   insert_xgwx_iec_ld_function_cell,
   insert_xgwx_iec_ld_terminal_move,
   insert_xgwx_iec_ld_terminal_timer,
@@ -1032,6 +1041,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
     const selectPosition = (position, extend = false) => {
       const rowIndex = xgkCanvasRowValues(ladder).indexOf(position.rawY);
       if (rowIndex < 0) return;
+      canvas.querySelectorAll(".ld-wire-target.selected").forEach(node => node.classList.remove("selected"));
       const normalized = { rawY: position.rawY, rowIndex, column: position.column };
       selectedLadderComment = null;
       if (!extend || !selectedLadderAnchor) selectedLadderAnchor = normalized;
@@ -1138,7 +1148,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const section = element("section", "iec-layout");
   section.append(element("h3", "", "IEC ladder layout"));
   section.append(element("p", "muted",
-    "Single-click selects cells. Double-click or Enter opens the instruction editor. F6 draws a vertical connection beside the selected cell. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
+    "Single-click selects cells. Double-click or Enter opens the instruction editor. Select a BOOL output pin and press F5 or Enter to draw a horizontal wire; F5 extends it from a blank cell. F6 draws a vertical connection beside the selected cell. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
   const rows = body.iecRows || [];
   if (!rows.length && !body.iecCircuitGraph) {
     section.append(emptyState("No decoded IEC rows."));
@@ -1223,6 +1233,31 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       board.append(label);
     }
   };
+  const drawOutputWire = (block, port, startX = port.rawX) => {
+    const position = {rowIndex:port.rowIndex,rawX:startX+3};
+    return applyEdit(() => insert_xgwx_iec_ld_function_output_wire(current.file.bytes,
+      selectedProgramIndex,block.recordOffset,block.name,port.name,startX),
+    `Wire ${block.name}.${port.name} · L${port.rowIndex}`, () => {
+      selectedIecElement = selectedIecInsertion = selectedIecRow = null;
+      selectedIecBlank = {programIndex:selectedProgramIndex,...position};
+    }).then(edited => {
+      if (edited) requestAnimationFrame(() => {
+        const cell = document.querySelector(`.iec-layout-marker[data-row-index="${position.rowIndex}"][data-raw-x="${position.rawX}"]`)
+          || document.querySelector(".iec-layout-blank-cell");
+        cell?.focus({preventScroll:true});
+      });
+    });
+  };
+  board.addEventListener("keydown", event => {
+    if (event.key !== "F5" || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    const cell = event.target.closest(".iec-layout-blank-cell");
+    if (!cell) return;
+    event.preventDefault(); event.stopPropagation();
+    const position = {rowIndex:Number(cell.dataset.rowIndex),rawX:Number(cell.dataset.rawX)};
+    const output = iecOutputWireAt(body,position);
+    if (!output) {status.textContent = "Select a BOOL output pin or the end of its horizontal wire. Numeric OUT needs a destination variable.";return;}
+    void drawOutputWire(output.block,output.pin,position.rawX);
+  });
   board.addEventListener("keydown", event => {
     if (event.key !== "F6" || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
     const cell = event.target.closest("[data-row-index][data-raw-x]");
@@ -1286,6 +1321,26 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
         source.programIndex, source.groupIndex, source.firstRow,
         selectedProgramIndex, rowIndex), label);
   });
+  const deleteTargets = new Map();
+  board.addEventListener("keydown", async event => {
+    if (!isLadderDeleteKey(event) || event.target.closest("input, textarea, [contenteditable=true]")) return;
+    const selected = [...deleteTargets.keys()].filter(node => node.classList.contains("selected"));
+    const focused = event.target.closest(".iec-layout-marker");
+    const nodes = selected.length ? selected : deleteTargets.has(focused) ? [focused] : [];
+    if (!nodes.length) return;
+    event.preventDefault(); event.stopPropagation();
+    const targets = [...new Set(nodes.map(node => deleteTargets.get(node)))].sort((a,b) => b.offset - a.offset);
+    const position = targets.at(-1).position;
+    const deletionFocus = targets.at(-1).focusSelector || ".iec-layout-blank-cell";
+    await applyEdit(() => targets.reduce((bytes,target,index) => {
+      const updated = index === 0 ? body : parse_xgwx(bytes).ladder.find(program => program.programIndex === selectedProgramIndex);
+      return target.remove(bytes,updated);
+    },current.file.bytes), `Delete ${targets.length} IEC ladder item${targets.length === 1 ? "" : "s"}`, () => {
+      selectedIecElement = selectedIecInsertion = selectedIecRow = null;
+      selectedIecBlank = {programIndex:selectedProgramIndex,...position};
+    });
+    requestAnimationFrame(() => document.querySelector(deletionFocus)?.focus({preventScroll:true}));
+  }, true);
   const wireKinds = new Map((body.iecRecords || []).map(record => [record.offset, record.kind]));
   for (const wire of body.iecGeometry?.horizontal || []) {
     // LongWire stores the last occupied cell anchor; ShortWire geometry already
@@ -1298,6 +1353,27 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     line(x(wire.x), y(wire.startRowIndex), x(wire.x), y(wire.endRowIndex), "branch");
   }
   board.append(svg);
+  for (const wire of body.iecGeometry?.horizontal || []) {
+    const longWire = wireKinds.get(wire.offset) === "Long wire" || wire.startX === wire.endX;
+    const left = visualX(wire.rowIndex,wire.startX);
+    const right = visualX(wire.rowIndex,wire.endX + (longWire ? 3 : 0));
+    const control = button(`Horizontal IEC wire L${wire.rowIndex} x${wire.startX}–${wire.endX}`, "iec-layout-marker horizontal-wire", () => {
+      board.querySelectorAll(".iec-layout-marker.selected, .iec-layout-marker.inspected").forEach(node => node.classList.remove("selected","inspected"));
+      selectRow(wire.rowIndex); control.classList.add("selected");
+      status.textContent = `Horizontal wire L${wire.rowIndex} selected. Delete removes the wire.`;
+    });
+    control.style.left = `${left}px`; control.style.top = `${y(wire.rowIndex)-5}px`;
+    control.style.width = `${Math.max(10,right-left)}px`;
+    control.addEventListener("dblclick",event => {
+      event.preventDefault(); event.stopPropagation();
+      const position = cellAtPoint(event.clientX,event.clientY);
+      selectBlankPosition(position); void showIecBlankInput(body,position);
+    });
+    control.dataset.groupIndex = String(wire.groupIndex);
+    deleteTargets.set(control,{offset:wire.offset,position:{rowIndex:wire.rowIndex,rawX:wire.startX},remove:bytes =>
+      delete_xgwx_iec_ld_horizontal_wire_record(bytes,selectedProgramIndex,wire.offset,wire.startX,wire.endX)});
+    board.append(control);
+  }
   for (const wire of body.iecGeometry?.vertical || []) {
     const control = button("", "iec-layout-marker vertical-wire", () => {
       board.querySelectorAll(".iec-layout-marker.selected").forEach(marker => marker.classList.remove("selected"));
@@ -1305,6 +1381,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       selectRow(wire.startRowIndex);
       status.textContent = `Vertical wire L${wire.startRowIndex}–L${wire.endRowIndex} x${wire.x} selected. Delete removes the wire and keeps shared rows.`;
     });
+    deleteTargets.set(control,{offset:wire.startOffset,position:{rowIndex:wire.startRowIndex,rawX:wire.x+1},remove:(bytes,updated) => deleteIecVerticalWireBytes(updated,wire,bytes)});
     control.style.left = `${x(wire.x) - 6}px`;
     control.style.top = `${y(wire.startRowIndex) + 4}px`;
     control.style.height = `${y(wire.endRowIndex) - y(wire.startRowIndex) - 8}px`;
@@ -1312,7 +1389,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     control.setAttribute("aria-label", `Vertical IEC wire L${wire.startRowIndex}–L${wire.endRowIndex} x${wire.x}`);
     control.title = "Select vertical wire; Delete or Backspace removes it while retaining shared rows";
     control.addEventListener("keydown", event => {
-      if (!["Delete", "Backspace"].includes(event.key) || event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (!isLadderDeleteKey(event)) return;
       event.preventDefault(); event.stopPropagation();
       void applyEdit(() => deleteIecVerticalWireBytes(body, wire),
       `Delete vertical IEC wire L${wire.startRowIndex}–L${wire.endRowIndex} x${wire.x}`).then(edited => {
@@ -1425,33 +1502,20 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
         return;
       }
       selectRow(item.iecRowIndex);
-      if (kind === "contact" || kind === "coil" || kind === "comment") selectElement(item, marker);
+      board.querySelectorAll(".iec-layout-marker.selected").forEach(node => node.classList.remove("selected"));
+      if (["contact","coil","function","operand"].includes(kind)) marker.classList.add("selected");
+      if (["contact","coil","comment","function"].includes(kind)) selectElement(item, marker);
       if (kind === "unknown") focusText(item);
     });
+    if (["contact","coil","function"].includes(kind)) {
+      deleteTargets.set(marker,{offset:item.iecRecordOffset,position:{rowIndex:item.iecRowIndex,rawX:item.iecPosition?.[0] ?? 1},remove:(bytes,updated) => deleteIecElementBytes(bytes,item,updated)});
+    }
     if (["contact", "coil", "function", "operand"].includes(kind)) {
       marker.addEventListener("dblclick", (event) => {
         event.preventDefault();
         void showIecElementInput(item, body);
       });
       marker.addEventListener("keydown", (event) => {
-        if (kind === "contact" && ["Delete", "Backspace"].includes(event.key)
-            && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) {
-          event.preventDefault(); event.stopPropagation();
-          void deleteIecContact(item, body);
-          return;
-        }
-        if (kind === "coil" && ["Delete", "Backspace"].includes(event.key)
-            && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) {
-          event.preventDefault(); event.stopPropagation();
-          void deleteIecCoil(item);
-          return;
-        }
-        if (kind === "function" && ["Delete", "Backspace"].includes(event.key)
-            && !event.repeat && !event.altKey && !event.ctrlKey && !event.metaKey) {
-          event.preventDefault(); event.stopPropagation();
-          void deleteIecFunction(item, body);
-          return;
-        }
         if (event.key !== "Enter" || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
         event.preventDefault();
         event.stopPropagation();
@@ -1476,10 +1540,17 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     const link = isOperand && linkByRecord.get(item.iecRecordOffset);
     const owner = link && blockByOffset.get(link.targetRecordOffset);
     const linkedPin = owner && functionPins(owner).find((pin) => pin.referenceOrdinal === link.ordinal);
+    if (isOperand && link?.isOutput && linkedPin?.name === "OUT") {
+      deleteTargets.set(marker,{offset:item.iecRecordOffset,
+        position:{rowIndex:item.iecRowIndex,rawX:item.iecPosition[0]},
+        focusSelector:`[aria-label="Assign ${owner.name}.${linkedPin.name} at L${item.iecRowIndex}"]`,
+        remove:bytes => delete_xgwx_iec_ld_function_output_operand(bytes,selectedProgramIndex,item.offset,item.value)});
+    }
     const description = owner ? `${owner.name}.${linkedPin?.name || `pin ${link.ordinal}`} · ${linkedPin?.direction || (link.isOutput ? "output" : "input")} · ${functionPinType(linkedPin)}`
       : item.iecElementKind || (isComment ? "Comment" : isFunction ? "Function block" : "Function operand");
     marker.title = `${description} · L${item.iecRowIndex} · byte ${item.offset}`
-      + (["contact", "coil", "function", "operand"].includes(kind) ? " · Double-click or Enter to edit instruction" : "");
+      + (isOperand ? " · Double-click or Enter to edit value" + (link?.isOutput && linkedPin?.name === "OUT" ? " · Delete or Backspace removes assignment" : "")
+        : ["contact", "coil", "function"].includes(kind) ? " · Double-click or Enter to edit instruction" : "");
     marker.dataset.iecOffset = String(item.offset);
     marker.classList.toggle("inspected", selectedIecElement?.programIndex === selectedProgramIndex
       && selectedIecElement.offset === item.offset);
@@ -1552,15 +1623,52 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   for (const block of body.iecFunctions || []) {
     const blockOffset = gapOffset(block.rowIndex, block.rawX);
     for (const port of functionPins(block)) {
-      const pin = element("span", `iec-layout-pin ${port.direction}`);
+      const wireable = canWireIecOutput(block,port);
+      const outputLink = (body.iecFunctionOperandLinks || []).find(link => link.targetRecordOffset === block.recordOffset && link.ordinal === port.referenceOrdinal);
+      const emptyOutput = port.direction === "output" && port.name === "OUT" && port.referenceOrdinal != null
+        && (!outputLink || !(body.sourceStrings || []).some(item => item.isIecFunctionOperand && item.iecRecordOffset === outputLink.recordOffset && item.value))
+        && !(body.iecCircuitGraph?.occupiedAreas || []).some(area => area.startRowIndex <= port.rowIndex
+          && area.endRowIndex >= port.rowIndex && area.startX <= port.rawX && area.endX >= port.rawX
+          && area.recordOffset !== outputLink?.recordOffset);
+      const pin = element(wireable || emptyOutput ? "button" : "span", `iec-layout-pin ${port.direction}${wireable || emptyOutput ? " wireable" : ""}`);
+      if (emptyOutput) {
+        pin.type = "button";
+        pin.setAttribute("aria-label", `Assign ${block.name}.${port.name} at L${port.rowIndex}`);
+        pin.addEventListener("click", () => { selectRow(port.rowIndex);status.textContent = `${block.name}.${port.name} has no assignment. Double-click or Enter to assign a variable.${wireable ? " F5 draws a BOOL wire." : ""}`; });
+        pin.addEventListener("dblclick", event => {event.preventDefault();event.stopPropagation();void showIecEmptyOutputInput(block,port);});
+        pin.addEventListener("keydown", event => {
+          if (event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+          if (event.key === "F5" && !wireable) {
+            event.preventDefault();event.stopPropagation();status.textContent = "Numeric OUT needs a destination variable; wire from ENO instead.";return;
+          }
+          if (event.key !== "Enter") return;
+          event.preventDefault();event.stopPropagation();void showIecEmptyOutputInput(block,port);
+        });
+      }
+      if (wireable) {
+        pin.type = "button";
+        if (!emptyOutput) pin.setAttribute("aria-label", `Wire ${block.name}.${port.name} at L${port.rowIndex}`);
+        if (!emptyOutput) pin.addEventListener("click", () => {
+          selectRow(port.rowIndex);
+          status.textContent = `${block.name}.${port.name} · BOOL. F5, Enter, or double-click draws a wire.${port.name === "OUT" ? " Its output assignment will be replaced by the wire." : " Numeric OUT keeps its destination."}`;
+        });
+        if (!emptyOutput) pin.addEventListener("dblclick", event => {event.preventDefault();event.stopPropagation();void drawOutputWire(block,port);});
+        pin.addEventListener("keydown", event => {
+          if (!(emptyOutput ? ["F5"] : ["F5","Enter"]).includes(event.key) || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+          event.preventDefault();event.stopPropagation();void drawOutputWire(block,port);
+        });
+      }
       pin.style.left = `${x(port.rawX - 1 - blockOffset) - 4}px`;
       pin.style.top = `${y(port.rowIndex) - 4}px`;
       pin.title = `${block.name}.${port.name} · ${port.direction} · ${functionPinType(port)} · L${port.rowIndex}${port.referenceOrdinal == null ? "" : ` · reference ${port.referenceOrdinal}`}`;
-      pin.setAttribute("aria-hidden", "true");
+      if (!wireable && !emptyOutput) pin.setAttribute("aria-hidden", "true");
       const label = element("span", `iec-layout-pin-label ${port.direction}`, port.name);
       label.style.left = `${x(port.rawX - 1 - blockOffset) + (port.direction === "input" ? 6 : -6)}px`;
       label.style.top = `${y(port.rowIndex) - 8}px`;
       label.title = pin.title;
+      if (emptyOutput) pin.title += " · Double-click or Enter to assign a variable" + (wireable ? " · F5 to draw a BOOL wire" : "");
+      else if (wireable) pin.title += " · F5, Enter, or double-click to draw a wire";
+      else if (port.direction === "output") pin.title += " · Data output: assign a destination variable";
       board.append(pin, label);
     }
   }
@@ -1625,7 +1733,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     return { rowIndex, rawX };
   };
   board.addEventListener("dblclick", (event) => {
-    if (event.target.closest(".iec-layout-marker, .iec-layout-insert, .iec-layout-row")) return;
+    if (event.target.closest(".iec-layout-marker, .iec-layout-insert, .iec-layout-row, .iec-layout-pin")) return;
     event.preventDefault();
     const position = cellAtPoint(event.clientX, event.clientY);
     if (iecOccupiedCell(body, position.rowIndex, position.rawX)) return;
@@ -1718,7 +1826,7 @@ function instructionSuggestions(iec) {
     .filter(symbol => symbol.value);
 }
 
-async function requestLadderInstruction({ choices, value = "", title, mode, iec, focusSelector, build, afterInsert }) {
+async function requestLadderInstruction({ choices, value = "", title, mode, iec, focusSelector, build, afterInsert, singleValue = false, allowEmpty = false }) {
   if (instructionPromptOpen) return;
   const fileUri = current.file.uri;
   const programIndex = selectedProgramIndex;
@@ -1733,7 +1841,7 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
         throw new Error("The program changed while the editor was open. Reopen the instruction editor.");
       }
       const choice = choices.find(item => item.mnemonic === result?.command);
-      if (!choice || !Array.isArray(result.operands) || result.operands.length !== choice.operandCount
+      if (!choice || !Array.isArray(result.operands) || (result.operands.length < (choice.minOperandCount ?? choice.operandCount) || result.operands.length > choice.operandCount)
         || result.operands.some(operand => !instructionOperandText(operand, iec))) {
         throw new Error("Unknown command or incorrect operands");
       }
@@ -1742,7 +1850,7 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
     const result = await new Promise(resolve => {
       pendingContactPrompts.set(requestId, { resolve, focusSelector, fileUri, programIndex, validate, restoreFocus: false });
       vscode.postMessage({ type: "promptLadderInstruction", requestId, title,
-        instruction: { choices, value, mode, iec: Boolean(iec), suggestions: [...instructionSuggestions(iec), ...choices.flatMap(choice => choice.suggestions || [])] } });
+        instruction: { choices, value, mode, singleValue, allowEmpty, iec: Boolean(iec), suggestions: [...instructionSuggestions(iec), ...choices.flatMap(choice => choice.suggestions || [])] } });
     });
     if (result) await applyEdit(() => validate(result), `${mode === "edit" ? "Edit" : "Insert"} ${result.command}`, () => {
       if (afterInsert) focusSelector = afterInsert(choices.find(choice => choice.mnemonic === result.command)) || focusSelector;
@@ -1811,7 +1919,7 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
   const wiredComparison = (body.iecWiredComparisonInsertionSites || []).some(site =>
     site.rowIndex === position.rowIndex && site.rawX === position.rawX);
   const scalarChoices = wiredComparison ? scalarIecCommands(true).filter(choice =>
-    ["EQ", "GT", "GE", "LT", "LE"].includes(choice.mnemonic)) : scalarIecCommands();
+    ["EQ", "GT", "GE", "LT", "LE"].includes(choice.mnemonic)) : scalarIecCommands(false, true);
   const choices = [
     ...elementCommands("contact", true),
     ...(!site ? elementCommands("coil", true) : []),
@@ -1901,6 +2009,7 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
 }
 
 function showIecElementInput(item, body) {
+  if (item.isIecFunctionOperand) return showIecFunctionOperandInput(item, body);
   const contact = IEC_CONTACT_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
   const coil = IEC_COIL_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
   if (!contact && !coil) return showIecFunctionInput(item, body);
@@ -1915,6 +2024,65 @@ function showIecElementInput(item, body) {
       if (operands[0] !== item.value) candidate = update_xgwx_iec_ld_element_operand(candidate, program, item.offset, item.value, operands[0]);
       return candidate;
     } });
+}
+
+function showIecFunctionOperandInput(item, body) {
+  const link = (body.iecFunctionOperandLinks || []).find(link => link.recordOffset === item.iecRecordOffset);
+  const block = (body.iecFunctions || []).find(block => block.recordOffset === link?.targetRecordOffset);
+  const pin = block && functionPins(block).find(pin => pin.referenceOrdinal === link.ordinal);
+  if (!pin) { vscode.postMessage({ type: "showError", message: "This operand has no decoded pin metadata" }); return; }
+  let cleared = false;
+  return requestLadderInstruction({
+    choices: [{ mnemonic: block.name, operandCount: 1, ...(link.isOutput && pin.name === "OUT" ? {minOperandCount:0} : {}), operandRules: [iecPinRule(pin)] }],
+    allowEmpty: link.isOutput && pin.name === "OUT",
+    value: item.value, mode: "edit", iec: true, singleValue: true,
+    title: `Edit ${block.name}.${pin.name} · L${item.iecRowIndex}`,
+    focusSelector: `.iec-layout-marker[data-iec-offset="${item.offset}"]`,
+    afterInsert: () => cleared ? `[aria-label="Assign ${block.name}.${pin.name} at L${item.iecRowIndex}"]` : null,
+    build: (_choice, operands, bytes, program) => {
+      cleared = operands.length === 0;
+      return update_xgwx_iec_ld_function_operand(bytes, program, item.offset, item.value, operands[0] ?? "");
+    },
+  });
+}
+
+function showIecEmptyOutputInput(block, pin) {
+  return requestLadderInstruction({
+    choices:[{mnemonic:block.name,operandCount:1,operandRules:[iecPinRule(pin)]}],
+    value:"",mode:"edit",iec:true,singleValue:true,
+    title:`Assign ${block.name}.${pin.name} · L${pin.rowIndex}`,
+    focusSelector:`[aria-label="Assign ${block.name}.${pin.name} at L${pin.rowIndex}"]`,
+    build:(_choice,operands,bytes,program) => assign_xgwx_iec_ld_function_output_operand(
+      bytes,program,block.recordOffset,block.name,pin.referenceOrdinal,operands[0]),
+  });
+}
+
+function deleteIecElementBytes(bytes, item, body) {
+  if (item.iecElementKind && IEC_CONTACT_KIND_BY_SOURCE_LABEL.has(item.iecElementKind)) {
+    const gap = iecAddressedContactSites(body,"iecNoContactDeletionSites").find(site => site.contactOffset === item.iecRecordOffset);
+    const cell = iecAddressedContactSites(body,"iecNoContactCellDeletionSites").find(site => site.contactOffset === item.iecRecordOffset);
+    const site = gap || cell;
+    if (!site) return delete_xgwx_iec_ld_isolated_element(bytes,selectedProgramIndex,item.iecRecordOffset,item.value);
+    return (gap ? delete_xgwx_iec_ld_contact : delete_xgwx_iec_ld_contact_cell)(bytes,selectedProgramIndex,site.contactOffset,site.rawX,site.kind,item.value);
+  }
+  if (IEC_COIL_KIND_BY_SOURCE_LABEL.has(item.iecElementKind)) {
+    try {return delete_xgwx_iec_ld_terminal_coil(bytes,selectedProgramIndex,item.iecRecordOffset,item.value);}
+    catch {return delete_xgwx_iec_ld_isolated_element(bytes,selectedProgramIndex,item.iecRecordOffset,item.value);}
+  }
+  const block = (body.iecFunctions || []).find(block => block.nameOffset === item.offset);
+  if (!block) throw new Error("This selected item is not a deletable function block");
+  const deletions = [delete_xgwx_iec_ld_branch_function, delete_xgwx_iec_ld_branched_arithmetic,
+    delete_xgwx_iec_ld_scalar_chain_function, delete_xgwx_iec_ld_terminal_function,
+    delete_xgwx_iec_ld_standalone_function, delete_xgwx_iec_ld_function_cell,
+    delete_xgwx_iec_ld_connected_arithmetic, delete_xgwx_iec_ld_eq_chain_head,
+    delete_xgwx_iec_ld_heating_chain_head, delete_xgwx_iec_ld_heating_chain_middle,
+    delete_xgwx_iec_ld_heating_chain_x3_eq_repaired, delete_xgwx_iec_ld_heating_chain_contact_eq,
+    delete_xgwx_iec_ld_heating_chain_x15_eq];
+  for (const remove of deletions) {
+    try {return remove(bytes,selectedProgramIndex,block.recordOffset,item.value);}
+    catch { /* Guarded writers leave the input unchanged on failure. */ }
+  }
+  throw new Error("This connected function layout does not yet support block deletion");
 }
 
 async function deleteIecContact(item, body) {
@@ -3819,15 +3987,15 @@ function planIecBranchRemoval(body, segment) {
   return { bytes, removedFeedAndTail: false, removedOpenTail: wasOpen };
 }
 
-function deleteIecVerticalWireBytes(body, wire) {
+function deleteIecVerticalWireBytes(body, wire, bytes = current.file.bytes) {
   try {
-    return edit_xgwx_iec_ld_vertical_wire(current.file.bytes, selectedProgramIndex,
+    return edit_xgwx_iec_ld_vertical_wire(bytes, selectedProgramIndex,
       wire.groupIndex, wire.startRowIndex, wire.endRowIndex, wire.x, true, false);
   } catch (error) {
     const endRecords = (body.iecRecords || []).filter(record => record.groupIndex === wire.groupIndex
       && record.rowIndex === wire.endRowIndex);
     if (endRecords.length !== 1 || endRecords[0].kind !== "Branch end") throw error;
-    return edit_xgwx_iec_ld_branch_segment(current.file.bytes, selectedProgramIndex,
+    return edit_xgwx_iec_ld_branch_segment(bytes, selectedProgramIndex,
       wire.groupIndex, wire.startRowIndex, wire.endRowIndex, wire.x, true, false);
   }
 }
@@ -4369,13 +4537,39 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
           type: "rung", rawY: position.rawY, column: position.column,
         }, event.key, LD_COLUMN_COUNT), event.shiftKey);
       }
-      if (event.key === "Delete" && !event.repeat) {
-        event.preventDefault();
+      if (isLadderDeleteKey(event)) {
+        event.preventDefault(); event.stopPropagation();
         await deleteSelection();
       }
     });
   };
 
+  const addWireControl = (label, left, top, width, height, position, remove) => {
+    const control = button(label,"ld-wire-target", () => {
+      selectedLadderAnchor = selectedLadderFocus = selectedLadderComment = null;
+      selectedCellOffset = selectedBlankCell = null;
+      board.querySelectorAll(".selected, .active").forEach(node => node.classList.remove("selected","active"));
+      control.classList.add("selected"); control.setAttribute("aria-selected","true");
+    });
+    Object.assign(control.style,{left:`${left}px`,top:`${top}px`,width:`${Math.max(width,10)}px`,height:`${Math.max(height,10)}px`});
+    control.addEventListener("dblclick",event => {
+      event.preventDefault(); event.stopPropagation();
+      const bounds = board.getBoundingClientRect();
+      const row = layoutRows[Math.max(0,Math.min(layoutRows.length-1,Math.round((event.clientY-bounds.top-LD_FIRST_ROW_Y)/LD_ROW_HEIGHT)))];
+      if (row?.type !== "rung") return;
+      const column = Math.max(0,Math.min(9,Math.floor((event.clientX-bounds.left-LD_LEFT_RAIL)/((LD_RIGHT_RAIL-LD_LEFT_RAIL)/10))));
+      const target = {rawY:row.rawY,column};
+      selectPosition(target);
+      if (!ladderCellAtPosition(ladder,target)) void showXgkBlankInput(ladder,target);
+    });
+    control.addEventListener("keydown",async event => {
+      if (!isLadderDeleteKey(event)) return;
+      event.preventDefault(); event.stopPropagation();
+      await applyEdit(remove,`Delete ${label}`,() => {selectedLadderAnchor = selectedLadderFocus = position;});
+      requestAnimationFrame(() => document.querySelector(`[data-ladder-key="${ladderPositionKey(position)}"]`)?.focus({preventScroll:true}));
+    });
+    board.append(control);
+  };
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.classList.add("ld-wires");
   svg.setAttribute("viewBox", `0 0 ${LD_VIEW_WIDTH} ${height}`);
@@ -4408,6 +4602,21 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     svg.append(svgLine(ldBoundaryX(line.rawX), ldRowY(start), ldBoundaryX(line.rawX), ldRowY(end), "wire"));
   });
   board.append(svg);
+  if (ladder.structuralEditing) {
+    for (const line of ladder.horizontalLines || []) {
+      const index = rowIndexes.get(line.rawY); if (index === undefined) continue;
+      const left = ldWireStartX(line.rawXStart), right = ldWireEndX(line.rawXEnd);
+      addWireControl(`Horizontal XGK wire L${line.rawY/4} x${line.rawXStart}–${line.rawXEnd}`,left,ldRowY(index)-5,right-left,10,
+        {rawY:line.rawY,column:ldCellColumn(line.rawXStart)}, () => delete_xgwx_ladder_horizontal_wire(current.file.bytes,selectedProgramIndex,line.rawY,line.rawXStart,line.rawXEnd));
+    }
+    for (const wire of ladder.branchConnections || []) {
+      const first = rowIndexes.get(wire.rawYStart), last = rowIndexes.get(wire.rawYEnd);
+      if (first === undefined || last === undefined) continue;
+      addWireControl(`Vertical XGK wire L${wire.rawYStart/4}–L${wire.rawYEnd/4} x${wire.rawX}`,ldBoundaryX(wire.rawX)-5,ldRowY(first)+4,10,ldRowY(last)-ldRowY(first)-8,
+        {rawY:wire.rawYStart,column:Math.max(0,wire.rawX/3-1)}, () => delete_xgwx_ladder_vertical_wire(current.file.bytes,selectedProgramIndex,wire.rawX,wire.rawYStart,wire.rawYEnd));
+    }
+  }
+
 
   for (let column = 0; column < LD_COLUMN_COUNT; column += 1) {
     const label = element("span", "ld-column-label", column + 1);

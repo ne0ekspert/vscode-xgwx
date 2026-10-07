@@ -1935,3 +1935,40 @@ form.iec-rung-creation {
 [data-variable-field] {
   cursor: text;
 }
+
+.ld-wire-target,
+.iec-layout-marker.horizontal-wire {
+  min-height: 0;
+  max-width: none;
+  position: absolute;
+  z-index: 2;
+  min-width: 0;
+  height: 10px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 0;
+  transform: none;
+  background: transparent;
+  color: transparent;
+}
+.ld-wire-target:hover,
+.ld-wire-target:focus-visible,
+.ld-wire-target.selected,
+.iec-layout-marker.horizontal-wire:hover,
+.iec-layout-marker.horizontal-wire:focus-visible,
+.iec-layout-marker.horizontal-wire.selected {
+  border-color: var(--vscode-focusBorder);
+  background: color-mix(in srgb, var(--vscode-focusBorder) 20%, transparent);
+}
+
+.iec-layout-pin.wireable {
+  min-width: 8px;
+  min-height: 8px;
+  padding: 0;
+  cursor: pointer;
+}
+.iec-layout-pin.wireable:focus-visible,
+.iec-layout-pin.wireable:hover {
+  outline: 2px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}

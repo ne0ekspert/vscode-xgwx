@@ -589,3 +589,79 @@ test('variable popup uses native text input validation and a cancellable swap no
   assert.equal(messages.at(-1).value, true);
   assert.deepEqual([...document.bytes], [1,2,3]);
 });
+
+test('single IEC pin prompt edits a value, retains type completion and validates before closing', async () => {
+  let picker;
+  mockVscode.window = { createQuickPick: () => (picker = {
+    activeItems: [], items: [], onDidChangeValue(cb) { this.changed = cb; },
+    onDidAccept(cb) { this.accepted = cb; }, onDidHide(cb) { this.hidden = cb; },
+    set value(value) { this._value = value; this.changed?.(value); },
+    get value() { return this._value; }, show() {}, dispose() {},
+  }) };
+  const instruction = { iec: true, singleValue: true, structuredResult: true, mode: 'edit', value: 'T#5s',
+    choices: [{ mnemonic: 'TON', operandCount: 1, operandRules: [{label:'PT',dataTypes:['TIME']}] }],
+    suggestions: [{value:'PresetTime',dataType:'TIME'}, {value:'Counter',dataType:'INT'}] };
+  const validated = [];
+  const result = promptInstruction(instruction, 'Edit TON.PT', async value => {
+    validated.push(value); return value.operands[0] === 'bad' ? 'Invalid TIME value' : undefined;
+  });
+  assert.equal(picker.value, 'T#5s');
+  assert.equal(picker.items[0].description, 'Apply value');
+  picker.value = '';
+  assert.deepEqual(picker.items.map(item => item.completion), ['PresetTime']);
+  picker.value = 'bad';
+  await picker.accepted();
+  assert.match(picker.title, /Invalid TIME value/);
+  picker.value = 'T#10s';
+  await picker.accepted();
+  assert.deepEqual(await result, {command:'TON',operands:['T#10s']});
+  assert.equal(validated.length, 2);
+  const cancelled = promptInstruction(instruction, 'Edit TON.PT');
+  picker.hidden();
+  assert.equal(await cancelled, undefined);
+});
+
+test('comparison creation accepts two sources or a BOOL destination while arithmetic requires three operands', async () => {
+  let picker;
+  mockVscode.window = { createQuickPick: () => (picker = {
+    activeItems: [], items: [],
+    onDidChangeValue(callback) { this.changed = callback; },
+    onDidAccept(callback) { this.accepted = callback; },
+    onDidHide(callback) { this.hidden = callback; },
+    set value(value) { this._value=value;this.changed?.(value); },
+    get value() { return this._value; }, show() {}, dispose() {},
+  }) };
+  const choices = [
+    {mnemonic:'EQ',operandCount:3,minOperandCount:2,operandRules:[
+      {label:'Source 1',dataTypes:['WORD']},{label:'Source 2',dataTypes:['WORD']},
+      {label:'Destination',dataTypes:['BOOL'],allowsConstant:false}]},
+    {mnemonic:'ADD',operandCount:3},
+  ];
+  for(const value of ['EQ %MW0 1','EQ %MW0 1 %MX3']) {
+    const result=promptInstruction({choices,iec:true,structuredResult:true},'Insert');
+    picker.value='ADD %MW0 1';
+    assert.equal(picker.items.some(item=>item.insert),false);
+    picker.value=value;
+    assert.equal(picker.items[0].insert,true);
+    await picker.accepted();
+    assert.deepEqual((await result).operands,value.split(' ').slice(1));
+  }
+});
+
+test('single OUT value can be cleared with a visible action while input values stay required', async () => {
+  let picker;
+  mockVscode.window={createQuickPick:()=> (picker={activeItems:[],items:[],
+    onDidChangeValue(f){this.changed=f;},onDidAccept(f){this.accepted=f;},onDidHide(f){this.hidden=f;},
+    set value(v){this._value=v;this.changed?.(v);},get value(){return this._value;},show(){},dispose(){}})};
+  const result=promptInstruction({singleValue:true,allowEmpty:true,iec:true,structuredResult:true,
+    choices:[{mnemonic:'ADD',operandCount:1,minOperandCount:0,operandRules:[{label:'OUT',dataTypes:['INT'],allowsConstant:false}]}]},'Edit');
+  picker.value='';
+  assert.equal(picker.items[0].label,'Remove output assignment');
+  assert.equal(picker.items[0].insert,true);
+  assert.match(picker.title,/leave blank to remove assignment/);
+  await picker.accepted();assert.deepEqual((await result).operands,[]);
+  const input=promptInstruction({singleValue:true,iec:true,structuredResult:true,
+    choices:[{mnemonic:'ADD',operandCount:1,operandRules:[{label:'IN1',dataTypes:['INT']}]}]},'Edit');
+  picker.value='';assert.equal(picker.items.some(i=>i.insert),false);
+  picker.hidden();assert.equal(await input,undefined);
+});

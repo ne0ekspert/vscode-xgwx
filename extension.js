@@ -337,13 +337,16 @@ function promptInstruction(instruction, title, validate) {
       resolve(value);
     };
     const parse = value => {
-      const { tokens, error: groupingError } = tokenizeInstruction(value);
+      const parsed = tokenizeInstruction(value);
+      const tokens = instruction.singleValue
+        ? [choices[0]?.mnemonic, ...(value.trim() ? [value.trim()] : [])] : parsed.tokens;
+      const groupingError = parsed.error;
       const choice = choices.find(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase() === tokens[0]?.toUpperCase()));
       const operands = tokens.slice(1);
       const error = validationError || groupingError || (!choice && tokens.length && !choices.some(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase().startsWith(tokens[0].toUpperCase()))) ? "Unknown or unavailable command" : undefined)
         || (choice && operands.length > choice.operandCount ? `Expected ${choice.operandCount} operands` : undefined)
         || operands.map((operand, index) => operandError(choice?.operandRules?.[index], operand, instruction.iec === true)).find(Boolean);
-      const complete = !error && choice && operands.length === choice.operandCount
+      const complete = !error && choice && operands.length >= (choice.minOperandCount ?? choice.operandCount) && operands.length <= choice.operandCount
         && value.length <= 255 && !/[\p{Cc}]/u.test(value)
         && tokens.every(token => !token.includes(",") || token.startsWith("'") && token.endsWith("'"));
       return { tokens, choice, operands, complete, error };
@@ -351,13 +354,13 @@ function promptInstruction(instruction, title, validate) {
     const update = value => {
       const { tokens, choice, operands, complete, error } = parse(value);
       const { trailingSeparator, depth, quoted } = tokenizeInstruction(value);
-      const last = trailingSeparator ? "" : (tokens.at(-1) || "");
+      const last = trailingSeparator ? "" : instruction.singleValue ? value.trim() : (tokens.at(-1) || "");
       let hint = "Instruction";
       let completions;
-      if (!choice || tokens.length === 1 && !trailingSeparator) {
+      if (!choice || !instruction.singleValue && tokens.length === 1 && !trailingSeparator) {
         completions = choices.filter(item => [item.mnemonic, ...(item.aliases || [])].some(name => name.toUpperCase().startsWith(value.trim().toUpperCase())))
           .slice(0, 50).map(item => ({ value: `${item.mnemonic} `,
-            description: `${item.operandCount} operands` }));
+            description: `${item.minOperandCount ? `${item.minOperandCount}–` : ""}${item.operandCount} operands` }));
       } else {
         const index = Math.max(0, operands.length - (last ? 1 : 0));
         const name = choice.mnemonic.toUpperCase();
@@ -371,7 +374,7 @@ function promptInstruction(instruction, title, validate) {
         if (rule) {
           const label = rule.label === "S" ? "Source operand" : rule.label === "D" ? "Destination operand"
             : /^S\d+$/.test(rule.label) ? `Source operand ${rule.label.slice(1)}` : rule.label;
-          hint = `${label} · ${rule.dataTypes.join("/")}`;
+          hint = `${label} · ${rule.dataTypes.join("/")}${index >= (choice.minOperandCount ?? choice.operandCount) ? instruction.allowEmpty ? " · leave blank to remove assignment" : " · optional; omit to wire OUT" : ""}`;
         }
         const fragment = depth ? (value.match(/[\p{L}\p{N}_%.]*$/u)?.[0] || "") : last;
         const prefix = fragment ? value.slice(0, -fragment.length) : value;
@@ -384,9 +387,10 @@ function promptInstruction(instruction, title, validate) {
       picker.title = `${title} · ${error || hint}`;
       const groupingHint = instruction.iec !== true && choice?.operandRules?.some(rule => rule.dataTypes?.includes("STRING"))
         ? "quote strings with single quotes" : "group expressions in parentheses";
-      picker.placeholder = `${hint} · separate operands with spaces; ${groupingHint}`;
+      picker.placeholder = instruction.singleValue ? `${hint} · enter a value or choose a variable`
+        : `${hint} · separate operands with spaces; ${groupingHint}`;
       picker.items = [
-        ...(complete ? [{ label: value.trim(), description: instruction.mode === "edit" ? "Apply instruction" : "Insert instruction", insert: true }] : []),
+        ...(complete ? [{ label: value.trim() || (instruction.allowEmpty ? "Remove output assignment" : ""), description: instruction.singleValue ? instruction.allowEmpty && !value.trim() ? "Clear output assignment" : "Apply value" : instruction.mode === "edit" ? "Apply instruction" : "Insert instruction", insert: true }] : []),
         ...(error ? [{ label: value.trim(), description: error, invalid: true }] : []),
         ...completions.filter(item => item.value !== value)
           .map(item => ({ label: item.value.trimEnd(), description: item.description, completion: item.value })),
