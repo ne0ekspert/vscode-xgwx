@@ -1,0 +1,25 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import init, {parse_xgwx, insert_xgwx_iec_ld_single_element} from '../media/libxgwx.js';
+await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
+const xgi=fs.readFileSync(new URL('../media/templates/new-xgi.xgwx',import.meta.url));
+const xgk=fs.readFileSync(new URL('../media/templates/new-xgk.xgwx',import.meta.url));
+const fresh=bytes=>{parse_xgwx(xgk);return parse_xgwx(bytes);};
+test('cached ladder summaries invalidate across edits, undo, workspace and returned-object mutations',()=>{
+ const original=fresh(xgi);
+ const cached=parse_xgwx(xgi);
+ assert.deepEqual(cached,original);
+ cached.ladder[0].programName='Mutated by renderer';
+ assert.deepEqual(parse_xgwx(xgi),original);
+ const bytes=insert_xgwx_iec_ld_single_element(xgi,0,100,1,'contact','NO','%MX0');
+ const edited=parse_xgwx(bytes);
+ assert.notDeepEqual(edited.ladder,original.ladder);
+ assert.deepEqual(edited,fresh(bytes));
+ assert.deepEqual(parse_xgwx(xgi),original);
+ const second=insert_xgwx_iec_ld_single_element(bytes,0,200,1,'contact','NC','%MX1');
+ const after=parse_xgwx(second);
+ assert.equal(after.ladder[0].sourceStrings.filter(item=>item.iecElementKind).length,2);
+ assert.deepEqual(after,fresh(second));
+ assert.deepEqual(parse_xgwx(bytes),edited);
+});

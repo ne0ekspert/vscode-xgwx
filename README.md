@@ -1384,3 +1384,19 @@ never changes the file. XGK coordinate handling and the extended row-count
 header were verified in native XG5000 at physical rows 256 and 65534 with zero
 Check Program errors or warnings and byte-identical program payloads after
 Save As. IEC retains its separately validated coordinate range.
+
+### Ladder edit performance
+
+The browser reuses decoded ladder summaries for programs whose complete XML and
+CPU model are unchanged. The cache keeps only the last summary, within the
+existing program, byte, and item budgets; edits, Undo, and workspace changes
+invalidate affected entries. Instruction prompts also reuse the last successful
+validated edit when it is accepted against the same source bytes.
+
+To measure parsing and an available IEC contact insertion locally:
+
+```sh
+node scripts/benchmark-ladder-edits.mjs /path/to/project.xgwx
+```
+
+The benchmark reports timings and counts without printing project contents.

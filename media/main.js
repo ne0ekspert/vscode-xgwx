@@ -1,3 +1,4 @@
+import { validatedEditCache } from "./validated-edit-cache.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
@@ -1725,6 +1726,8 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
   instructionPromptOpen = true;
   try {
     const requestId = ++nextContactPromptId;
+    const cachedBuild = validatedEditCache((bytes, command, operands) =>
+      build(choices.find(choice => choice.mnemonic === command), operands, bytes, programIndex));
     const validate = result => {
       if (current?.file.uri !== fileUri || selectedProgramIndex !== programIndex || current.file.bytes !== source) {
         throw new Error("The program changed while the editor was open. Reopen the instruction editor.");
@@ -1734,7 +1737,7 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
         || result.operands.some(operand => !instructionOperandText(operand, iec))) {
         throw new Error("Unknown command or incorrect operands");
       }
-      return build(choice, result.operands, source, programIndex);
+      return cachedBuild(source, result.command, result.operands);
     };
     const result = await new Promise(resolve => {
       pendingContactPrompts.set(requestId, { resolve, focusSelector, fileUri, programIndex, validate, restoreFocus: false });
