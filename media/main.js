@@ -640,7 +640,7 @@ function renderModuleTable(slotRows, inspector) {
   if (!slotRows.length) return emptyState("No slots match this filter.");
   const wrap = element("div", "table-scroll");
   const table = createTable(["Base", "Slots", "Width", "ID", "Name", "Input filter", "Comment"]);
-  table.setAttribute("aria-label", "Hardware modules. Use Up and Down to navigate and Delete to remove a module.");
+  table.setAttribute("aria-label", "Hardware modules. Double-click a row to select a module. Use Up and Down to navigate and Delete to remove a module.");
   slotRows.forEach((slotRow, index) => {
     const { module, slot } = slotRow;
     const row = table.tBodies[0].insertRow();
@@ -663,6 +663,10 @@ function renderModuleTable(slotRows, inspector) {
       renderModuleInspector(inspector, module, slot);
     };
     row.addEventListener("click", select);
+    row.addEventListener("dblclick", () => {
+      select();
+      void pickHardwareModule(slotRow);
+    });
     row.addEventListener("keydown", async (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
@@ -700,6 +704,50 @@ function renderModuleTable(slotRows, inspector) {
   });
   wrap.append(table);
   return wrap;
+}
+
+let modulePromptOpen = false;
+
+async function pickHardwareModule({ base, slot, module }) {
+  if (modulePromptOpen || !supportsXgkHardware()) return;
+  modulePromptOpen = true;
+  const source = current.file.bytes, uri = current.file.uri;
+  const targetSlot = module?.slot ?? slot;
+  const entry = module && moduleCatalog.find(item => catalogEntryMatchesModule(item, module));
+  try {
+    const model = await new Promise(resolve => {
+      const requestId = ++nextContactPromptId;
+      pendingContactPrompts.set(requestId, { resolve, restoreFocus: false });
+      vscode.postMessage({
+        type: "promptModuleSelection", requestId,
+        title: `${module ? "Replace" : "Insert"} module · Base ${base}, Slot ${targetSlot}`,
+        items: moduleCatalog.map(item => ({
+          label: item.model,
+          description: `${item.category}${item === entry ? " · Current" : ""}`,
+          detail: catalogModuleDescription(item),
+          picked: item === entry,
+        })),
+      });
+    });
+    if (model === null) return;
+    if (current?.file.uri !== uri || current.file.bytes !== source) {
+      throw new Error("Hardware changed. Reopen the module picker.");
+    }
+    if (!moduleCatalog.some(item => item.model === model) || model === entry?.model) return;
+    await applyEdit(
+      () => module
+        ? select_xgwx_module(source, base, targetSlot, model)
+        : insert_xgwx_module(source, base, targetSlot, model),
+      `${module ? "Select" : "Insert"} ${model} at base ${base}, slot ${targetSlot}`,
+    );
+  } catch (error) {
+    vscode.postMessage({ type: "showError", message: String(error) });
+  } finally {
+    modulePromptOpen = false;
+    if (current?.file.uri === uri && activeView === "hardware" && selectedBase === base) {
+      document.querySelector(`tr[data-module-key="${base}:${slot}"]`)?.focus({ preventScroll: true });
+    }
+  }
 }
 
 function renderModuleInspector(inspector, module, physicalSlot = module?.slot ?? null) {

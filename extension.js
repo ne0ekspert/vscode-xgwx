@@ -79,6 +79,17 @@ class XgwxEditorProvider {
       } else if (message?.type === "ladderInstructionValidationResult") {
         const resolve = validations.get(message.validationId);
         if (resolve) { validations.delete(message.validationId); resolve(message.error || undefined); }
+      } else if (message?.type === "promptModuleSelection") {
+        const choice = await vscode.window.showQuickPick(message.items, {
+          title: message.title,
+          placeHolder: "Choose a module model",
+          matchOnDescription: true,
+          matchOnDetail: true,
+          ignoreFocusOut: true,
+        });
+        await new Promise(resolve => setImmediate(resolve));
+        if (this.editors.has(editor) && panel.visible) panel.reveal(undefined, false);
+        await panel.webview.postMessage({ type: "iecContactInputResult", requestId: message.requestId, value: choice?.label ?? null });
       } else if (message?.type === "promptVariableField") {
         const value = await vscode.window.showInputBox({
           title: message.title, value: message.value || "", prompt: message.prompt,
