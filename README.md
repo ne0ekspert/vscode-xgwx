@@ -1420,3 +1420,17 @@ node scripts/benchmark-ladder-edits.mjs /path/to/project.xgwx
 ```
 
 The benchmark reports timings and counts without printing project contents.
+
+### Generate digital I/O variables
+
+Use **Hardware → Generate I/O variables** after selecting modules. The preview
+lists names, P addresses, BIT types, comments, and whether each variable is new,
+unchanged, or will overwrite an existing variable. **Generate and overwrite
+duplicates** replaces matching names, I/O source mappings, and occupied addresses;
+unrelated variables remain. Cancel leaves the workspace unchanged, and generation
+is one Undo step.
+
+The current generator supports XGK global symbols, variable-point allocation,
+and 18 digital module types captured in native XG5000. Analog channel variables,
+IEC global symbols, fixed-point allocation, and unverified module layouts remain
+unsupported. Allocation follows the [LS XGK instruction manual](https://www.ls-electric.com/upload/customer/download/c4090ad3-f6a5-424a-a5fd-ef46a70eecd8/XGK_XGB_Instructions_Manual_Eng_V2.2.pdf).

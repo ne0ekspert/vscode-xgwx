@@ -5,6 +5,8 @@ import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
+  preview_xgwx_io_variables,
+  generate_xgwx_io_variables,
   cpu_catalog,
   copy_xgwx_iec_ld_group,
   copy_xgwx_iec_ld_group_to_program_with_locals,
@@ -511,6 +513,46 @@ function renderEditor(editor, summary, inspector) {
   editor.append(tabs, canvas);
 }
 
+function showIoVariableGeneration(canvas) {
+  const source = current.file.bytes;
+  const uri = current.file.uri;
+  const preview = element("section", "io-variable-preview");
+  preview.append(element("h3", "", "Generate digital I/O variables"));
+  preview.append(element("p", "muted", "Preview for all configured modules. Duplicate names, source mappings, and occupied addresses will be overwritten. Unrelated variables are preserved."));
+  canvas.querySelector(".io-variable-preview")?.remove();
+  let rows;
+  try { rows = preview_xgwx_io_variables(source); }
+  catch (error) {
+    preview.append(element("p", "validation-summary invalid", String(error)));
+    canvas.prepend(preview);return;
+  }
+  const counts = rows.reduce((counts,row) => {counts[row.action]++;return counts;}, {create:0,overwrite:0,unchanged:0});
+  const summary = element("p", "validation-summary", `${counts.create} new · ${counts.overwrite} overwrite · ${counts.unchanged} unchanged`);
+  summary.setAttribute("role", "status");preview.append(summary);
+  const table = createTable(["Module", "Name", "Address", "Type", "Comment", "Action", "Existing variable"]);
+  for (const row of rows) {
+    const tr = table.tBodies[0].insertRow();
+    tr.dataset.ioVariableAction = row.action;
+    appendCells(tr, [`Base ${row.base} / Slot ${row.slot} · ${row.model}`, row.name, row.address,
+      row.dataType, row.description, row.action, row.existingNames.join(", ")]);
+  }
+  preview.append(tableContainer(table, rows.length));
+  const actions = element("div", "editor-toolbar");
+  const apply = button("Generate and overwrite duplicates", "primary-button", async () => {
+    if (current.file.uri !== uri || current.file.bytes !== source) {
+      summary.textContent = "The workspace changed. Reopen the preview before generating variables.";
+      summary.classList.add("invalid");apply.disabled = true;return;
+    }
+    await applyEdit(() => generate_xgwx_io_variables(source), "Generate digital I/O variables");
+  });
+  apply.textContent = counts.overwrite ? "Generate and overwrite duplicates" : "Generate variables";
+  apply.disabled = !counts.create && !counts.overwrite;
+  const cancel = button("Cancel I/O variable generation", "secondary-button", () => preview.remove());
+  cancel.textContent = "Cancel";
+  actions.append(apply, cancel);preview.append(actions);
+  canvas.prepend(preview);preview.scrollIntoView({block:"start"});
+}
+
 function renderHardwareEditor(canvas, inspector, hardware) {
   const allModules = hardware.modules || [];
   const baseModules = allModules.filter((module) => module.base === selectedBase);
@@ -531,7 +573,11 @@ function renderHardwareEditor(canvas, inspector, hardware) {
   searchWrap.append(search);
   const usedSlots = occupiedSlotCount(baseModules, slotCount, moduleSlotSpan);
   const scope = element("span", "toolbar-summary", `Base ${selectedBase} · ${usedSlots}/${slotCount} slots · ${baseModules.length} modules`);
-  toolbar.append(searchWrap, scope);
+  const generate = button("Generate I/O variables", "secondary-button", () => showIoVariableGeneration(canvas));
+  generate.textContent = "Generate I/O variables";
+  generate.disabled = !supportsXgkHardware();
+  if (generate.disabled) generate.title = "Generation currently supports XGK global digital I/O variables.";
+  toolbar.append(searchWrap, scope, generate);
   const baseError = element("p", "muted");
   baseError.setAttribute("role", "status");
   baseError.hidden = true;

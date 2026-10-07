@@ -1986,3 +1986,7 @@ form.iec-rung-creation {
   outline: 2px solid var(--vscode-focusBorder);
   outline-offset: 2px;
 }
+
+.io-variable-preview { padding: 12px; margin-bottom: 16px; border: 1px solid var(--vscode-panel-border); }
+.io-variable-preview .table-scroll { max-height: 320px; overflow: auto; }
+.io-variable-preview tr[data-io-variable-action="overwrite"] { background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 12%, transparent); }
