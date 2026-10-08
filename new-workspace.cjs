@@ -3,6 +3,7 @@ const vscode = require('vscode');
 const PROJECT_TEMPLATES = [
   { label: 'XGK ladder project', description: 'XGK-CPUSN · Ladder Diagram', file: 'new-xgk.xgwx' },
   { label: 'XGI IEC ladder project', description: 'XGI-CPUE · IEC Ladder Diagram', file: 'new-xgi.xgwx' },
+  { label: 'XGI SFC project', description: 'XGI-CPUE · Sequential Function Chart', file: 'new-xgi-sfc.xgwx' },
 ];
 
 async function createNewWorkspace(context) {

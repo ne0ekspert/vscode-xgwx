@@ -90,7 +90,37 @@ class XgwxEditorProvider {
         await new Promise(resolve => setImmediate(resolve));
         if (this.editors.has(editor) && panel.visible) panel.reveal(undefined, false);
         await panel.webview.postMessage({ type: "iecContactInputResult", requestId: message.requestId, value: choice?.label ?? null });
-      } else if (message?.type === "promptVariableField") {
+      } else if (message?.type === "promptSfcAction") {
+        const qualifiers = [["N","Non-stored"],["R","Reset"],["S","Set"],["L","Time limited"],["D","Time delayed"],
+          ["P","Pulse"],["SD","Stored and delayed"],["DS","Delayed and stored"],["SL","Stored and time limited"]];
+        const currentQualifier = message.qualifier || "N";
+        const items = qualifiers.map(([label,description]) => ({label,description}));
+        items.sort((a,b) => Number(b.label === currentQualifier) - Number(a.label === currentQualifier));
+        const choice = await vscode.window.showQuickPick(items, {title:message.title, placeHolder:"Choose an SFC action qualifier", ignoreFocusOut:true});
+        const validateAction = value => new Promise(resolve => {
+          const validationId = ++nextValidationId; validations.set(validationId,resolve);
+          panel.webview.postMessage({type:"validateLadderInstruction",requestId:message.requestId,validationId,value});
+        });
+        let value = null;
+        if (choice) {
+          const qualifier = choice.label;
+          const timed = ["L","D","SD","DS","SL"].includes(qualifier);
+          const time = timed ? await vscode.window.showInputBox({title:`${message.title} · Time`,
+            value:message.time || "T#2s", prompt:"Enter a TIME literal, for example T#2s or T#500ms.", ignoreFocusOut:true,
+            validateInput:time => validateAction({operand:message.value || "%MX0",qualifier,time}),
+          }) : "";
+          if (time != null) {
+            const operand = await vscode.window.showInputBox({title:`${message.title} · ${qualifier}`,
+              value:message.value || "", prompt:"Enter a direct %MX BOOL address. Leave empty to remove the action.", ignoreFocusOut:true,
+              validateInput:operand => validateAction({operand,qualifier,time}),
+            });
+            if (operand != null) value = {operand,qualifier,time};
+          }
+        }
+        await new Promise(resolve => setImmediate(resolve));
+        if (this.editors.has(editor) && panel.visible) panel.reveal(undefined,false);
+        await panel.webview.postMessage({type:"iecContactInputResult",requestId:message.requestId,value});
+      } else if (message?.type === "promptVariableField" || message?.type === "promptSfcField") {
         const value = await vscode.window.showInputBox({
           title: message.title, value: message.value || "", prompt: message.prompt,
           ignoreFocusOut: true,

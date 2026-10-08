@@ -7,9 +7,11 @@ powered by the sibling `libxgwx` project during development.
 
 - Opens `*.xgwx` files directly as a VS Code custom editor.
 - Creates blank projects from **File → New File… → XGWX: New File**, or the
-  **XGWX: New File** command. Choose XGK ladder (XGK-CPUSN) or XGI IEC ladder
-  (XGI-CPUE), choose a new `.xgwx` path, and open `NewProgram` to start editing.
+  **XGWX: New File** command. Choose XGK ladder (XGK-CPUSN), XGI IEC ladder,
+  or XGI SFC (XGI-CPUE), choose a new `.xgwx` path, and open `NewProgram`.
   The native template defaults to project `NewProject` and PLC `LSPLC`.
+  SFC projects start with an empty main block. Use **Create loop** for a starter
+  chart, or add steps, transitions, labels, and jumps individually.
 - Shows project counts and metadata.
 - Enables CPU choices only when the bundled writer accepts the retained hardware.
   Cross-family and compact-model conversions are disabled.
@@ -1438,14 +1440,47 @@ unsupported. Allocation follows the [LS XGK instruction manual](https://www.ls-e
 ### SFC programs
 
 Native SFC blocks open in a dedicated chart with initial/ordinary steps,
-transitions, labels, jumps, and variable actions. Click an entity or focus it
-with Tab and press Enter to inspect it. Supported edits are step
-comments and existing direct `%MX` BOOL transition conditions; Save and Undo
-use the normal custom document lifecycle.
+transitions, labels, jumps, and variable actions. Click an entity to inspect it.
+Double-click or press Enter on an editable entity to open its native text
+prompt, prefilled with its name or operand. Values are validated before Apply;
+Cancel restores chart focus without changing the file.
+Arrow-key navigation keeps Up/Down in the current column and Left/Right
+in the current row. Drag or hold Shift while pressing arrows to select a
+rectangle across rows and columns, including action boxes and **+ New Action**.
+Shift+Arrow can also contract the selection; a plain arrow or Escape returns
+to a single cell. Dragging near the viewport edges scrolls the chart.
+Delete removes selected rows and actions as one undoable edit and keeps focus
+in the chart. Empty action slots are ignored; deleting labels also removes
+their jumps, and removing the initial step assigns the first remaining step.
+Selection alone does not change the file. These shortcuts apply inside the chart, leaving property
+inputs and modified shortcuts alone. Read-only charts still support navigation and selection.
+Captured linear main blocks support adding rows after the selection (or at the
+end), moving rows up/down, and deleting rows. **Create loop** builds a starter
+chart in an empty project.
 
-Step/program names, action qualifiers, program-backed conditions/actions, and
-chart structure remain read only. Unknown entity types are preserved and shown
-as placeholders; their connections are not inferred. The validated XGI-CPUE
-loop and N-action fixtures pass XG5000 4.82.1 strict all-program Check Program
-with 0 errors and 0 warnings. Native Save As preserves the edited chart and
-local variable tables exactly.
+Edit step names/comments, the initial step, label/jump names, direct `%MX`
+BOOL transitions, and one direct `%MX` action per step with N, R, S, L, D, P,
+SD, DS, or SL qualifier. **+ New Action** appears beside steps without an action
+and participates in arrow-key navigation. Click it or press Enter to choose
+a qualifier, enter a time for timed types, and enter the BOOL operand.
+Existing actions use the same picker through Enter, double-click, or **Edit action**.
+Timed types accept TIME literals such as `T#2s`, `T#500ms`, or `T#1m2s`.
+An empty action operand removes it. Renaming a label updates its jumps;
+deleting a label also deletes its jumps. Names use letters, digits, and
+underscores, up to 32 characters, with unique step and label names. Save and
+Undo use the normal custom document lifecycle; incomplete charts can be saved
+and may report errors in XG5000 until completed.
+
+
+All nine variable action qualifiers passed native XG5000 strict Check Program
+and Save As retention checks (`libxgwx/fixtures/sfc/action-qualifiers*`).
+
+Branches, nested blocks, program-backed conditions/actions, unknown qualifiers,
+bookmarks/breakpoints, unknown properties, and program names remain read only.
+Unsupported charts retain the existing bounded comment/condition edits.
+Unknown entity types are preserved and shown as placeholders; their connections
+are not inferred. Creating a chart from the blank XGI-CPUE template, deleting
+a step/transition pair, and changing names, operands, actions, and initial-step
+status pass XG5000 4.82.1 strict all-program Check Program with 0 errors and
+0 warnings. Native Save As preserves the row model and local symbol payloads;
+XG5000 regenerates compiled internal names.

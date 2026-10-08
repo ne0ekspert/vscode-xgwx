@@ -3,6 +3,18 @@ import fs from 'node:fs';
 import test from 'node:test';
 import init, {parse_xgwx, insert_xgwx_iec_ld_single_element, edit_xgwx_ladder_cell, insert_xgwx_module, delete_xgwx_module} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
+test('native blank SFC template opens as an empty SFC main block',()=>{
+  const source=fs.readFileSync(new URL('../media/templates/new-xgi-sfc.xgwx',import.meta.url));
+  const summary=parse_xgwx(source);
+  assert.equal(summary.programs.length,1);
+  assert.equal(summary.programs[0].name,'NewProgram');
+  assert.equal(summary.programs[0].kind,3);
+  assert.equal(summary.ladder.length,0);
+  assert.equal(summary.counts.ladderErrors,0);
+  assert.deepEqual(summary.sfc,[{programIndex:0,blocks:[{blockIndex:0,name:'NewProgram',main:true,
+    languageType:3,language:2,rows:0,columns:0,entities:[],editableRows:[]}]}]);
+  assert.ok(source.equals(fs.readFileSync(new URL('../../libxgwx/fixtures/sfc/new-xgi-sfc.xgwx',import.meta.url))));
+});
 for (const family of ['xgk','xgi']) {
   test(`blank ${family} handles XGL-EFMT(B) at Base 0 Slot 0`,()=>{
     const source=fs.readFileSync(new URL(`../media/templates/new-${family}.xgwx`,import.meta.url));

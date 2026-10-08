@@ -23,7 +23,7 @@ const context={extensionUri:uri(root)};
 function reset(){selection=0;destination=uri('/workspace/Created');applied=opened=undefined;failures=[];existing=false;}
 
 test('creates each native binary template and opens it with the XGWX editor',async()=>{
-  for(const [index,file] of [[0,'new-xgk.xgwx'],[1,'new-xgi.xgwx']]){
+  for(const [index,file] of [[0,'new-xgk.xgwx'],[1,'new-xgi.xgwx'],[2,'new-xgi-sfc.xgwx']]){
     reset();selection=index;
     const result=await createNewWorkspace(context);
     assert.equal(result.path,'/workspace/Created.xgwx');

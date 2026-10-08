@@ -2088,6 +2088,23 @@ export function replace_xgwx_iec_ld_scalar_chain_function(bytes, program_index, 
 }
 
 /**
+ * @param {Uint8Array} bytes
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function replace_xgwx_sfc_sequence(bytes, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.replace_xgwx_sfc_sequence(ptr0, len0, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Select the primary project configuration's CPU and return rewritten bytes.
  * @param {Uint8Array} bytes
  * @param {string} model

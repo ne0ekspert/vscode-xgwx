@@ -665,3 +665,58 @@ test('single OUT value can be cleared with a visible action while input values s
   picker.value='';assert.equal(picker.items.some(i=>i.insert),false);
   picker.hidden();assert.equal(await input,undefined);
 });
+
+test('SFC text prompt uses native validated input and returns cancellation or the accepted text', async () => {
+  let receive, options, finish;
+  const messages=[];
+  mockVscode.window={showInputBox:value=>{options=value;return new Promise(resolve=>{finish=resolve;});}};
+  const document=new XgwxDocument(uri('/workspace/sfc.xgwx'),[1,2,3]);
+  const provider=new XgwxEditorProvider({});
+  const panel={visible:true,webview:{cspSource:'test',asWebviewUri:value=>value,
+    onDidReceiveMessage(callback){receive=callback;return{dispose(){}};},
+    async postMessage(message){messages.push(message);}},reveal(){},onDidDispose(){}};
+  await provider.resolveCustomEditor(document,panel);
+  let pending=receive({type:'promptSfcField',requestId:51,title:'Edit SFC step name · L1',value:'S0',prompt:'Enter a unique name.'});
+  assert.equal(options.title,'Edit SFC step name · L1');assert.equal(options.value,'S0');assert.equal(options.ignoreFocusOut,true);
+  const validation=options.validateInput('Duplicate');
+  const request=messages.at(-1);assert.equal(request.type,'validateLadderInstruction');assert.equal(request.requestId,51);
+  await receive({type:'ladderInstructionValidationResult',validationId:request.validationId,error:'Step name is already used'});
+  assert.equal(await validation,'Step name is already used');
+  finish(undefined);await pending;assert.equal(messages.at(-1).type,'iecContactInputResult');assert.equal(messages.at(-1).value,null);
+  pending=receive({type:'promptSfcField',requestId:52,title:'Edit SFC transition condition · L2',value:'%MX0',prompt:'Enter a BOOL address.'});
+  finish('%MX2');await pending;assert.equal(messages.at(-1).value,'%MX2');
+  assert.deepEqual([...document.bytes],[1,2,3]);
+});
+
+test('SFC action picker validates structured qualifiers and times and cancels each stage', async () => {
+  let receive, options, finish, choice, time;
+  const messages=[], picks=[];
+  mockVscode.window={
+    showQuickPick:async(items,options)=>{picks.push(items);return choice && items.find(i=>i.label===choice);},
+    showInputBox:async(value)=>{
+      if(value.title.endsWith('· Time')) return time;
+      options=value; return new Promise(resolve=>{finish=resolve;});
+    },
+  };
+  const doc=new XgwxDocument(uri('/workspace/actions.xgwx'),[1,2,3]);
+  const provider=new XgwxEditorProvider({});
+  const panel={visible:true,webview:{cspSource:'test',asWebviewUri:v=>v,
+    onDidReceiveMessage(cb){receive=cb;return{dispose(){}};},async postMessage(m){messages.push(m);}},
+    reveal(){},onDidDispose(){}};
+  await provider.resolveCustomEditor(doc,panel);
+  const start=()=>receive({type:'promptSfcAction',requestId:70,title:'Edit SFC action operand · L1',value:'%MX10',qualifier:'L',time:'T#2s'});
+  await start(); assert.equal(messages.at(-1).value,null);
+  assert.equal(picks[0][0].label,'L');
+  assert.deepEqual(picks[0].map(i=>i.label).sort(),['N','R','S','L','D','P','SD','DS','SL'].sort());
+  choice='L';await start(); assert.equal(messages.at(-1).value,null);
+  time='T#5s'; let pending=start(); await new Promise(resolve=>setImmediate(resolve));
+  const validation=options.validateInput('%MW1'); const request=messages.at(-1);
+  assert.deepEqual(request.value,{operand:'%MW1',qualifier:'L',time:'T#5s'});
+  await receive({type:'ladderInstructionValidationResult',validationId:request.validationId,error:'Require BOOL'});
+  assert.equal(await validation,'Require BOOL');finish(undefined);await pending;assert.equal(messages.at(-1).value,null);
+  choice='S'; pending=start(); await new Promise(resolve=>setImmediate(resolve));finish('%MX11');await pending;
+  assert.deepEqual(messages.at(-1).value,{operand:'%MX11',qualifier:'S',time:''});
+  choice='DS';pending=start();await new Promise(resolve=>setImmediate(resolve));finish('');await pending;
+  assert.deepEqual(messages.at(-1).value,{operand:'',qualifier:'DS',time:'T#5s'});
+  assert.deepEqual([...doc.bytes],[1,2,3]);
+});

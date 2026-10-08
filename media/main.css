@@ -2016,3 +2016,19 @@ form.iec-rung-creation {
 
 .sfc-entity.action { width: 144px; display: flex; gap: 10px; text-align: left; }
 .sfc-qualifier { border-right: 1px solid currentColor; padding-right: 10px; }
+.sfc-new-action { position: absolute; z-index: 1; min-height: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--vscode-descriptionForeground, #858b98); font-size: 16px; font-style: italic; white-space: nowrap; cursor: pointer; }
+.sfc-new-action:hover { color: var(--vscode-foreground, #d4d4d4); }
+.sfc-new-action:focus-visible { outline: 2px solid var(--vscode-focusBorder, #71b7ff); outline-offset: 3px; }
+
+.sfc-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.sfc-toolbar button { padding: 6px 10px; }
+
+.sfc-toolbar ~ .sfc-viewport { max-height: calc(100vh - 320px); }
+
+.sfc-entity.action { flex-wrap: wrap; }
+.sfc-action-time { order: 2; flex-basis: 100%; font-size: 11px; opacity: .8; }
+
+.sfc-board { user-select: none; touch-action: none; }
+.sfc-selection-range { position: absolute; pointer-events: none; border: 1px solid var(--vscode-focusBorder, #71b7ff); background: color-mix(in srgb, var(--vscode-focusBorder, #71b7ff) 12%, transparent); }
+.sfc-entity.range-selected, .sfc-new-action.range-selected { outline: 2px solid var(--vscode-focusBorder, #71b7ff); outline-offset: 3px; }
+.sfc-selection-status { min-height: 16px; margin: 6px 0; }
