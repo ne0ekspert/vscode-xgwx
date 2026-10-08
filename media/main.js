@@ -1,4 +1,4 @@
-import { renderSfcDiagram, renderSfcProperties, sfcRowsAfterEdit, sfcTextField } from "./sfc.js";
+import { renderSfcDiagram, renderSfcProperties, renderSfcVariables, sfcRowsAfterEdit, sfcTextField } from "./sfc.js";
 import { moveIecCursor, iecCursorRecord } from "./iec-navigation.js";
 import { validatedEditCache } from "./validated-edit-cache.js";
 import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
@@ -8,6 +8,7 @@ import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativ
 import init, {
   edit_xgwx_sfc_entity,
   replace_xgwx_sfc_sequence,
+  edit_xgwx_sfc_variable,
   preview_xgwx_io_variables,
   generate_xgwx_io_variables,
   cpu_catalog,
@@ -1050,16 +1051,18 @@ function capitalize(value) {
 
 async function applySfcSequence(block, rows, selectedRow, action = false) {
   return applyEdit(() => replace_xgwx_sfc_sequence(current.file.bytes, {
-    programIndex: selectedProgramIndex, blockIndex: block.blockIndex, expectedEntities: block.entities, rows,
+    programIndex: selectedProgramIndex, blockIndex: block.blockIndex, expectedEntities: block.entities, expectedRows:block.editableRows, rows,
   }), "Edit SFC chart", () => {
     selectedSfcEntity = selectedRow < 0 ? null : { programIndex: selectedProgramIndex, blockIndex: block.blockIndex,
       entityIndex: action ? rows.length + selectedRow : selectedRow };
   });
 }
 
+const sfcStDrafts = new Map();
 let sfcPromptOpen = false;
 async function showSfcTextInput(block, entity, field = sfcTextField(block, entity)) {
   if (!field || sfcPromptOpen) return;
+  if (["actionCode", "transitionCode"].includes(field.field)) { document.querySelector("[data-sfc-st-source]")?.focus(); return; }
   sfcPromptOpen = true;
   const source = current.file.bytes, fileUri = current.file.uri, programIndex = selectedProgramIndex;
   let focusIndex = field.field === "action" && entity.typeCode === 0 && !block.editableRows?.[entity.row].action
@@ -1068,7 +1071,7 @@ async function showSfcTextInput(block, entity, field = sfcTextField(block, entit
   const cachedBuild = validatedEditCache((bytes, _command, operands) => {
     const replacement = operands[0];
     if (Array.isArray(block.editableRows)) return replace_xgwx_sfc_sequence(bytes, {
-      programIndex, blockIndex: block.blockIndex, expectedEntities: block.entities,
+      programIndex, blockIndex: block.blockIndex, expectedEntities: block.entities, expectedRows:block.editableRows,
       rows: sfcRowsAfterEdit(block, entity, field.field, replacement),
     });
     return edit_xgwx_sfc_entity(bytes, {programIndex, blockIndex:block.blockIndex, entityIndex:entity.entityIndex,
@@ -1091,12 +1094,12 @@ async function showSfcTextInput(block, entity, field = sfcTextField(block, entit
       const row = block.editableRows?.[entity.row];
       vscode.postMessage({type:field.field === "action" ? "promptSfcAction" : "promptSfcField", requestId,
         title:`Edit SFC ${field.label} · L${entity.row}`, value:field.value, prompt:field.prompt,
-        ...(field.field === "action" ? {qualifier:row?.actionQualifier || "N",time:row?.actionTime || ""} : {})});
+        ...(field.field === "action" ? {qualifier:row?.actionQualifier || "N",time:row?.actionTime || "",chooseActionType:true,kind:row?.actionCode != null ? "program" : "variable"} : {})});
     });
     if (value == null || value === field.value) return;
     if (field.field === "action") {
       const row = block.editableRows[entity.row];
-      if (value.operand === (row.action || "") && value.qualifier === (row.actionQualifier || "N") && value.time === (row.actionTime || "")) return;
+      if ((value.kind || "variable") === (row.actionCode != null ? "program" : "variable") && value.operand === (row.action || "") && value.qualifier === (row.actionQualifier || "N") && value.time === (row.actionTime || "")) return;
     }
     await applyEdit(() => validate(value), `Edit SFC ${field.label}`, () => {
       if (Array.isArray(block.editableRows)) focusIndex = field.field === "action" && value.operand
@@ -1126,7 +1129,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
     canvas.append(renderSfcDiagram(sfc, selection, (block, entity) => {
       selectedSfcEntity = { programIndex: selectedProgramIndex, blockIndex: block.blockIndex, entityIndex: entity.entityIndex };
       renderProgramInspector(inspector, selected, null, null);
-    }, applySfcSequence, showSfcTextInput));
+    }, applySfcSequence, showSfcTextInput, {drafts:sfcStDrafts,fileKey:current.file.uri}));
     renderProgramInspector(inspector, selected, null, null);
     return;
   }
@@ -5509,6 +5512,9 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
         field, expectedValue, replacement,
       }), `Edit SFC ${field}`);
     }, applySfcSequence, showSfcTextInput));
+    inspector.append(renderSfcVariables(sfc, patch => applyEdit(() => edit_xgwx_sfc_variable(current.file.bytes, {
+      programIndex:selectedProgramIndex, expectedVariables:sfc.variables, name:patch.name, dataType:patch.dataType, description:patch.description, remove:patch.remove,
+    }), patch.remove ? "Remove SFC declaration" : "Add SFC declaration")));
     return;
   }
 

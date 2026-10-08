@@ -1440,7 +1440,7 @@ unsupported. Allocation follows the [LS XGK instruction manual](https://www.ls-e
 ### SFC programs
 
 Native SFC blocks open in a dedicated chart with initial/ordinary steps,
-transitions, labels, jumps, and variable actions. Click an entity to inspect it.
+transitions, labels, jumps, Boolean variable actions, and ST program actions. Click an entity to inspect it.
 Double-click or press Enter on an editable entity to open its native text
 prompt, prefilled with its name or operand. Values are validated before Apply;
 Cancel restores chart focus without changing the file.
@@ -1462,8 +1462,9 @@ Edit step names/comments, the initial step, label/jump names, direct `%MX`
 BOOL transitions, and one direct `%MX` action per step with N, R, S, L, D, P,
 SD, DS, or SL qualifier. **+ New Action** appears beside steps without an action
 and participates in arrow-key navigation. Click it or press Enter to choose
-a qualifier, enter a time for timed types, and enter the BOOL operand.
-Existing actions use the same picker through Enter, double-click, or **Edit action**.
+a Boolean variable or ST program action, then a qualifier and time for timed types.
+Boolean actions use the same picker through Enter, double-click, or **Edit action**.
+ST actions and transitions focus their source editor on Enter or double-click.
 Timed types accept TIME literals such as `T#2s`, `T#500ms`, or `T#1m2s`.
 An empty action operand removes it. Renaming a label updates its jumps;
 deleting a label also deletes its jumps. Names use letters, digits, and
@@ -1475,7 +1476,7 @@ and may report errors in XG5000 until completed.
 All nine variable action qualifiers passed native XG5000 strict Check Program
 and Save As retention checks (`libxgwx/fixtures/sfc/action-qualifiers*`).
 
-Branches, nested blocks, program-backed conditions/actions, unknown qualifiers,
+Branches, nested charts, LD/IL program-backed conditions/actions, unknown qualifiers,
 bookmarks/breakpoints, unknown properties, and program names remain read only.
 Unsupported charts retain the existing bounded comment/condition edits.
 Unknown entity types are preserved and shown as placeholders; their connections
@@ -1484,3 +1485,35 @@ a step/transition pair, and changing names, operands, actions, and initial-step
 status pass XG5000 4.82.1 strict all-program Check Program with 0 errors and
 0 warnings. Native Save As preserves the row model and local symbol payloads;
 XG5000 regenerates compiled internal names.
+
+SFC action and transition programs can be created and edited as Structured Text.
+Select a step/action or transition and choose **Create ST action** or
+**Create ST transition**; edit the ST text editor beside the chart and apply it. Transitions assign a
+Boolean expression to `TRANS`. **Use Boolean variable** converts the selected
+reference back to an operand. Shared programs update all matching references.
+ST edits participate in Save and Undo. XG5000 **Check Program** performs the ST
+syntax and type check; the webview validates file structure and declarations.
+
+**Program variables** declares BOOL, BYTE/WORD/DWORD/LWORD, signed and unsigned
+8/16/32/64-bit integers, REAL/LREAL, TIME, DATE, TIME_OF_DAY, and DATE_AND_TIME.
+Named BOOL declarations can be used directly as chart actions and transitions.
+The reserved `TRANS` and `GOTO_INIT` records cannot be changed. Removing a
+referenced declaration is rejected. Existing allocation records are preserved.
+
+Function block instances include TON, TOF, TP, CTU_DINT, CTD_DINT, CTUD_DINT,
+R_TRIG, F_TRIG, RS, and SR. Declare an instance, then write its call using
+autocomplete for the instance name and named parameters. Common functions
+such as ADD are also available through autocomplete. Blocks retain state
+between scans. N actions run each active
+scan and P actions run once on activation. LD action-program editing, arrays,
+structures, strings, and custom FB declarations remain outside this verified writer.
+
+The ST text editor has line numbers, a cursor-position display, Tab/Shift+Tab
+indentation, and Enter auto-indentation. Autocomplete matches declared variables,
+function block instances, ST keywords, types, and common functions. Type
+`Instance.` to suggest member pins, or type a named parameter inside an instance
+call. Use Up/Down and Enter/Tab to accept, Escape to dismiss, and Ctrl+Space to
+request suggestions. Comments and strings do not trigger suggestions. Drafts are
+retained when switching chart selections and adding declarations; Apply commits
+the source through the existing SFC writer. Narrow layouts put the editor below
+the chart. Source editing and autocomplete keys stay inside the text editor.

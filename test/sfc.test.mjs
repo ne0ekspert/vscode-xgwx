@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import init, {parse_xgwx, edit_xgwx_sfc_entity, replace_xgwx_sfc_sequence} from '../media/libxgwx.js';
+import init, {parse_xgwx, edit_xgwx_sfc_entity, replace_xgwx_sfc_sequence, edit_xgwx_sfc_variable} from '../media/libxgwx.js';
 await init({module_or_path: fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
 const fixture = name => fs.readFileSync(new URL(`../../libxgwx/fixtures/sfc/${name}.xgwx`,import.meta.url));
 const patch = {programIndex:0,blockIndex:0,entityIndex:2,expectedType:1,expectedRow:2,expectedColumn:0,
@@ -11,7 +11,8 @@ test('native SFC summary skips the binary ladder decoder and retains entity prop
   const summary=parse_xgwx(fixture('native-loop'));
   assert.equal(summary.counts.ladderErrors,0);
   assert.equal(summary.ladder.length,0);
-  assert.ok(summary.warnings.some(w=>w.includes("SFC local symbols are preserved but not decoded")));
+  assert.equal(summary.sfc[0].variables.filter(v=>v.system).length,2);
+  assert.equal(summary.sfc[0].variablesError,null);
   assert.equal(summary.sfc[0].blocks[0].entities[1].properties.EntityStep.InitialStep,'1');
   assert.equal(summary.sfc[0].blocks[0].entities[5].typeCode,5);
 });
@@ -89,4 +90,25 @@ test('SFC range deletion is one validated edit with action metadata, label clean
   assert.equal(rows.length,timed.editableRows.length);
   assert.ok(rows.every(r=>r.action===null&&r.actionQualifier==null&&r.actionTime==null));
   assert.deepEqual(rows.map(r=>[r.kind,r.title,r.initial]),timed.editableRows.map(r=>[r.kind,r.title,r.initial]));
+});
+
+test('typed SFC action and transition sources and declarations use guarded native records',()=>{
+  let bytes=fixture('native-st-programs');
+  let sfc=parse_xgwx(bytes).sfc[0], block=sfc.blocks[0];
+  assert.ok(block.editableRows[1].actionCode.includes('Delay(IN := TRUE'));
+  const rows=structuredClone(block.editableRows);rows[1].actionCode='Count := ADD(Count, 2);';
+  const patch={programIndex:0,blockIndex:0,expectedEntities:block.entities,expectedRows:block.editableRows,rows};
+  bytes=replace_xgwx_sfc_sequence(bytes,patch);
+  assert.equal(parse_xgwx(bytes).sfc[0].blocks[0].editableRows[1].actionCode,rows[1].actionCode);
+  assert.throws(()=>replace_xgwx_sfc_sequence(bytes,patch),/stale/);
+  for(const dataType of ['WORD','DWORD','LWORD','INT','DINT','UINT','UDINT','REAL','LREAL','TIME','TON','TOF','TP','CTU_DINT','CTD_DINT','CTUD_DINT','R_TRIG','F_TRIG','RS','SR']) {
+    const expectedVariables=parse_xgwx(bytes).sfc[0].variables;
+    const patch={programIndex:0,expectedVariables,name:`Test_${dataType}`,dataType,description:'Added in SFC',remove:false};
+    bytes=edit_xgwx_sfc_variable(bytes,patch);
+    assert.ok(parse_xgwx(bytes).sfc[0].variables.some(v=>v.name===patch.name&&v.dataType===dataType));
+    assert.throws(()=>edit_xgwx_sfc_variable(bytes,patch),/stale/);
+  }
+  const expectedVariables=parse_xgwx(bytes).sfc[0].variables;
+  assert.throws(()=>edit_xgwx_sfc_variable(bytes,{programIndex:0,expectedVariables,name:'Count',dataType:'DINT',description:'',remove:true}),/used/);
+  assert.throws(()=>edit_xgwx_sfc_variable(bytes,{programIndex:0,expectedVariables,name:'TRANS',dataType:'BOOL',description:'',remove:true}),/identifier/);
 });

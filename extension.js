@@ -93,10 +93,18 @@ class XgwxEditorProvider {
       } else if (message?.type === "promptSfcAction") {
         const qualifiers = [["N","Non-stored"],["R","Reset"],["S","Set"],["L","Time limited"],["D","Time delayed"],
           ["P","Pulse"],["SD","Stored and delayed"],["DS","Delayed and stored"],["SL","Stored and time limited"]];
+        let kind = message.kind || "variable";
+        let kindCancelled = false;
+        if (message.chooseActionType) {
+          const kinds = [{label:"Boolean variable",description:"Control a BOOL operand",kind:"variable"},{label:"ST program",description:"Typed values, arithmetic, and function blocks",kind:"program"}];
+          kinds.sort((a,b) => Number(b.kind === kind) - Number(a.kind === kind));
+          const picked = await vscode.window.showQuickPick(kinds, {title:message.title,placeHolder:"Choose an action type",ignoreFocusOut:true});
+          if (picked) kind = picked.kind; else kindCancelled = true;
+        }
         const currentQualifier = message.qualifier || "N";
         const items = qualifiers.map(([label,description]) => ({label,description}));
         items.sort((a,b) => Number(b.label === currentQualifier) - Number(a.label === currentQualifier));
-        const choice = await vscode.window.showQuickPick(items, {title:message.title, placeHolder:"Choose an SFC action qualifier", ignoreFocusOut:true});
+        const choice = kindCancelled ? null : await vscode.window.showQuickPick(items, {title:message.title, placeHolder:"Choose an SFC action qualifier", ignoreFocusOut:true});
         const validateAction = value => new Promise(resolve => {
           const validationId = ++nextValidationId; validations.set(validationId,resolve);
           panel.webview.postMessage({type:"validateLadderInstruction",requestId:message.requestId,validationId,value});
@@ -107,14 +115,14 @@ class XgwxEditorProvider {
           const timed = ["L","D","SD","DS","SL"].includes(qualifier);
           const time = timed ? await vscode.window.showInputBox({title:`${message.title} · Time`,
             value:message.time || "T#2s", prompt:"Enter a TIME literal, for example T#2s or T#500ms.", ignoreFocusOut:true,
-            validateInput:time => validateAction({operand:message.value || "%MX0",qualifier,time}),
+            validateInput:time => validateAction({operand:kind === "program" ? "Action0" : message.value || "%MX0",qualifier,time,...(message.chooseActionType ? {kind} : {})}),
           }) : "";
           if (time != null) {
             const operand = await vscode.window.showInputBox({title:`${message.title} · ${qualifier}`,
-              value:message.value || "", prompt:"Enter a direct %MX BOOL address. Leave empty to remove the action.", ignoreFocusOut:true,
-              validateInput:operand => validateAction({operand,qualifier,time}),
+              value:kind === "program" && !message.value?.startsWith("%") ? message.value || "Action0" : kind === "program" ? "Action0" : message.value || "", prompt:kind === "program" ? "Enter an ST action program name (32 characters max)." : "Enter a %MX address or a declared BOOL variable. Leave empty to remove the action.", ignoreFocusOut:true,
+              validateInput:operand => validateAction({operand,qualifier,time,...(message.chooseActionType ? {kind} : {})}),
             });
-            if (operand != null) value = {operand,qualifier,time};
+            if (operand != null) value = {operand,qualifier,time,...(message.chooseActionType ? {kind} : {})};
           }
         }
         await new Promise(resolve => setImmediate(resolve));

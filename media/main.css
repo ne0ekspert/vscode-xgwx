@@ -2032,3 +2032,25 @@ form.iec-rung-creation {
 .sfc-selection-range { position: absolute; pointer-events: none; border: 1px solid var(--vscode-focusBorder, #71b7ff); background: color-mix(in srgb, var(--vscode-focusBorder, #71b7ff) 12%, transparent); }
 .sfc-entity.range-selected, .sfc-new-action.range-selected { outline: 2px solid var(--vscode-focusBorder, #71b7ff); outline-offset: 3px; }
 .sfc-selection-status { min-height: 16px; margin: 6px 0; }
+
+.sfc-variable-form { display: grid; gap: 8px; }
+.sfc-variable-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; }
+.sfc-variable-row code { flex: 1; overflow-wrap: anywhere; }
+.sfc-variable-list { margin-bottom: 12px; }
+.sfc-variable-form input, .sfc-variable-form select, .sfc-properties select { width: 100%; box-sizing: border-box; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--border)); padding: 6px; }
+
+.sfc-program-workspace { display: grid; grid-template-columns: minmax(0,1fr); gap: 12px; align-items: start; }
+.sfc-program-workspace.has-source { grid-template-columns: minmax(360px,1fr) minmax(280px,1fr); }
+.sfc-source-panel { min-width: 0; position: sticky; top: 0; }
+.st-text-editor { border: 1px solid var(--vscode-panel-border, #444); background: var(--vscode-editor-background); }
+.st-editor-header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px; border-bottom: 1px solid var(--vscode-panel-border, #444); }
+.st-editor-header strong { flex: 1; min-width: 100px; }
+.st-editor-body { position: relative; display: grid; grid-template-columns: 42px minmax(0,1fr); height: 520px; min-height: 280px; }
+.st-line-numbers, .st-source-input { box-sizing: border-box; margin: 0; padding: 8px 6px; font: 14px/22px var(--vscode-editor-font-family, monospace); tab-size: 2; white-space: pre; }
+.st-line-numbers { overflow: hidden; text-align: right; color: var(--vscode-editorLineNumber-foreground, #858585); user-select: none; border-right: 1px solid var(--vscode-panel-border, #444); }
+.st-source-input { width: 100%; height: 100%; resize: none; border: 0; border-radius: 0; color: var(--vscode-editor-foreground, var(--vscode-foreground)); background: var(--vscode-editor-background); outline-offset: -2px; }
+.st-editor-status { padding: 6px 8px; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border, #444); font-size: 11px; }
+.st-completions { position: absolute; z-index: 5; min-width: 220px; max-width: calc(100% - 44px); max-height: 140px; overflow: auto; background: var(--vscode-editorSuggestWidget-background, #252526); border: 1px solid var(--vscode-editorSuggestWidget-border, #555); box-shadow: 0 4px 12px #0006; }
+.st-completion { display: flex; justify-content: space-between; gap: 18px; padding: 4px 8px; cursor: pointer; }
+.st-completion.selected { color: var(--vscode-list-activeSelectionForeground, #fff); background: var(--vscode-list-activeSelectionBackground, #094771); }
+@media (max-width: 1100px) { .sfc-program-workspace.has-source { grid-template-columns: minmax(0,1fr); } .sfc-source-panel { position: static; } .st-editor-body { height: 360px; } }

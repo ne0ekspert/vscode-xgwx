@@ -1,3 +1,4 @@
+import { renderStTextEditor } from "./st-editor.js";
 const qualifiers = {1:"N",2:"R",4:"S",8:"L",16:"D",32:"P",64:"SD",128:"DS",256:"SL"};
 const names = { 0: "Step", 1: "Transition", 2: "Action", 5: "Jump", 6: "Label", 9: "Annotation", 10: "Empty" };
 const node = (tag, cls, text = "") => {
@@ -8,13 +9,18 @@ export function sfcEntityProperties(entity) { return entity.properties.EntitySte
 
 export function sfcRowsAfterEdit(block, entity, field, replacement) {
   const rows = structuredClone(block.editableRows), row = rows[entity.row];
-  if (field === "initial") {
+  if (field === "actionCode" || field === "transitionCode") {
+    const name = field === "actionCode" ? row.action : row.title;
+    for (const r of rows) if ((field === "actionCode" ? r.action : r.title) === name && r[field] !== undefined) r[field] = replacement;
+  } else if (field === "initial") {
     if (replacement === "1") rows.forEach(r => { r.initial = false; });
     row.initial = replacement === "1";
   } else if (field === "action" || entity.typeCode === 2) {
     row.action = (typeof replacement === "object" ? replacement.operand : replacement) || null;
-    if (!row.action) { delete row.actionQualifier; delete row.actionTime; }
+    if (!row.action) { delete row.actionQualifier; delete row.actionTime; delete row.actionCode; }
     else if (typeof replacement === "object") {
+      if (replacement.kind === "program") row.actionCode = row.actionCode ?? "(* Action program *)";
+      else delete row.actionCode;
       if (replacement.qualifier === "N") delete row.actionQualifier; else row.actionQualifier = replacement.qualifier;
       if (replacement.time) row.actionTime = replacement.time; else delete row.actionTime;
     }
@@ -33,10 +39,11 @@ export function sfcTextField(block, entity) {
   const directBool = block.languageType === 3 && block.language === 2 && entity.typeCode === 1
     && p.PropertyProgram === "0" && /^%MX\d+$/.test(p.Title || "");
   if (!linear && !directBool || ![0,1,2,5,6].includes(entity.typeCode)) return null;
+  if (p.PropertyProgram === "1") return {field:entity.typeCode === 2 ? "actionCode" : "transitionCode"};
   const operand = [1,2].includes(entity.typeCode);
   return { field: entity.typeCode === 1 ? "condition" : entity.typeCode === 2 ? "action" : "name",
     label: entity.typeCode === 1 ? "transition condition" : entity.typeCode === 2 ? "action operand" : `${sfcEntityName(entity).toLowerCase()} name`,
-    value: p.Title || "", prompt: operand ? `Enter a direct %MX BOOL address.${entity.typeCode === 2 ? " Leave empty to remove the action." : ""}`
+    value: p.Title || "", prompt: operand ? `Enter a %MX address or a declared BOOL variable.${entity.typeCode === 2 ? " Leave empty to remove the action." : ""}`
       : entity.typeCode === 5 ? "Enter an existing label name." : "Enter a unique name using letters, digits, or underscores (32 characters max)." };
 }
 
@@ -53,7 +60,7 @@ export function sfcRowsAfterDelete(block, entities) {
   const removedInitial = [...removedRows].some(r => block.editableRows[r].initial);
   const rows = structuredClone(block.editableRows);
   for (const entity of actual.filter(e => e.typeCode === 2)) {
-    const row = rows[entity.row]; row.action = null; delete row.actionQualifier; delete row.actionTime;
+    const row = rows[entity.row]; row.action = null; delete row.actionQualifier; delete row.actionTime; delete row.actionCode;
   }
   const remaining = rows.filter((row,index) => !removedRows.has(index)
     && !(row.kind === "jump" && removedLabels.has(row.title)));
@@ -65,11 +72,19 @@ function deleteSfcEntity(block, entity, onSequence) {
   return edit && onSequence(block,edit.rows,edit.selectedRow);
 }
 
-export function renderSfcDiagram(program, selection, onSelect, onSequence, onTextEdit) {
+export function renderSfcDiagram(program, selection, onSelect, onSequence, onTextEdit, editorState = {}) {
   const section = node("section", "sfc-editor");
   section.append(node("p", "muted", "Select an entity to inspect its properties. Arrow keys navigate; drag or Shift+Arrow selects a rectangle. Delete removes selected rows or actions. Double-click or Enter edits text."));
   const selections = new Map();
-  for (const block of program.blocks) {
+  if (editorState.drafts) {
+    const prefix = `${editorState.fileKey || ""}:${program.programIndex}:`, valid = new Set();
+    for (const b of program.blocks) for (const r of b.editableRows || []) {
+      if (r.actionCode != null) valid.add(`${prefix}${b.blockIndex}:actionCode:${r.action}`);
+      if (r.transitionCode != null) valid.add(`${prefix}${b.blockIndex}:transitionCode:${r.title}`);
+    }
+    for (const key of editorState.drafts.keys()) if (key.startsWith(prefix) && !valid.has(key)) editorState.drafts.delete(key);
+  }
+  for (const block of program.blocks.filter(b => b.main || b.language !== 4)) {
     section.append(node("h3", "sfc-block-title", `${block.name || "Unnamed block"}${block.main ? " · Main" : ""}`));
     let activeEntity = block.entities.find(e => e.entityIndex === selection?.entityIndex && block.blockIndex === selection?.blockIndex);
     if (Array.isArray(block.editableRows) && onSequence) {
@@ -98,6 +113,25 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
       section.append(toolbar);
       section.append(node("p", "muted", "Add after the selected row, or at the end. Select an entity to edit, move, or delete it. Incomplete charts can be saved."));
     } else section.append(node("p", "muted", "Structural editing is unavailable for this chart. Supported properties can still be edited."));
+    const workspace = node("div", "sfc-program-workspace");
+    const sourcePanel = node("div", "sfc-source-panel"); sourcePanel.hidden = true;
+    const drafts = editorState.drafts || new Map(); let sourceKey;
+    const showSource = entity => {
+      const row = block.editableRows?.[entity?.row];
+      const key = entity?.typeCode === 1 ? "transitionCode" : [0,2].includes(entity?.typeCode) ? "actionCode" : null;
+      if (!key || row?.[key] == null) { sourcePanel.hidden = true; sourceKey = null; workspace.classList.remove("has-source"); return; }
+      const name = key === "actionCode" ? row.action : row.title;
+      const identity = `${editorState.fileKey || ""}:${program.programIndex}:${block.blockIndex}:${key}:${name}`;
+      if (sourceKey === identity) { sourcePanel.hidden = false; workspace.classList.add("has-source"); return; }
+      sourceKey = identity;
+      const stored = drafts.get(identity), draft = stored?.source === row[key] ? stored.value : row[key];
+      const editor = renderStTextEditor({name,source:row[key],draft,
+        variables:(program.variables || []).map(v=>({...v,call:sfcFunctionBlocks[v.dataType]})),
+        onChange:value=>drafts.set(identity,{source:row[key],value}),
+        onApply:value=>onSequence(block,sfcRowsAfterEdit(block,entity,key,value),entity.row,key === "actionCode"),
+      });
+      sourcePanel.replaceChildren(editor); sourcePanel.hidden = false; workspace.classList.add("has-source");
+    };
     const viewport = node("div", "sfc-viewport");
     const board = node("div", "sfc-board");
     board.setAttribute("role", "group"); board.setAttribute("aria-label", `SFC ${block.name}`);
@@ -165,7 +199,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
       if (!extend || !anchor) anchor = entity;
       extent = entity;
       activeEntity = entity.newAction ? byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
-      onSelect(block,activeEntity); paintSelection();
+      showSource(activeEntity); onSelect(block,activeEntity); paintSelection();
     };
     const focusCell = entity => {
       movingFocus = true;
@@ -316,7 +350,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         const entity = navigation.find(e => e.row === extent.row && e.column === extent.column);
         if (entity) {
           activeEntity = entity.newAction ? byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
-          onSelect(block,activeEntity);
+          showSource(activeEntity); onSelect(block,activeEntity);
         }
         focusCell(entity); paintSelection();
       } else {
@@ -390,7 +424,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
     if (positioned.some(e => ![0,1,2,5,6,9,10].includes(e.typeCode))) section.append(node("p", "muted", "This block contains entity kinds whose connections are not decoded. They are shown as read-only placeholders."));
     if (positioned.length !== block.entities.length) section.append(node("p", "muted", "Some entities have coordinates outside the display range. Their XML is preserved."));
     if (!block.entities.length) board.append(node("p", "muted", "This SFC block is empty."));
-    viewport.append(board); section.append(viewport,status);
+    viewport.append(board); workspace.append(viewport,sourcePanel); showSource(activeEntity); section.append(workspace,status);
   }
   return section;
 }
@@ -419,6 +453,28 @@ export function renderSfcProperties(program, selection, onEdit, onSequence, onTe
   const linear = Array.isArray(block.editableRows) && Boolean(onSequence);
   const directBool = editingSupported && entity.typeCode === 1 && p.PropertyProgram === "0" && /^%MX\d+$/.test(p.Title || "");
   field(entity.typeCode === 1 ? "Condition" : "Name", p.Title || "", false, directBool || linear, entity.typeCode === 1 ? "condition" : "name");
+  if (linear && [0,1,2].includes(entity.typeCode)) {
+    const row = block.editableRows[entity.row], action = entity.typeCode !== 1;
+    const key = action ? "actionCode" : "transitionCode", code = row[key];
+    const mode = node("button", "secondary-button", code !== undefined && code !== null ? "Use Boolean variable" : `Create ST ${action ? "action" : "transition"}`);
+    mode.type = "button"; mode.addEventListener("click", () => {
+      const rows = structuredClone(block.editableRows), target = rows[entity.row];
+      if (code !== undefined && code !== null) { delete target[key]; if (action) target.action = "%MX0"; else target.title = "%MX0"; }
+      else {
+        let i = 0, prefix = action ? "Action" : "Transition";
+        const names = new Set(program.blocks.map(b => b.name));
+        while (names.has(`${prefix}${i}`)) i++;
+        if (action) target.action = `${prefix}${i}`; else target.title = `${prefix}${i}`;
+        target[key] = action ? "(* Action program *)" : "TRANS := FALSE;";
+      }
+      return onSequence(block,rows,entity.row,action);
+    }); section.append(mode);
+    if (code !== undefined && code !== null) {
+      const open = node("button", "secondary-button", "Edit ST source"); open.type = "button";
+      open.addEventListener("click",()=>document.querySelector("[data-sfc-st-source]")?.focus());
+      section.append(open,node("p", "muted", action ? "N actions run each active scan; P actions run once on activation." : "Assign a Boolean expression to TRANS in the text editor."));
+    }
+  }
   if (entity.typeCode === 2) {
     const action = entity.properties.EntityAction || {};
     field("Qualifier", qualifiers[action.Qualifier] || `Native qualifier ${action.Qualifier ?? "unknown"}`, false, false);
@@ -438,7 +494,7 @@ export function renderSfcProperties(program, selection, onEdit, onSequence, onTe
     const command = (title, run, disabled = false) => { const button = node("button", "secondary-button", title); button.type = "button"; button.disabled = disabled; button.addEventListener("click", run); actions.append(button); };
     if (onTextEdit && [0,2].includes(entity.typeCode)) command(block.editableRows[entity.row].action ? "Edit action" : "New action", () => {
       const row = block.editableRows[entity.row];
-      return onTextEdit(block, entity, {field:"action",label:"action operand",value:row.action || "",prompt:"Enter a direct %MX BOOL address."});
+      return onTextEdit(block, entity, {field:"action",label:"action operand",value:row.action || "",prompt:"Enter a %MX address or a declared BOOL variable."});
     });
     if (entity.typeCode === 2) command("Delete action", () => deleteSfcEntity(block, entity, onSequence));
     else {
@@ -452,8 +508,44 @@ export function renderSfcProperties(program, selection, onEdit, onSequence, onTe
   }
   if ([0,1].includes(entity.typeCode)) field("Comment", p.Comment || "", true, editingSupported && entity.typeCode === 0 && typeof p.Comment === "string", "comment");
   else if (p.Comment) field("Comment", p.Comment, true, false, "comment");
-  if (linear) section.append(node("p", "muted", "Step and label names use letters, digits, and underscores (32 characters max). Transitions and action operands use %MX BOOL addresses. Renaming a label updates its jumps; deleting it removes its jumps. An empty action operand removes it."));
+  if (linear) section.append(node("p", "muted", "Step and label names use letters, digits, and underscores (32 characters max). Boolean transitions and actions use %MX addresses or declared BOOL variables; ST programs use declared variables and function blocks. Renaming a label updates its jumps; deleting it removes its jumps. An empty action operand removes it."));
   else if (directBool) section.append(node("p", "muted", "Direct BOOL transitions support %MX addresses. Step names and chart structure are read only."));
   else section.append(node("p", "muted", "Names, program references, and chart structure are read only."));
+  return section;
+}
+
+export const sfcVariableTypes = ["BOOL","BYTE","WORD","DWORD","LWORD","SINT","INT","DINT","LINT","USINT","UINT","UDINT","ULINT","REAL","LREAL","TIME","DATE","TIME_OF_DAY","DATE_AND_TIME"];
+export const sfcFunctionBlocks = {
+  TON: "IN := TRUE, PT := T#2s", TOF: "IN := TRUE, PT := T#2s", TP: "IN := TRUE, PT := T#2s",
+  CTU_DINT: "CU := TRUE, R := FALSE, PV := 10", CTD_DINT: "CD := TRUE, LD := FALSE, PV := 10",
+  CTUD_DINT: "CU := TRUE, CD := FALSE, R := FALSE, LD := FALSE, PV := 10",
+  R_TRIG: "CLK := TRUE", F_TRIG: "CLK := TRUE", RS: "S := TRUE, R_1 := FALSE", SR: "S_1 := TRUE, R := FALSE",
+};
+export function renderSfcVariables(program, onEdit) {
+  const section = node("section", "cell-editor sfc-variables"); section.append(node("h3", "", "Program variables"));
+  if (program.variablesError) { section.append(node("p", "muted", program.variablesError)); return section; }
+  const list = node("div", "sfc-variable-list");
+  for (const variable of program.variables || []) {
+    const item = node("div", "sfc-variable-row");
+    item.append(node("code", "", `${variable.name} : ${variable.dataType}`));
+    if (variable.description) item.append(node("span", "muted", variable.description));
+    if (variable.system) item.append(node("span", "muted", "SFC system"));
+    else { const remove = node("button", "secondary-button", "Remove"); remove.type = "button";
+      remove.setAttribute("aria-label", `Remove variable ${variable.name}`); remove.addEventListener("click", () => onEdit({...variable,remove:true})); item.append(remove); }
+    list.append(item);
+  }
+  section.append(list);
+  const form = node("form", "sfc-variable-form");
+  const name = node("input", ""); name.placeholder = "Variable or instance name"; name.setAttribute("aria-label", "SFC variable name"); name.required = true; name.maxLength = 32;
+  const type = node("select", ""); type.setAttribute("aria-label", "SFC variable type");
+  for (const [label, types] of [["Variables",sfcVariableTypes],["Function blocks",Object.keys(sfcFunctionBlocks)]]) {
+    const group = document.createElement("optgroup"); group.label = label;
+    for (const value of types) { const option = node("option", "", value); option.value = value; group.append(option); } type.append(group);
+  }
+  const description = node("input", ""); description.placeholder = "Description"; description.setAttribute("aria-label", "SFC variable description");
+  const add = node("button", "primary-button", "Add declaration"); add.type = "submit";
+  form.append(name,type,description,add); form.addEventListener("submit", async event => { event.preventDefault(); add.disabled = true;
+    try { await onEdit({name:name.value.trim(),dataType:type.value,description:description.value,remove:false}); } finally { if (add.isConnected) add.disabled = false; } });
+  section.append(form,node("p", "muted", "Declarations are shared by the chart’s action and transition programs. TRANS is the Boolean transition result. Function blocks retain instance state between scans."));
   return section;
 }

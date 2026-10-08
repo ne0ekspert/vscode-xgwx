@@ -12,7 +12,9 @@ test('native blank SFC template opens as an empty SFC main block',()=>{
   assert.equal(summary.ladder.length,0);
   assert.equal(summary.counts.ladderErrors,0);
   assert.deepEqual(summary.sfc,[{programIndex:0,blocks:[{blockIndex:0,name:'NewProgram',main:true,
-    languageType:3,language:2,rows:0,columns:0,entities:[],editableRows:[]}]}]);
+    languageType:3,language:2,rows:0,columns:0,entities:[],editableRows:[]}],variables:[
+      {name:"GOTO_INIT",dataType:"BOOL",description:"",system:true},
+      {name:"TRANS",dataType:"BOOL",description:"",system:true}],variablesError:null}]);
   assert.ok(source.equals(fs.readFileSync(new URL('../../libxgwx/fixtures/sfc/new-xgi-sfc.xgwx',import.meta.url))));
 });
 for (const family of ['xgk','xgi']) {

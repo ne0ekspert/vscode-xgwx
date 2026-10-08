@@ -720,3 +720,21 @@ test('SFC action picker validates structured qualifiers and times and cancels ea
   assert.deepEqual(messages.at(-1).value,{operand:'',qualifier:'DS',time:'T#5s'});
   assert.deepEqual([...doc.bytes],[1,2,3]);
 });
+
+test('SFC new action picker offers ST programs and preserves its kind through validation',async()=>{
+  let receive, options, finish;
+  const messages=[],picks=[];
+  mockVscode.window={showQuickPick:async(items)=>{picks.push(items);return items.find(i=>i.kind==='program') || items.find(i=>i.label==='P');},
+    showInputBox:value=>{options=value;return new Promise(resolve=>{finish=resolve;});}};
+  const document=new XgwxDocument(uri('/workspace/program-action.xgwx'),[1,2,3]);
+  const provider=new XgwxEditorProvider({});
+  const panel={visible:true,webview:{cspSource:'test',asWebviewUri:value=>value,onDidReceiveMessage(callback){receive=callback;return{dispose(){}};},async postMessage(m){messages.push(m);}},reveal(){},onDidDispose(){}};
+  await provider.resolveCustomEditor(document,panel);
+  const pending=receive({type:'promptSfcAction',requestId:81,title:'New SFC action',chooseActionType:true,kind:'variable',value:'',qualifier:'N',time:''});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(picks[0].map(i=>i.label),['Boolean variable','ST program']);assert.equal(options.value,'Action0');assert.ok(options.prompt.includes('program name'));
+  const validation=options.validateInput('UpdateValues'),request=messages.at(-1);
+  assert.deepEqual(request.value,{operand:'UpdateValues',qualifier:'P',time:'',kind:'program'});
+  await receive({type:'ladderInstructionValidationResult',validationId:request.validationId});await validation;
+  finish('UpdateValues');await pending;assert.deepEqual(messages.at(-1).value,request.value);
+});

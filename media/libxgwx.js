@@ -1247,6 +1247,23 @@ export function edit_xgwx_sfc_entity(bytes, patch) {
 }
 
 /**
+ * @param {Uint8Array} bytes
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_sfc_variable(bytes, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_sfc_variable(ptr0, len0, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Extend an IEC group into the adjacent implicit blank row.
  * @param {Uint8Array} bytes
  * @param {number} program_index
