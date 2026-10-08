@@ -1434,3 +1434,18 @@ The current generator supports XGK global symbols, variable-point allocation,
 and 18 digital module types captured in native XG5000. Analog channel variables,
 IEC global symbols, fixed-point allocation, and unverified module layouts remain
 unsupported. Allocation follows the [LS XGK instruction manual](https://www.ls-electric.com/upload/customer/download/c4090ad3-f6a5-424a-a5fd-ef46a70eecd8/XGK_XGB_Instructions_Manual_Eng_V2.2.pdf).
+
+### SFC programs
+
+Native SFC blocks open in a dedicated chart with initial/ordinary steps,
+transitions, labels, jumps, and variable actions. Click an entity or focus it
+with Tab and press Enter to inspect it. Supported edits are step
+comments and existing direct `%MX` BOOL transition conditions; Save and Undo
+use the normal custom document lifecycle.
+
+Step/program names, action qualifiers, program-backed conditions/actions, and
+chart structure remain read only. Unknown entity types are preserved and shown
+as placeholders; their connections are not inferred. The validated XGI-CPUE
+loop and N-action fixtures pass XG5000 4.82.1 strict all-program Check Program
+with 0 errors and 0 warnings. Native Save As preserves the edited chart and
+local variable tables exactly.

@@ -1990,3 +1990,29 @@ form.iec-rung-creation {
 .io-variable-preview { padding: 12px; margin-bottom: 16px; border: 1px solid var(--vscode-panel-border); }
 .io-variable-preview .table-scroll { max-height: 320px; overflow: auto; }
 .io-variable-preview tr[data-io-variable-action="overwrite"] { background: color-mix(in srgb, var(--vscode-editorWarning-foreground) 12%, transparent); }
+
+.sfc-viewport { overflow: auto; max-height: calc(100vh - 240px); border: 1px solid var(--border); background: var(--vscode-editor-background, #151b24); }
+.sfc-board { position: relative; min-height: 280px; }
+.sfc-wires { position: absolute; inset: 0; pointer-events: none; }
+.sfc-wires line { stroke: currentColor; stroke-width: 2; }
+.sfc-row { position: absolute; left: 12px; opacity: .65; font: 12px monospace; }
+.sfc-entity { position: absolute; z-index: 1; width: 80px; min-height: 44px; padding: 8px; border: 1px solid currentColor; background: var(--vscode-editor-background, #151b24); color: inherit; cursor: pointer; }
+.sfc-entity.initial { outline: 1px solid currentColor; outline-offset: -5px; }
+.sfc-entity.transition { width: 164px; min-height: 44px; border: 0; background: transparent; text-align: left; padding-left: 64px; }
+.sfc-entity.transition .sfc-symbol { position: absolute; left: 24px; top: 21px; width: 32px; border-top: 2px solid currentColor; }
+.sfc-entity.label, .sfc-entity.jump { width: 164px; border: 0; background: transparent; text-align: left; }
+.sfc-entity.unknown { border-style: dashed; }
+.sfc-entity.inspected, .sfc-entity:focus-visible { outline: 2px solid var(--vscode-focusBorder, #71b7ff); outline-offset: 3px; }
+.sfc-title, .sfc-comment { display: block; overflow-wrap: anywhere; }
+.sfc-comment { font-size: 11px; opacity: .85; max-height: 32px; overflow: auto; white-space: pre-wrap; }
+.sfc-properties .property-field, .sfc-properties .primary-button { margin-bottom: 12px; }
+.sfc-block-title { margin-top: 24px; }
+
+.sfc-entity.step { width: 120px; }
+.sfc-entity.label .sfc-symbol, .sfc-entity.jump .sfc-symbol { position: absolute; left: 40px; top: 14px; width: 40px; height: 16px; overflow: visible; fill: none; stroke: currentColor; stroke-width: 2; pointer-events: none; }
+.sfc-entity.label .sfc-title, .sfc-entity.jump .sfc-title { padding-left: 76px; }
+
+.sfc-wires line.sfc-grid-line { stroke: currentColor; stroke-width: 1; opacity: .1; }
+
+.sfc-entity.action { width: 144px; display: flex; gap: 10px; text-align: left; }
+.sfc-qualifier { border-right: 1px solid currentColor; padding-right: 10px; }

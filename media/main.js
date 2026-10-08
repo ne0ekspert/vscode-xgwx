@@ -1,3 +1,4 @@
+import { renderSfcDiagram, renderSfcProperties } from "./sfc.js";
 import { moveIecCursor, iecCursorRecord } from "./iec-navigation.js";
 import { validatedEditCache } from "./validated-edit-cache.js";
 import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
@@ -5,6 +6,7 @@ import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
+  edit_xgwx_sfc_entity,
   preview_xgwx_io_variables,
   generate_xgwx_io_variables,
   cpu_catalog,
@@ -179,6 +181,7 @@ let selectedBase = null;
 let selectedModule = null;
 let selectedHardwareSlot = null;
 let selectedProgramIndex = 0;
+let selectedSfcEntity = null;
 let selectedCellOffset = null;
 let selectedBlankCell = null;
 let selectedLadderAnchor = null;
@@ -246,7 +249,7 @@ window.addEventListener("message", async ({ data }) => {
 vscode.postMessage({ type: "ready" });
 
 async function loadWorkspace(file) {
-  const viewport = app.querySelector(".iec-layout-viewport, .ld-viewport");
+  const viewport = app.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
   if (current && viewport && activeView === "programs") ladderCanvasScroll.set(canvasExtentKey(), {
     top: viewport.scrollTop, left: viewport.scrollLeft,
     editorTop: app.querySelector(".editor-canvas")?.scrollTop ?? 0,
@@ -259,6 +262,7 @@ async function loadWorkspace(file) {
       selectedIecElement = null;
       selectedIecInsertion = null;
       selectedIecBlank = null;
+      selectedSfcEntity = null;
     }
     await wasmReady;
     if (!moduleCatalog.length) moduleCatalog = xgk_module_catalog();
@@ -288,7 +292,7 @@ function renderWorkspace() {
   const oldShell = app.querySelector(".editor-shell");
   const sameProgram = activeView === "programs" && oldShell?.dataset.view === activeView
     && oldShell.dataset.programIndex === String(selectedProgramIndex);
-  const oldLayout = sameProgram ? app.querySelector(".iec-layout-viewport, .ld-viewport") : null;
+  const oldLayout = sameProgram ? app.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport") : null;
   const scroll = oldLayout ? { top: oldLayout.scrollTop, left: oldLayout.scrollLeft,
     editorTop: app.querySelector(".editor-canvas")?.scrollTop ?? 0 }
     : activeView === "programs" ? ladderCanvasScroll.get(canvasExtentKey()) : null;
@@ -303,7 +307,7 @@ function renderWorkspace() {
     renderStatusBar(summary),
   );
   app.append(shell);
-  const layout = scroll && shell.querySelector(".iec-layout-viewport, .ld-viewport");
+  const layout = scroll && shell.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
   if (layout) {
     layout.scrollTop = scroll.top;
     layout.scrollLeft = scroll.left;
@@ -1048,7 +1052,19 @@ function renderProgramsEditor(canvas, inspector, programs) {
   const selected = programs[selectedProgramIndex] || null;
   const ladder = (current.summary.ladder || []).find((item) => item.programIndex === selectedProgramIndex) || null;
 
-  if (ladder?.projectType === 2) {
+  const sfc = (current.summary.sfc || []).find(item => item.programIndex === selectedProgramIndex);
+  if (sfc) {
+    const selection = selectedSfcEntity?.programIndex === selectedProgramIndex ? selectedSfcEntity : null;
+    canvas.append(editorHeader("Sequential function chart", `${sfc.blocks.length} block${sfc.blocks.length === 1 ? "" : "s"}`));
+    canvas.append(renderSfcDiagram(sfc, selection, (block, entity) => {
+      selectedSfcEntity = { programIndex: selectedProgramIndex, blockIndex: block.blockIndex, entityIndex: entity.entityIndex };
+      renderProgramInspector(inspector, selected, null, null);
+    }));
+    renderProgramInspector(inspector, selected, null, null);
+    return;
+  }
+
+  if (ladder?.projectType === 2 && programLanguage(ladder) === "Ladder Diagram") {
     const editableCount = (ladder.sourceStrings || []).filter((item) => item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction).length;
     canvas.append(editorHeader(
       `${programLanguage(ladder)} payload`,
@@ -5393,7 +5409,8 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   }
 
   const form = element("div", "property-grid");
-  const name = property(form, "Name", program.name, false);
+  const sfc = (current.summary.sfc || []).find(item => item.programIndex === selectedProgramIndex);
+  const name = property(form, "Name", program.name, Boolean(sfc));
   const task = property(form, "Task", program.task, false);
   property(form, "Kind", program.kind, true);
   property(form, "Version", program.version, true);
@@ -5412,8 +5429,20 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   form.append(applyMetadata);
   inspector.append(form);
 
+  if (sfc) {
+    const selection = selectedSfcEntity?.programIndex === selectedProgramIndex ? selectedSfcEntity : null;
+    inspector.append(renderSfcProperties(sfc, selection, async (block, entity, field, expectedValue, replacement) => {
+      await applyEdit(() => edit_xgwx_sfc_entity(current.file.bytes, {
+        programIndex: selectedProgramIndex, blockIndex: block.blockIndex, entityIndex: entity.entityIndex,
+        expectedType: entity.typeCode, expectedRow: entity.row, expectedColumn: entity.column,
+        field, expectedValue, replacement,
+      }), `Edit SFC ${field}`);
+    }));
+    return;
+  }
+
   const cellSection = element("section", "cell-editor");
-  if (ladder?.projectType === 2) {
+  if (ladder?.projectType === 2 && programLanguage(ladder) === "Ladder Diagram") {
     cellSection.append(element("h3", "", cell || insertion || iecBlankCell ? "Ladder cell" : "Ladder row"));
     if (cell?.isIecComment) renderIecCommentCell(cellSection, cell);
     else if (cell?.iecElementKind) renderIecLadderCell(cellSection, ladder, cell);
@@ -5777,7 +5806,7 @@ function renderIecContactInsertion(section, site, initialX = null) {
 async function applyEdit(update, label, beforeRender) {
   try {
     const editorPane = app.querySelector(".editor-canvas");
-    const iecViewport = app.querySelector(".iec-layout-viewport, .ld-viewport");
+    const iecViewport = app.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
     const scroll = activeView === "programs" ? {
       editorTop: editorPane?.scrollTop ?? 0,
       layoutTop: iecViewport?.scrollTop ?? 0,
@@ -5800,7 +5829,7 @@ async function applyEdit(update, label, beforeRender) {
     renderWorkspace();
     if (scroll) {
       const refreshedEditor = app.querySelector(".editor-canvas");
-      const refreshedLayout = app.querySelector(".iec-layout-viewport, .ld-viewport");
+      const refreshedLayout = app.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
       if (refreshedEditor) refreshedEditor.scrollTop = scroll.editorTop;
       if (refreshedLayout) {
         refreshedLayout.scrollTop = scroll.layoutTop;
