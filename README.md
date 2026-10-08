@@ -14,6 +14,11 @@ powered by the sibling `libxgwx` project during development.
   chart, or add steps, transitions, labels, and jumps individually.
 - Shows project counts and metadata.
 - Enables CPU choices only when the bundled writer accepts the retained hardware.
+  Supported SFC projects with captured default parameters and empty I/O tables
+  can switch among XGI-CPUE, CPUS, CPUH, CPUU, CPUU/D and CPUUN. Changes preserve
+  ST source and declarations and update default memory ranges. CPUUN adds/removes
+  its default local Ethernet and empty motion sections. Custom settings and other
+  XGI conversions require migration or further native validation.
   Cross-family and compact-model conversions are disabled.
 - Identifies the captured XBM-DR16S built-in I/O and disables unsupported compact
   module selection, deletion, and settings. Module comments remain editable.

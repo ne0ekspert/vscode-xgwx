@@ -1,11 +1,24 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import init, {parse_xgwx, edit_xgwx_sfc_entity, replace_xgwx_sfc_sequence, edit_xgwx_sfc_variable} from '../media/libxgwx.js';
+import init, {parse_xgwx, edit_xgwx_sfc_entity, replace_xgwx_sfc_sequence, edit_xgwx_sfc_variable, select_xgwx_cpu} from '../media/libxgwx.js';
 await init({module_or_path: fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
 const fixture = name => fs.readFileSync(new URL(`../../libxgwx/fixtures/sfc/${name}.xgwx`,import.meta.url));
 const patch = {programIndex:0,blockIndex:0,entityIndex:2,expectedType:1,expectedRow:2,expectedColumn:0,
   field:'condition',expectedValue:'%MX0',replacement:'%MX2'};
+
+test('SFC CPU selection covers all six captured XGI models and preserves ST and declarations',()=>{
+  const source=fixture('st-programs-generated'), before=parse_xgwx(source);
+  const models=['XGI-CPUE','XGI-CPUS','XGI-CPUH','XGI-CPUU','XGI-CPUU/D','XGI-CPUUN'];
+  for(const from of models) for(const to of models) {
+    const start=select_xgwx_cpu(source,from), bytes=select_xgwx_cpu(start,to), after=parse_xgwx(bytes);
+    assert.equal(after.cpu.model,to);
+    assert.deepEqual(after.sfc,before.sfc);
+    assert.deepEqual(parse_xgwx(select_xgwx_cpu(bytes,from)).sfc,before.sfc);
+    assert.equal(after.parameters.some(p=>p.parameterType==='FENET PARAMETER'),to==='XGI-CPUUN');
+  }
+  for(const target of ['XGI-CPUS/P','XGK-CPUSN','XGB-XBMS']) assert.throws(()=>select_xgwx_cpu(source,target));
+});
 
 test('native SFC summary skips the binary ladder decoder and retains entity properties',()=>{
   const summary=parse_xgwx(fixture('native-loop'));

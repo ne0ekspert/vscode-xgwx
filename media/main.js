@@ -6813,6 +6813,8 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
   const cpuActions = element("div", "overview-cpu-actions");
   const cpuNote = element("p", "module-selection-note", currentCpu?.family === "XGK"
     ? "Available CPU changes preserve hardware within the target CPU limits. Check program compatibility in XG5000 after changing CPU."
+    : currentCpu?.family === "XGI" && !cpuSelect.disabled
+    ? "Supported XGI models update captured default parameters and preserve SFC programs. CPUUN includes local Ethernet defaults. Custom settings and configured modules require migration. Check program compatibility in XG5000 after changing CPU."
     : "CPU conversion is not supported for this workspace. Existing hardware is preserved.");
   const applyCpu = button("Apply CPU selection", "primary-button", async () => {
     const entry = cpuCatalog.find((item) => item.model === cpuSelect.value);

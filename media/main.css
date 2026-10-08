@@ -1104,6 +1104,7 @@ button.tree-row:hover,
 }
 
 .overview-cpu-actions p { margin: 0; }
+.overview-cpu-actions button { flex-shrink: 0; white-space: nowrap; }
 
 .diagnostics {
   display: grid;
