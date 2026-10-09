@@ -1482,9 +1482,13 @@ All nine variable action qualifiers passed native XG5000 strict Check Program
 and Save As retention checks (`libxgwx/fixtures/sfc/action-qualifiers*`).
 
 Balanced alternative and simultaneous branches are editable. Select a step for
-**Add alternative branch**, or a transition for **Add simultaneous branch**;
-the following node becomes the first path. Select a split for **Add path**
-(up to eight paths). **Extend paths** adds a step/transition pair to every path.
+**Add alternative branch**, or a step/transition for **Add simultaneous branch**;
+selecting a step puts the split immediately before that step and its action stack;
+the following node becomes the first path. The canvas branch control appends
+a path when a matching branch is already selected. Select a split for **Add path**. **Extend paths** adds a step/transition pair to every path.
+**Extend selected path** adds a pair only to the selected lane, retaining empty
+connector rows in the others. **Remove path pair** removes a pair after the first
+node from that lane, including its step actions, while retaining the branch.
 Select a split/join for **Remove branch**, retaining the first path. Delete on a
 node inside a branch removes its entire path; removing one of two paths restores
 a linear chart. Branch actions, Boolean conditions, ST sources, names and
@@ -1492,7 +1496,7 @@ comments use the existing inspectors and text editor. Arrow keys navigate across
 paths and split/join endpoints. Branch deletion accepts a single selected node
 or action boxes; ambiguous multi-path range deletion leaves the chart unchanged.
 
-Nested/crossing branches, unequal path heights, custom alternative priorities,
+Nested/crossing branches, path gaps without connector rows, custom alternative priorities,
 LD/IL program-backed conditions/actions, unknown qualifiers, bookmarks/breakpoints,
 unknown properties, and program names remain read only.
 Unsupported charts retain the existing bounded comment/condition edits.
@@ -1548,7 +1552,10 @@ Mixed ST/variable stacks in linear and simultaneous-branch charts passed native
 XG5000 strict Check Program and Save As retention checks; UI interaction checks
 use the rendered webview with a mocked VS Code host. Supported qualifiers remain
 N/R/S/L/D/P/SD/DS/SL. Post-scan actions and unsupported native metadata remain
-read only. The chart limit includes continuation rows (512 physical rows).
+read only. XG5000 limits each program to 512 ordinary steps and 65,535
+rows/columns; branches have no independent count cap. The editor separately
+limits dense grids to 1,048,576 cells. A simultaneous branch can therefore have
+511 single-step paths when its only other step is the initial step.
 
 The declaration editor supports **Edit**, **Apply declaration**, and **Cancel
 editing**, plus Retain and initial values. Arrays use up to three zero-based
@@ -1564,8 +1571,7 @@ overrides remain guarded. Native validation covers a mixed project using 1D,
 initial values and STRING, followed by strict checking and Save As comparison.
 
 
-SFC chart clipboard controls support **Copy**, **Cut**, and **Paste**, plus
-Ctrl/Cmd+C, X, and V when the chart has focus. Copying a step includes its full
+SFC chart clipboard operations use Ctrl/Cmd+C, X, and V when the chart has focus. Copying a step includes its full
 action stack; copying action boxes appends their saved actions to the selected
 step. Other selections copy the whole physical row span, including all branch
 lanes. Include both split and join to copy a branch, and paste outside an existing
@@ -1608,3 +1614,13 @@ Captured FB pin checks and autocomplete share one table, including latch output
 `Q`. Input `:=` and output `=>` call conventions and latch pins are checked
 against the [LS instruction manual](https://ssq.ls-electric.com/uploads/document/16411827948890/XGI_XGR_XEC_XMC_Instruction_Manual_202012_V3.8_EN.pdf),
 sections RS/SR and ST parameter calls.
+
+**Add alternative branch** is available on the chart canvas toolbar and becomes
+enabled for a supported selected step. The inspector omits Add action and Delete
+action buttons; use the canvas **+ New Action** affordance and the Delete key.
+
+Step-row hover or step selection by click/arrow keys reveals **+ New Action** and **+ Add simultaneous branch** beside
+the action area. Both remain keyboard reachable; simultaneous creation occurs
+before the selected step. Initial steps and unsupported entry/exit layouts keep
+branch creation disabled, and nested branch creation stays guarded. The inspector
+omits Add simultaneous branch. Touch surfaces show the affordances directly.

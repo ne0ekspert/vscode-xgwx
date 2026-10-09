@@ -1,3 +1,4 @@
+import {SFC_MAX_COLUMNS,SFC_MAX_ROWS,SFC_MAX_STEPS,sfcRowsFit} from "./sfc-limits.js";
 import {captureSfcClipboard,cutSfcClipboard,pasteSfcClipboard} from './sfc-clipboard.js';
 import {parseSfcArrayBounds,sfcDeclarationType} from "./sfc-declarations.js";
 import { actionGroup, appendAction, compactActions, removeActions, moveAction, moveRowUnit } from "./sfc-actions.js";
@@ -24,8 +25,31 @@ const branchKinds = new Set(["alternative_split","alternative_join","parallel_sp
 const freshRow = (kind,title,position) => ({kind,title,comment:"",initial:false,action:null,position});
 const sortRows = rows => rows.sort((a,b)=>a.position.row-b.position.row || a.position.column-b.position.column);
 const uniqueStep = rows => { let i=0; while(rows.some(r=>r.kind === "step" && r.title === `S${i}`)) i++; return `S${i}`; };
+export function sfcBranchRegion(block,entity) {
+  const index=sfcRowIndex(block,entity),source=block.editableRows?.[index];if(!source?.position)return null;
+  const splits=block.editableRows.filter(r=>r.kind.endsWith("_split") && r.position.row<=source.position.row);
+  for(const split of splits.reverse()) {
+    const join=block.editableRows.find(r=>r.kind===split.kind.replace("_split","_join")&&r.position.row>split.position.row);
+    if(join&&source.position.row<=join.position.row&&source.position.column<=split.branchEnd)return {split,join};
+  }
+  return null;
+}
 export function sfcAddBranch(block, entity, kind) {
+  const region=sfcBranchRegion(block,entity);
+  if(region)return region.split.kind===`${kind}_split` ? sfcAddPath(block,{row:region.split.position.row,column:0,typeCode:4}) : null;
   const rows = positionedRows(block), index=sfcRowIndex(block,entity), source=rows[index];
+  if(kind === "parallel" && source?.kind === "step") {
+    const start=source.position.row,group=actionGroup(rows,index),end=rows[group.at(-1)]?.position.row;
+    const previous=[...rows].reverse().find(r=>r.position.column===0 && r.position.row<start && r.kind!=="continuation");
+    const next=rows.find(r=>r.position.column===0 && r.position.row===end+1);
+    if(source.initial || source.position.column!==0 || previous?.kind!=="transition" || next?.kind!=="transition" || rows.some(r=>r.branchEnd!=null && r.position.row<=start && rows.find(j=>j.kind===r.kind.replace("_split","_join") && j.position.row>r.position.row)?.position.row>=start))return null;
+    for(const r of rows)if(r.position.row>=start)r.position.row+=r.position.row<=end?1:2;
+    rows.push({...freshRow("parallel_split","",{row:start,column:0}),branchEnd:2},
+      {...freshRow("parallel_join","",{row:end+2,column:0}),branchEnd:2},
+      freshRow("step",uniqueStep(rows),{row:start+1,column:2}));
+    for(let row=start+2;row<=end+1;row++)rows.push(freshRow("continuation","",{row,column:2}));
+    return sfcRowsFit(rows) ? sortRows(rows) : null;
+  }
   if (!source || source.position.column !== 0 || source.kind !== (kind === "alternative" ? "step" : "transition")) return null;
   const start=source.position.row+1, middle=rows.find(r=>r.position.row === start && r.position.column === 0);
   if (!middle || middle.kind !== (kind === "alternative" ? "transition" : "step") ||
@@ -36,34 +60,57 @@ export function sfcAddBranch(block, entity, kind) {
   rows.push({...freshRow(`${kind}_split`,"",{row:start,column:0}),branchEnd:2},
     {...freshRow(`${kind}_join`,"",{row:start+2,column:0}),branchEnd:2},
     freshRow(middle.kind,middle.kind === "step" ? uniqueStep(rows) : "%MX0",{row:start+1,column:2}));
-  return sortRows(rows);
+  return sfcRowsFit(rows) ? sortRows(rows) : null;
 }
 export function sfcAddPath(block, entity) {
   const rows=positionedRows(block), branch=rows[sfcRowIndex(block,entity)];
-  if(!branch?.kind.endsWith("_split") || branch.branchEnd >= 14) return null;
+  if(!branch?.kind.endsWith("_split") || branch.branchEnd+4 > SFC_MAX_COLUMNS) return null;
   const join=rows.find(r=>r.kind === branch.kind.replace("_split","_join") && r.position.row > branch.position.row);
   if(!join) return null;
+  const newSteps=rows.filter(r=>r.kind==="step" && r.position.column===0 && r.position.row>branch.position.row && r.position.row<join.position.row).length;
+  if(rows.filter(r=>r.kind==="step").length+newSteps>SFC_MAX_STEPS)return null;
   const column=branch.branchEnd+2;
   for(const r of rows.filter(r=>r.position.column === 0 && r.position.row > branch.position.row && r.position.row < join.position.row)) {
     rows.push(freshRow(r.kind,r.kind === "step" ? uniqueStep(rows) : r.kind === "continuation" ? "" : "%MX0",{row:r.position.row,column}));
   }
   branch.branchEnd=join.branchEnd=column;
-  return sortRows(rows);
+  return sfcRowsFit(rows) ? sortRows(rows) : null;
 }
-export function sfcExtendPaths(block, entity) {
+export function sfcExtendPaths(block, entity, selectedPathOnly = false) {
   const rows=positionedRows(block), selected=rows[sfcRowIndex(block,entity)];
   if(!selected || !["step","transition"].includes(selected.kind)) return null;
   const split=[...rows].reverse().find(r=>r.kind.endsWith("_split") && r.position.row < selected.position.row);
   const join=rows.find(r=>r.kind === split?.kind.replace("_split","_join") && r.position.row > split.position.row);
   if(!split || !join || selected.position.row >= join.position.row) return null;
   let at=selected.position.row+1;
-  while(rows.some(r=>r.position.row === at && r.kind === "continuation")) at++;
-  const first=selected.kind === "step" ? "transition" : "step";
-  for(const r of rows) if(r.position.row >= at) r.position.row += 2;
-  for(let column=0;column<=split.branchEnd;column+=2) for(const [offset,kind] of [[0,first],[1,selected.kind]]) {
-    rows.push(freshRow(kind,kind === "step" ? uniqueStep(rows) : "%MX0",{row:at+offset,column}));
+  // Avoid splitting any existing action stack on another path.
+  while(at<join.position.row && rows.some(r=>r.position.row === at && r.kind === "continuation")) at++;
+  const predecessors=new Map();
+  for(let column=0;column<=split.branchEnd;column+=2) {
+    const last=[...rows].reverse().find(r=>r.position.column===column && r.position.row<at && r.position.row>split.position.row && ["step","transition"].includes(r.kind));
+    if(!last)return null;
+    predecessors.set(column,last.kind);
   }
-  return sortRows(rows);
+  for(const r of rows) if(r.position.row >= at) r.position.row += 2;
+  for(let column=0;column<=split.branchEnd;column+=2) for(let offset=0;offset<2;offset++) {
+    const last=predecessors.get(column),kind=selectedPathOnly && column!==selected.position.column ? "continuation" : offset===0 ? last==="step" ? "transition" : "step" : last;
+    rows.push(freshRow(kind,kind === "step" ? uniqueStep(rows) : kind === "transition" ? "%MX0" : "",{row:at+offset,column}));
+  }
+  return sfcRowsFit(rows) ? sortRows(rows) : null;
+}
+export function sfcRemovePathPair(block, entity) {
+  const rows=positionedRows(block),selected=rows[sfcRowIndex(block,entity)];
+  if(!selected || !["step","transition"].includes(selected.kind))return null;
+  const split=[...rows].reverse().find(r=>r.kind.endsWith("_split") && r.position.row<selected.position.row);
+  const join=rows.find(r=>r.kind===split?.kind.replace("_split","_join") && r.position.row>split.position.row);
+  if(!split || !join || selected.position.row>=join.position.row)return null;
+  const lane=rows.filter(r=>r.position.column===selected.position.column && r.position.row>split.position.row && r.position.row<join.position.row && ["step","transition"].includes(r.kind));
+  const index=lane.indexOf(selected),start=index%2 ? index : index-1;
+  if(start<1 || !lane[start+1])return null;
+  const removed=new Set([lane[start],lane[start+1]]),previous=lane[start-1];
+  for(const row of [...removed])if(row.kind==="step")for(const child of actionGroup(rows,rows.indexOf(row)))removed.add(rows[child]);
+  const result=compactActions(rows.map(r=>removed.has(r)?freshRow("continuation","",r.position):r));
+  return {rows:result,selectedRow:result.findIndex(r=>r.title===previous.title && r.kind===previous.kind && r.position.column===previous.position.column)};
 }
 export function sfcCollapseBranch(block, entity) {
   let rows=positionedRows(block), boundary=rows[sfcRowIndex(block,entity)];
@@ -128,14 +175,14 @@ export function sfcSelectionBounds(anchor, extent) {
     left:Math.min(anchor.column,extent.column),right:Math.max(anchor.column,extent.column)};
 }
 export function sfcRowsAfterDelete(block, entities) {
-  const real=entities.filter(e=>!e.newAction);
+  const real=entities.filter(e=>!e.newAction&&!e.newBranch);
   if(real.length && real.every(e=>e.typeCode === 2)) {
     const indices=real.map(e=>sfcRowIndex(block,e)),owner=actionGroup(block.editableRows,indices[0])[0];
     const rows=removeActions(block.editableRows,indices);
     return {rows,selectedRow:Math.max(0,Math.min(owner,rows.length-1))};
   }
   if (block.editableRows?.some(r => r.position)) {
-    const actual=entities.filter(e=>!e.newAction);
+    const actual=entities.filter(e=>!e.newAction&&!e.newBranch);
     if(actual.some(e=>e.typeCode !== 2) && actual.length !== 1) return null;
     const boundary = entities.find(e=>e.typeCode === 4);
     if(boundary) { const rows=sfcCollapseBranch(block,boundary); return rows && {rows,selectedRow:Math.max(0,rows.findIndex(r=>(r.position?.row ?? rows.indexOf(r)) >= boundary.row-1))}; }
@@ -203,6 +250,10 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
   for (const block of program.blocks.filter(b => b.main || b.language !== 4)) {
     section.append(node("h3", "sfc-block-title", `${block.name || "Unnamed block"}${block.main ? " · Main" : ""}`));
     let activeEntity = block.entities.find(e => e.entityIndex === selection?.entityIndex && block.blockIndex === selection?.blockIndex);
+    let alternativeButton;
+    const refreshAlternative =()=>{
+      if(alternativeButton) alternativeButton.disabled=!activeEntity || !sfcAddBranch(block,activeEntity,"alternative");
+    };
     if (Array.isArray(block.editableRows) && onSequence) {
       const toolbar = node("div", "sfc-toolbar");
       const add = (title, run, disabled = false) => {
@@ -220,6 +271,14 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         rows.splice(index, 0, { kind, title, comment: "", initial: kind === "step" && !rows.some(r => r.initial), action: null });
         return onSequence(block, rows, index);
       }, kind === "jump" && !block.editableRows.some(r => r.kind === "label"));
+      alternativeButton=node("button","secondary-button sfc-add-alternative-branch","Add alternative branch");alternativeButton.type="button";
+      alternativeButton.addEventListener("click",async()=>{
+        const entity=activeEntity,rows=entity && sfcAddBranch(block,entity,"alternative");
+        if(!rows)return;
+        alternativeButton.disabled=true;
+        try {await onSequence(block,rows,rows.findIndex(r=>r.kind==="alternative_split" && r.position.row===(sfcBranchRegion(block,entity)?.split.position.row ?? entity.row+1)));}
+        finally {if(alternativeButton.isConnected)refreshAlternative();}
+      });toolbar.append(alternativeButton);refreshAlternative();
       if (!block.editableRows.length) add("Create loop", () => onSequence(block, [
         {kind:"label",title:"Start",comment:"",initial:false,action:null},
         {kind:"step",title:"S0",comment:"",initial:true,action:null},
@@ -254,18 +313,19 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
     const board = node("div", "sfc-board");
     board.setAttribute("role", "group"); board.setAttribute("aria-label", `SFC ${block.name}`);
     board.tabIndex = 0; board.dataset.sfcBlock = String(block.blockIndex);
-    const rowLimit = 4096, columnLimit = 256;
+    const rowLimit = SFC_MAX_ROWS, columnLimit = SFC_MAX_COLUMNS;
     const positioned = block.entities.filter(e => Number.isInteger(e.row) && e.row >= 0 && e.row < rowLimit
       && Number.isInteger(e.column) && e.column >= 0 && e.column < columnLimit);
     const lastRow = positioned.reduce((last, e) => Math.max(last, e.row), 0);
     const lastCol = positioned.reduce((last, e) => Math.max(last, e.column), 1);
-    board.style.width = `${Math.max(640, (lastCol + 2) * 176)}px`;
+    board.style.width = `${Math.max(640, (lastCol + 3) * 176)}px`;
     board.style.height = `${Math.max(280, (lastRow + 2) * 88)}px`;
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.classList.add("sfc-wires"); svg.setAttribute("width", "100%"); svg.setAttribute("height", "100%");
     svg.setAttribute("aria-hidden", "true"); board.append(svg);
     // Connect adjacent native step/transition entities only; infer no unknown branch topology.
     const byPosition = new Map(positioned.map(e => [`${e.row}:${e.column}`, e]));
+    const firstStepColumn=new Map();for(const e of positioned)if(e.typeCode===0)firstStepColumn.set(e.row,Math.min(firstStepColumn.get(e.row) ?? e.column,e.column));
     for (const e of positioned.filter(e => [0,1,5,6,7].includes(e.typeCode))) {
       const next = byPosition.get(`${e.row + 1}:${e.column}`);
       if (!next || ![0,1,5,6,7].includes(next.typeCode) || e.typeCode === 5) continue;
@@ -314,6 +374,9 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         cell.classList.toggle("inspected", extent?.entityIndex === entity.entityIndex);
         cell.setAttribute("aria-pressed",String(selected.has(entity.entityIndex)));
       }
+      const selectedSteps=new Set(navigation.filter(e=>e.typeCode===0 && selected.has(e.entityIndex)).map(e=>String(e.entityIndex)));
+      if(extent?.ownerEntityIndex!=null)selectedSteps.add(String(extent.ownerEntityIndex));
+      for(const control of board.querySelectorAll(".sfc-row-affordance"))control.classList.toggle("row-selected",selectedSteps.has(control.dataset.ownerEntity) || control.dataset.branchRow!=null && navigation.some(e=>e.typeCode===0 && selected.has(e.entityIndex) && String(e.row)===control.dataset.branchRow));
       const multiple = anchor && extent && (anchor.row !== extent.row || anchor.column !== extent.column);
       range.hidden = !multiple;
       if (multiple) {
@@ -334,8 +397,8 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
       activateBoard();
       if (!extend || !anchor) anchor = entity;
       extent = entity;
-      activeEntity = entity.newAction ? block.entities.find(e=>e.entityIndex===entity.ownerEntityIndex) || byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
-      showSource(activeEntity); onSelect(block,activeEntity); paintSelection();
+      activeEntity = entity.newAction || entity.newBranch ? block.entities.find(e=>e.entityIndex===entity.ownerEntityIndex) || byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
+      showSource(activeEntity); onSelect(block,activeEntity); refreshAlternative(); paintSelection();
     };
     const focusCell = entity => {
       movingFocus = true;
@@ -404,13 +467,15 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
       board.append(cell); cells.set(entity.entityIndex,cell);
       if (entity.typeCode === 0 && Array.isArray(block.editableRows)
         && onSequence && onTextEdit) {
-        const addAction = node("button", "sfc-new-action", "+ New Action");
+        const addAction = node("button", "sfc-new-action sfc-row-affordance", "+ New Action");
         addAction.type = "button";
         const empty = byPosition.get(`${entity.row}:${entity.column + 1}`),index=sfcRowIndex(block,entity),group=actionGroup(block.editableRows,index);
         const filled=group.filter(i=>block.editableRows[i].action),last=filled.length ? block.editableRows[filled.at(-1)] : null;
         const lastRow=last?.position?.row ?? (filled.at(-1) ?? entity.row),append=Boolean(last);
         const target = {...empty, entityIndex:append ? -1-entity.entityIndex : empty.entityIndex,
           row:append ? lastRow+0.75 : entity.row,newAction:true,ownerEntityIndex:entity.entityIndex,appendAction:append}; navigation.push(target);
+        addAction.dataset.ownerEntity=String(entity.entityIndex);
+        addAction.dataset.hoverRows = `${entity.row} ${lastRow}`;
         addAction.dataset.sfcEntity = `${block.blockIndex}:${target.entityIndex}`;
         addAction.style.left = `${192 + entity.column * 176}px`;
         addAction.style.top = `${append ? lastRow*88+70 : entity.row * 88 + 10}px`;
@@ -428,6 +493,25 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
             prompt:"Enter a direct %MX BOOL address for the new N action."});
         });
         board.append(addAction); cells.set(target.entityIndex,addAction);
+        const region=sfcBranchRegion(block,entity),parallelRegion=region?.split.kind==="parallel_split";
+        if(parallelRegion ? entity.column===firstStepColumn.get(entity.row) : entity.column===0 && !region) {
+          const branch=node("button","sfc-new-branch sfc-row-affordance","+ Add simultaneous branch");branch.type="button";
+          branch.dataset.ownerEntity=String(entity.entityIndex);
+          branch.dataset.hoverRows=String(entity.row);branch.style.left=`${parallelRegion ? 40+(region.split.branchEnd+2)*176 : 392+entity.column*176}px`;branch.style.top=`${entity.row*88+10}px`;
+          branch.setAttribute("aria-label",parallelRegion ? `Add simultaneous path, row ${entity.row}` : `Add simultaneous branch before ${p.Title}, row ${entity.row}`);
+          if(parallelRegion)branch.dataset.branchRow=String(entity.row);
+          branch.disabled=!sfcAddBranch(block,entity,"parallel");
+          if(branch.disabled)branch.title=parallelRegion ? "Native limits: 512 ordinary steps and 65,535 columns; editor safety limit: 1,048,576 grid cells." : entity.properties.EntityStep?.InitialStep==="1" ? "An initial step cannot be inside a branch." : "This step needs preceding and following transitions.";
+          const branchTarget={entityIndex:-2000000000-entity.entityIndex,row:entity.row,column:parallelRegion ? region.split.branchEnd+2 : entity.column+2,newBranch:true,ownerEntityIndex:entity.entityIndex};
+          if(!branch.disabled){navigation.push(branchTarget);branch.dataset.sfcEntity=`${block.blockIndex}:${branchTarget.entityIndex}`;cells.set(branchTarget.entityIndex,branch);}
+          branch.addEventListener("click",async event=>{
+            if(event.shiftKey)return;
+            const rows=sfcAddBranch(block,entity,"parallel");if(!rows)return;
+            branch.disabled=true;try {await onSequence(block,rows,parallelRegion ? rows.findIndex(r=>r.position.column===region.split.branchEnd+2 && r.kind==="step") : rows.findIndex(r=>r.kind==="parallel_split"&&r.position.row===entity.row));}
+            finally {if(branch.isConnected)branch.disabled=!sfcAddBranch(block,entity,"parallel");}
+          });board.append(branch);
+        }
+
       }
     }
     for (const entity of navigation) cellFor(entity)?.addEventListener("focus", () => {
@@ -483,7 +567,14 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
       event.preventDefault(); drag.capture.setPointerCapture(event.pointerId);
       drag.frame = requestAnimationFrame(scrollDrag);
     });
+    let lastHoverRow;
+    const hoverRow=row=>{
+      if(lastHoverRow===row)return;lastHoverRow=row;
+      for(const control of board.querySelectorAll(".sfc-row-affordance"))control.classList.toggle("row-hover",control.dataset.hoverRows.split(" ").includes(String(row)));
+    };
+    board.addEventListener("pointerleave",()=>hoverRow(-1));
     board.addEventListener("pointermove", event => {
+      hoverRow(Math.floor((event.clientY-board.getBoundingClientRect().top)/88));
       if (!drag || event.pointerId !== drag.id) return;
       drag.x = event.clientX; drag.y = event.clientY; updateDrag();
     });
@@ -496,8 +587,8 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         suppressClick = true; setTimeout(() => { suppressClick = false; },0);
         const entity = navigation.find(e => e.row === extent.row && e.column === extent.column);
         if (entity) {
-          activeEntity = entity.newAction ? block.entities.find(e=>e.entityIndex===entity.ownerEntityIndex) || byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
-          showSource(activeEntity); onSelect(block,activeEntity);
+          activeEntity = entity.newAction || entity.newBranch ? block.entities.find(e=>e.entityIndex===entity.ownerEntityIndex) || byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
+          showSource(activeEntity); onSelect(block,activeEntity); refreshAlternative();
         }
         focusCell(entity); paintSelection();
       } else {
@@ -520,7 +611,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
           const edit = pasteSfcClipboard(block,clipboard.value,index,program.blocks.map(b=>b.name).concat((program.variables || []).map(v=>v.name)));
           await onSequence(block,edit.rows,edit.selectedRow,edit.action);
         } else {
-          const entities = selectedCells().filter(e=>!e.newAction);
+          const entities = selectedCells().filter(e=>!e.newAction&&!e.newBranch);
           const captured = captureSfcClipboard(block,entities.map(e=>sfcRowIndex(block,e)),entities.length>0 && entities.every(e=>e.typeCode===2));
           if (operation === "cut") {
             const edit = cutSfcClipboard(block,captured);
@@ -538,13 +629,6 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         });
       }
     };
-    const clipboardToolbar = node("div","sfc-toolbar sfc-clipboard-toolbar");
-    for(const operation of ["copy","cut","paste"]) {
-      const button=node("button","secondary-button",operation[0].toUpperCase()+operation.slice(1));button.type="button";
-      button.disabled=!onSequence || !Array.isArray(block.editableRows);
-      button.addEventListener("click",()=>clipboardOperation(operation));clipboardToolbar.append(button);
-    }
-    section.append(clipboardToolbar);
     let deleting = false;
     board.addEventListener("keydown", async event => {
       if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
@@ -554,7 +638,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         return;
       }
       if (event.ctrlKey || event.metaKey || event.altKey) return;
-      const cell = event.target.closest(".sfc-entity, .sfc-new-action");
+      const cell = event.target.closest(".sfc-entity, .sfc-new-action, .sfc-new-branch");
       if (!cell && event.target !== board) return;
       const visible = navigation;
       const origin = event.shiftKey && extent ? extent : cell ? visible.find(e => `${block.blockIndex}:${e.entityIndex}` === cell.dataset.sfcEntity) : extent || activeEntity;
@@ -565,7 +649,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         if (target) selectCell(target); else { anchor = extent = null; paintSelection(); }
         return;
       }
-      if (event.key === "Enter" && cell && origin?.newAction) {
+      if (event.key === "Enter" && cell && (origin?.newAction || origin?.newBranch)) {
         event.preventDefault(); event.stopPropagation();
         if (!event.repeat) cell.click();
         return;
@@ -694,19 +778,12 @@ export function renderSfcProperties(program, selection, onEdit, onSequence, onTe
     const actions = node("div", "sfc-toolbar");
     const command = (title, run, disabled = false) => { const button = node("button", "secondary-button", title); button.type = "button"; button.disabled = disabled; button.addEventListener("click", run); actions.append(button); };
     const row=block.editableRows[sfcRowIndex(block,entity)];
+    const removePair=sfcRemovePathPair(block,entity);
+    if(removePair) command("Remove path pair",()=>{const edit=sfcRemovePathPair(block,entity);return edit && onSequence(block,edit.rows,edit.selectedRow);});
+    if(sfcExtendPaths(block,entity,true)) command("Extend selected path",()=>{const rows=sfcExtendPaths(block,entity,true);return onSequence(block,rows,rows.findIndex(r=>r.position.row > entity.row && r.position.column === entity.column && r.kind === (row.kind === "step" ? "transition" : "step")));});
     if(sfcExtendPaths(block,entity)) command("Extend paths",()=>{const rows=sfcExtendPaths(block,entity);return onSequence(block,rows,rows.findIndex(r=>r.position.row > entity.row && r.position.column === entity.column && r.kind === (row.kind === "step" ? "transition" : "step")));});
-    for(const [kind,title] of [["alternative","Add alternative branch"],["parallel","Add simultaneous branch"]]) {
-      const possible=sfcAddBranch(block,entity,kind);
-      if(possible) command(title,()=>{const rows=sfcAddBranch(block,entity,kind);return onSequence(block,rows,rows.findIndex(r=>r.kind === `${kind}_split` && r.position.row === entity.row+1));});
-    }
     if(row?.kind.endsWith("_split")) command("Add path",()=>{const rows=sfcAddPath(block,entity);return rows && onSequence(block,rows,rows.findIndex(r=>r.position.row === entity.row && r.branchEnd != null));},!sfcAddPath(block,entity));
     if(row && branchKinds.has(row.kind)) command("Remove branch",()=>{const rows=sfcCollapseBranch(block,entity);return rows && onSequence(block,rows,0);});
-    if(onTextEdit && [0,2].includes(entity.typeCode) && row?.action) {
-      const owner=actionGroup(block.editableRows,sfcRowIndex(block,entity))[0];
-      const p=block.editableRows[owner]?.position || {row:owner,column:0};
-      const step=block.entities.find(e=>e.typeCode===0 && e.row===p.row && e.column===p.column);
-      if(step) command("Add action",()=>onTextEdit(block,{...step,appendAction:true},{field:"action",label:"action operand",value:"",prompt:"Enter a %MX address or declared BOOL variable."}));
-    }
     if(entity.typeCode===2) for(const [title,delta] of [["Move action up",-1],["Move action down",1]]) {
       command(title,()=>{const edit=moveAction(block.editableRows,sfcRowIndex(block,entity),delta);return edit && onSequence(block,edit.rows,edit.index,true);},!moveAction(block.editableRows,sfcRowIndex(block,entity),delta));
     }
@@ -714,8 +791,7 @@ export function renderSfcProperties(program, selection, onEdit, onSequence, onTe
       const row = block.editableRows[sfcRowIndex(block,entity)];
       return onTextEdit(block, entity, {field:"action",label:"action operand",value:row.action || "",prompt:"Enter a %MX address or a declared BOOL variable."});
     });
-    if (entity.typeCode === 2) command("Delete action", () => deleteSfcEntity(block, entity, onSequence));
-    else if (!block.editableRows.some(r=>r.position)) {
+    if (entity.typeCode !== 2 && !block.editableRows.some(r=>r.position)) {
       for (const [title,delta] of [["Move up",-1],["Move down",1]]) command(title, () => {
         const edit=moveRowUnit(block.editableRows,entity.row,delta);return edit && onSequence(block,edit.rows,edit.index);
       },!moveRowUnit(block.editableRows,entity.row,delta));

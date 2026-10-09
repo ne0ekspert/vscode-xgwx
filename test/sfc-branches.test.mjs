@@ -68,3 +68,81 @@ test('removing a path preserves a later independent branch',()=>{
  const edit=sfcRowsAfterDelete(b,[select(b,first+1,2)]),after=block(apply(bytes,edit.rows));
  assert.deepEqual(after.editableRows.filter(r=>r.position.row>=second),untouched);
 });
+
+test('independent path extension pads other lanes, retains sources, and removes a pair without removing the path',async()=>{
+ const {sfcRemovePathPair}=await import('../media/sfc.js');
+ for(const name of ['multi-action-branch-native','branch-alternative-native']) {
+  const original=fixture(name),b=block(original),split=b.editableRows.find(r=>r.kind.endsWith('_split')),at=split.position.row+1;
+  const before=b.editableRows.filter(r=>r.position.column===0 && r.position.row>split.position.row && !r.kind.endsWith('_join')).map(r=>({...r,position:undefined}));
+  const rows=sfcExtendPaths(b,select(b,at,2),true),bytes=apply(original,rows),edited=block(bytes);
+  assert.ok(edited.editableRows);assert.equal(edited.editableRows.filter(r=>r.position.column===2 && ['step','transition'].includes(r.kind)).length,b.editableRows.filter(r=>r.position.column===2 && ['step','transition'].includes(r.kind)).length+2);
+  const main=edited.editableRows.filter(r=>r.position.column===0 && r.position.row>split.position.row && !r.kind.endsWith('_join') && !(r.kind==='continuation' && !r.action)).map(r=>({...r,position:undefined}));
+  assert.deepEqual(main,before.filter(r=>!(r.kind==='continuation'&&!r.action)));
+  assert.deepEqual(parse_xgwx(bytes).sfc[0].variables,parse_xgwx(original).sfc[0].variables);
+  const last=edited.editableRows.filter(r=>r.position.column===2&&['step','transition'].includes(r.kind)).at(-1);
+  const removed=sfcRemovePathPair(edited,select(edited,last.position.row,2));assert.ok(removed);assert.deepEqual(block(apply(bytes,removed.rows)).editableRows,b.editableRows);
+  const all=apply(bytes,sfcExtendPaths(edited,select(edited,at,0)));assert.ok(block(all).editableRows);
+  assert.equal(sfcRemovePathPair(b,select(b,at,2)),null);
+ }
+});
+
+test('native Save As retains independently padded alternative and simultaneous paths',()=>{
+ for(const kind of ['parallel','alternative']) {
+  const a=fixture(`branch-independent-${kind}-generated`),b=fixture(`branch-independent-${kind}-roundtrip`);
+  assert.ok(block(a).editableRows);assert.deepEqual(block(a).editableRows,block(b).editableRows);
+  assert.deepEqual(parse_xgwx(a).sfc[0].variables,parse_xgwx(b).sfc[0].variables);
+ }
+});
+
+test('selecting a step creates a simultaneous split before it and preserves its action stack',async()=>{
+ const bytes=fixture('st-programs-generated'),b=block(bytes),step=b.entities.find(e=>e.typeCode===0&&e.row===3),rows=sfcAddBranch(b,step,'parallel');
+ assert.ok(rows);assert.equal(rows.find(r=>r.kind==='parallel_split').position.row,3);
+ assert.equal(rows.find(r=>r.title===b.editableRows[3].title&&r.kind==='step').position.row,4);
+ assert.ok(block(apply(bytes,rows)).editableRows);
+ assert.equal(sfcAddBranch(b,b.entities.find(e=>e.typeCode===0&&e.row===1),'parallel'),null);
+ const {appendAction}=await import('../media/sfc-actions.js');
+ let stacked=apply(bytes,appendAction(b.editableRows,3,{action:'%MX12'}).rows),sb=block(stacked);
+ stacked=apply(stacked,appendAction(sb.editableRows,3,{action:'%MX13',actionQualifier:'P'}).rows);sb=block(stacked);
+ const selected=sb.entities.find(e=>e.typeCode===0&&e.row===3),branched=sfcAddBranch(sb,selected,'parallel');
+ const result=block(apply(stacked,branched)).editableRows;
+ assert.equal(result.find(r=>r.kind==='parallel_split').position.row,3);
+ assert.equal(result.find(r=>r.kind==='parallel_join').position.row,7);
+ assert.deepEqual(result.filter(r=>r.position.column===0 && r.position.row>=4 && r.position.row<=6).map(r=>({...r,position:undefined})),sb.editableRows.slice(3,6).map(r=>({...r,position:undefined})));
+ assert.equal(result.filter(r=>r.kind==='continuation'&&r.position.column===2).length,2);
+
+});
+
+test('adding simultaneous branches extends the existing split beyond eight lanes and stops at 512 ordinary steps',()=>{
+ const source=fixture('multi-action-branch-native'),original=block(source);let rows=original.editableRows;
+ const splitRow=rows.find(r=>r.kind==='parallel_split').position.row;
+ for(let n=2;n<511;n++) {
+  const b={...original,editableRows:rows};rows=sfcAddPath(b,{row:splitRow,column:0,typeCode:4});assert.ok(rows,`path ${n+1}`);
+ }
+ assert.equal(rows.filter(r=>r.kind==='step').length,512);assert.equal(rows.find(r=>r.kind==='parallel_split').branchEnd,1020);
+ assert.equal(sfcAddPath({...original,editableRows:rows},{row:splitRow,column:0,typeCode:4}),null);
+ // Exercise planner output through the writer/reader at 16 paths.
+ rows=original.editableRows;
+ for(let n=2;n<16;n++)rows=sfcAddBranch({...original,editableRows:rows},select(original,splitRow+1),'parallel');
+ const bytes=apply(source,rows),parsed=block(bytes);assert.ok(parsed.editableRows);assert.equal(parsed.columns,32);
+ assert.deepEqual(parsed.editableRows,rows);assert.deepEqual(parse_xgwx(bytes).sfc[0].variables,parse_xgwx(source).sfc[0].variables);
+});
+
+test('alternative paths obey native column bounds independently of the ordinary-step limit',async()=>{
+ const {sfcRowsFit}=await import('../media/sfc-limits.js');
+ const base={kind:'transition',title:'%MX0',comment:'',initial:false,action:null,position:{row:3,column:65532}};
+ assert.equal(sfcRowsFit([base,{...base,kind:'alternative_join',title:'',branchEnd:65532,position:{row:4,column:0}}]),true);
+ assert.equal(sfcRowsFit([{...base,position:{row:3,column:65534}}]),false);
+ const source=fixture('branch-alternative-native'),b=block(source),split=b.editableRows.find(r=>r.kind==='alternative_split');let rows=b.editableRows;
+ for(let n=2;n<16;n++)rows=sfcAddBranch({...b,editableRows:rows},{typeCode:4,row:split.position.row,column:0},'alternative');
+ assert.equal(block(apply(source,rows)).columns,32);
+ assert.equal(sfcAddBranch({...b,editableRows:rows},{typeCode:4,row:split.position.row,column:0},'parallel'),null);
+});
+
+test('native sixteen-path and 512-step Save As fixtures retain all rows and declarations',()=>{
+ for(const [name,paths] of [['branch-sixteen',16],['branch-step-limit',511]]) {
+  const a=parse_xgwx(fixture(`${name}-generated`)).sfc[0],b=parse_xgwx(fixture(`${name}-roundtrip`)).sfc[0];
+  assert.ok(a.blocks[0].editableRows);assert.deepEqual(b.blocks[0].editableRows,a.blocks[0].editableRows);
+  assert.deepEqual(b.variables,a.variables);assert.equal(b.blocks[0].columns,paths*2);
+  assert.equal(b.blocks[0].editableRows.filter(r=>r.kind==='step').length,paths+1);
+ }
+});
