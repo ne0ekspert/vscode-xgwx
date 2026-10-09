@@ -183,6 +183,32 @@ test("an edit updates sibling editors without echoing bytes to its source", asyn
   assert.deepEqual(siblingMessages[0].bytes, [1, 9, 3]);
 });
 
+test("broadcast delivers a stable revision to all siblings and keeps notifications lightweight", async () => {
+  const document = new XgwxDocument(uri("/workspace/shared.xgwx"), [1, 2, 3]);
+  const other = new XgwxDocument(uri("/workspace/other.xgwx"), [4]);
+  const provider = new XgwxEditorProvider({});
+  const messages = [];
+  for (let i = 0; i < 3; i++) provider.editors.add({ document, panel: { webview: {
+    postMessage: async message => {
+      messages.push(message);
+      // A subsequent revision must not change an in-flight payload.
+      if (i === 0) document.bytes = new Uint8Array([9]);
+    },
+  } } });
+  provider.editors.add({ document: other, panel: { webview: {
+    postMessage: async () => assert.fail("Unrelated document received a broadcast"),
+  } } });
+  await provider.broadcast(document);
+  assert.equal(messages.length, 3);
+  for (const message of messages) {
+    assert.deepEqual(message.bytes, [1, 2, 3]);
+    assert.equal(message.byteLength, 3);
+  }
+  messages.length = 0;
+  await provider.broadcast(document, "saved");
+  assert.deepEqual(messages, Array.from({ length: 3 }, () => ({ type: "saved", dirty: false })));
+});
+
 test("native contact prompt accepts suggestions and free text, and cancels without a value", async () => {
   let picker;
   mockVscode.window = { createQuickPick: () => {

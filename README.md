@@ -1439,6 +1439,17 @@ node scripts/benchmark-ladder-edits.mjs /path/to/project.xgwx
 
 The benchmark reports timings and counts without printing project contents.
 
+Document broadcasts serialize the full byte array once and reuse it for all
+sibling editors. The editing webview already has the new bytes, so it receives
+no echo. To measure the extension's serialization work with 1, 2, and 4 sibling
+editors using a synthetic 1 MiB document:
+
+```sh
+node scripts/benchmark-document-sync.cjs 1048576 30
+```
+
+This benchmark excludes VS Code IPC and webview parsing or rendering costs.
+
 ### Generate digital I/O variables
 
 Use **Hardware → Generate I/O variables** after selecting modules. The preview

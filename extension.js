@@ -257,19 +257,18 @@ class XgwxEditorProvider {
     const targets = [...this.editors].filter((editor) => (
       editor.document === document && editor !== excludedEditor
     ));
+    if (!targets.length) return;
+    // Serialize once per broadcast, regardless of sibling count.
+    const message = type === "load" ? {
+      type: "load",
+      fileName: path.basename(document.uri.fsPath || document.uri.path),
+      uri: document.uri.toString(),
+      byteLength: document.bytes.byteLength,
+      bytes: Array.from(document.bytes),
+      dirty: document.dirty,
+    } : { type, dirty: document.dirty };
     await Promise.all(targets.map(async (editor) => {
-      if (type === "load") {
-        await editor.panel.webview.postMessage({
-          type: "load",
-          fileName: path.basename(document.uri.fsPath || document.uri.path),
-          uri: document.uri.toString(),
-          byteLength: document.bytes.byteLength,
-          bytes: Array.from(document.bytes),
-          dirty: document.dirty,
-        });
-      } else {
-        await editor.panel.webview.postMessage({ type, dirty: document.dirty });
-      }
+      await editor.panel.webview.postMessage(message);
     }));
   }
 

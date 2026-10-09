@@ -1968,7 +1968,7 @@ export function move_xgwx_iec_ld_group(bytes, program_index, group_index, expect
 }
 
 /**
- * Delete the identified top-level program and return verified workspace bytes.
+ * Move the identified program to its final index and return verified workspace bytes.
  * @param {Uint8Array} bytes
  * @param {number} from
  * @param {number} to
