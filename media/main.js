@@ -110,6 +110,9 @@ import init, {
   edit_xgwx_fenet_field,
   edit_xgwx_cnet_settings,
   update_xgwx_program,
+  create_xgwx_program,
+  delete_xgwx_program,
+  move_xgwx_program,
   update_xgwx_variable,
   xgk_module_catalog,
   xgwx_module_option_values,
@@ -271,7 +274,10 @@ async function loadWorkspace(file) {
     if (!moduleCatalog.length) moduleCatalog = xgk_module_catalog();
     if (!cpuCatalog.length) cpuCatalog = cpu_catalog();
     const summary = parse_xgwx(new Uint8Array(file.bytes));
+    const previousPrograms=current?.file.uri===file.uri ? current.summary.programs : null;
+    const activeId=previousPrograms?.[selectedProgramIndex]?.objectId;
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
+    if(previousPrograms && (previousPrograms.length!==summary.programs.length || previousPrograms.some((p,i)=>p.objectId!==summary.programs[i]?.objectId)))reconcileProgramOrder(previousPrograms,activeId);
     dirty = Boolean(file.dirty);
     const modules = summary.hardware?.modules || [];
     const bases = summary.hardware?.bases || [];
@@ -404,11 +410,133 @@ function buildDataGroup(label, view, items, iconName, itemLabel) {
   return group.container;
 }
 
+function showProgramContextMenu(x, y) {
+  closeLadderOverlay();
+  const menu = element("div", "ladder-context-menu");
+  menu.setAttribute("role", "menu");menu.setAttribute("aria-label", "Programs actions");
+  const close = installLadderOverlayDismissal(menu);
+  const item = button("Create program", "ladder-context-item", () => {close();void createProgram();});
+  item.setAttribute("role", "menuitem");item.textContent="Create program";
+  item.disabled = !newProgramLanguages().length;
+  menu.append(item);positionLadderOverlay(menu,x,y);item.focus();
+}
+function showProgramItemContextMenu(x, y, index, program) {
+  closeLadderOverlay();
+  const menu=element("div","ladder-context-menu");
+  menu.setAttribute("role","menu");menu.setAttribute("aria-label",`Program ${program.name || index+1} actions`);
+  const close=installLadderOverlayDismissal(menu);
+  const item=button("Delete program","ladder-context-item",async()=>{
+    close();
+    const active=current.summary.programs[selectedProgramIndex]?.objectId;
+    await applyEdit(()=>delete_xgwx_program(current.file.bytes,index,program.objectId),`Delete program ${program.name || index+1}`,()=>{
+      const prefix=`${current.file.uri}:`,moved=[];
+      for(const [key,value] of sfcStDrafts) {
+        if(!key.startsWith(prefix))continue;
+        const suffix=key.slice(prefix.length),separator=suffix.indexOf(":"),owner=Number(suffix.slice(0,separator));
+        if(separator<0 || !Number.isInteger(owner) || owner<index)continue;
+        sfcStDrafts.delete(key);
+        if(owner>index)moved.push([`${prefix}${owner-1}${suffix.slice(separator)}`,value]);
+      }
+      for(const [key,value] of moved)sfcStDrafts.set(key,value);
+      const retained=current.summary.programs.findIndex(p=>p.objectId===active);
+      selectedProgramIndex=retained>=0 ? retained : Math.max(0,Math.min(index,current.summary.programs.length-1));
+      selectedSfcEntity=null;selectedIecRow=null;selectedIecElement=null;selectedIecInsertion=null;selectedIecBlank=null;resetLadderSelection();
+    });
+  });
+  item.setAttribute("role","menuitem");item.textContent="Delete program";item.disabled=!program.objectId;
+  menu.append(item);positionLadderOverlay(menu,x,y);item.focus();
+}
+function newProgramLanguages() {
+  const cpu = current?.summary.cpu;
+  if(current?.summary.counts?.configurations !== 1)return [];
+  if(cpu?.family === "XGK")return ["LD"];
+  if(cpu?.family === "XGI")return ["LD", ...([100,102,104,106,107,111].includes(cpu.typeCode) ? ["SFC"] : [])];
+  return [];
+}
+let programPromptOpen = false;
+async function createProgram() {
+  if(programPromptOpen)return;programPromptOpen=true;
+  const fileUri=current.file.uri,programs=current.summary.programs || [],languages=newProgramLanguages();
+  let name="NewProgram",suffix=1;while(programs.some(p=>p.name?.toLowerCase()===name.toLowerCase()))name=`NewProgram${suffix++}`;
+  try {
+    const value=await new Promise(resolve=>{
+      const requestId=++nextContactPromptId;
+      pendingContactPrompts.set(requestId,{resolve,restoreFocus:false});
+      vscode.postMessage({type:"promptNewProgram",requestId,languages,name,existingNames:programs.map(p=>p.name || "")});
+    });
+    if(value == null || current.file.uri !== fileUri)return;
+    const patch={...value,objectId:crypto.randomUUID(),symbolId:crypto.randomUUID()};
+    await applyEdit(()=>create_xgwx_program(current.file.bytes,patch),`Create ${value.language} program ${value.name}`,()=>{
+      selectedProgramIndex=current.summary.programs.findIndex(program=>program.objectId===patch.objectId);selectedSfcEntity=null;selectedIecRow=null;selectedIecElement=null;selectedIecInsertion=null;selectedIecBlank=null;resetLadderSelection();activeView="programs";
+    });
+  } finally {programPromptOpen=false;}
+}
+
+let draggedProgram = null;
+function clearProgramDropMarkers() {
+  document.querySelectorAll(".program-drop-before,.program-drop-after").forEach(row=>row.classList.remove("program-drop-before","program-drop-after"));
+}
+function reconcileProgramOrder(previousPrograms, activeId) {
+  const prefix=`${current.file.uri}:`,indices=new Map(current.summary.programs.map((p,i)=>[p.objectId,i]));
+  for(const cache of [sfcStDrafts,ladderCanvasExtents,ladderCanvasScroll]) {
+    const moved=[];
+    for(const [key,value] of cache) {
+      if(!key.startsWith(prefix))continue;
+      const suffix=key.slice(prefix.length),match=/^(\d+)(:.*)?$/.exec(suffix);
+      if(!match)continue;
+      const destination=indices.get(previousPrograms[Number(match[1])]?.objectId);
+      cache.delete(key);
+      if(destination!==undefined)moved.push([`${prefix}${destination}${match[2] || ""}`,value]);
+    }
+    for(const [key,value] of moved)cache.set(key,value);
+  }
+  selectedProgramIndex=indices.get(activeId) ?? Math.max(0,Math.min(selectedProgramIndex,current.summary.programs.length-1));
+  if(selectedSfcEntity)selectedSfcEntity={...selectedSfcEntity,programIndex:selectedProgramIndex};
+  if(selectedIecRow)selectedIecRow={...selectedIecRow,programIndex:selectedProgramIndex};
+  if(selectedIecElement)selectedIecElement={...selectedIecElement,programIndex:selectedProgramIndex};
+  if(selectedIecInsertion)selectedIecInsertion={...selectedIecInsertion,programIndex:selectedProgramIndex};
+  if(selectedIecBlank)selectedIecBlank={...selectedIecBlank,programIndex:selectedProgramIndex};
+}
+async function moveProgram(from, to) {
+  if(from===to)return;
+  const programs=current.summary.programs,source=programs[from],target=programs[to];
+  if(!source?.objectId || !target?.objectId)return;
+  const active=programs[selectedProgramIndex]?.objectId;
+  await applyEdit(()=>move_xgwx_program(current.file.bytes,from,to,source.objectId,target.objectId),`Move program ${source.name}`,()=>{
+    reconcileProgramOrder(programs,active);
+  });
+}
+
 function buildProgramGroup(programs) {
   const group = treeGroup(`Programs (${programs.length})`, icon("program"), true);
   group.header.addEventListener("click", () => selectView("programs"));
-  programs.slice(0, 30).forEach((program, index) => {
+  group.header.addEventListener("contextmenu", event => {event.preventDefault();showProgramContextMenu(event.clientX,event.clientY);});
+  group.header.addEventListener("keydown", event => {if(event.key === "ContextMenu" || event.shiftKey && event.key === "F10") {event.preventDefault();const rect=group.header.getBoundingClientRect();showProgramContextMenu(rect.left,rect.bottom);}});
+  programs.forEach((program, index) => {
     const row = treeRow(program.name || `Program ${index + 1}`, "program", true, false);
+    row.tabIndex=0;row.setAttribute("role","button");
+    row.draggable=!!program.objectId;
+    row.title="Drag to change program order; task assignments are preserved";
+    row.addEventListener("dragstart",event=>{
+      closeLadderOverlay();draggedProgram={index,objectId:program.objectId,uri:current.file.uri};
+      event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("application/x-xgwx-program",program.objectId);
+      row.classList.add("program-dragging");
+    });
+    row.addEventListener("dragend",()=>{draggedProgram=null;row.classList.remove("program-dragging");clearProgramDropMarkers();});
+    const dropPosition=event=>event.clientY < row.getBoundingClientRect().top+row.getBoundingClientRect().height/2;
+    const acceptsDrag=()=>draggedProgram?.uri===current.file.uri && programs[draggedProgram.index]?.objectId===draggedProgram.objectId;
+    row.addEventListener("dragover",event=>{
+      clearProgramDropMarkers();if(!acceptsDrag())return;
+      event.preventDefault();event.dataTransfer.dropEffect="move";
+      row.classList.add(dropPosition(event) ? "program-drop-before" : "program-drop-after");
+    });
+    row.addEventListener("dragleave",()=>row.classList.remove("program-drop-before","program-drop-after"));
+    row.addEventListener("drop",event=>{
+      clearProgramDropMarkers();if(!acceptsDrag())return;
+      event.preventDefault();event.stopPropagation();
+      const from=draggedProgram.index,insertion=index+(dropPosition(event) ? 0 : 1),to=insertion-(from<insertion ? 1 : 0);
+      draggedProgram=null;void moveProgram(from,to);
+    });
     row.classList.toggle("selected", activeView === "programs" && selectedProgramIndex === index);
     row.addEventListener("click", () => {
       selectedProgramIndex = index;
@@ -419,6 +547,8 @@ function buildProgramGroup(programs) {
       resetLadderSelection();
       selectView("programs");
     });
+    row.addEventListener("contextmenu",event=>{event.preventDefault();showProgramItemContextMenu(event.clientX,event.clientY,index,program);});
+    row.addEventListener("keydown",event=>{if(event.key === "Enter" || event.key === " ") {event.preventDefault();row.click();return;}if(event.key==="ContextMenu" || event.shiftKey && event.key==="F10") {event.preventDefault();const rect=row.getBoundingClientRect();showProgramItemContextMenu(rect.left,rect.bottom,index,program);}});
     group.children.append(row);
   });
   return group.container;

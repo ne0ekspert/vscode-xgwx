@@ -141,6 +141,24 @@ export function cpu_catalog() {
 }
 
 /**
+ * Append a captured blank program and return verified workspace bytes.
+ * @param {Uint8Array} bytes
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function create_xgwx_program(bytes, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.create_xgwx_program(ptr0, len0, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Delete one implicit IEC LD blank row, matching XG5000 Ctrl+D coordinate
  * shifting while rejecting rows referenced by decoded records.
  * @param {Uint8Array} bytes
@@ -1005,6 +1023,27 @@ export function delete_xgwx_module(bytes, base, slot) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Delete the identified top-level program and return verified workspace bytes.
+ * @param {Uint8Array} bytes
+ * @param {number} program_index
+ * @param {string} expected_object_id
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_program(bytes, program_index, expected_object_id) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_object_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_program(ptr0, len0, program_index, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
 }
 
 /**
@@ -1926,6 +1965,31 @@ export function move_xgwx_iec_ld_group(bytes, program_index, group_index, expect
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Delete the identified top-level program and return verified workspace bytes.
+ * @param {Uint8Array} bytes
+ * @param {number} from
+ * @param {number} to
+ * @param {string} expected_object_id
+ * @param {string} expected_target_id
+ * @returns {Uint8Array}
+ */
+export function move_xgwx_program(bytes, from, to, expected_object_id, expected_target_id) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_object_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_target_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.move_xgwx_program(ptr0, len0, from, to, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
 }
 
 /**

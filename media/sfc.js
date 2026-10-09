@@ -250,10 +250,6 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
   for (const block of program.blocks.filter(b => b.main || b.language !== 4)) {
     section.append(node("h3", "sfc-block-title", `${block.name || "Unnamed block"}${block.main ? " · Main" : ""}`));
     let activeEntity = block.entities.find(e => e.entityIndex === selection?.entityIndex && block.blockIndex === selection?.blockIndex);
-    let alternativeButton;
-    const refreshAlternative =()=>{
-      if(alternativeButton) alternativeButton.disabled=!activeEntity || !sfcAddBranch(block,activeEntity,"alternative");
-    };
     if (Array.isArray(block.editableRows) && onSequence) {
       const toolbar = node("div", "sfc-toolbar");
       const add = (title, run, disabled = false) => {
@@ -271,14 +267,6 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         rows.splice(index, 0, { kind, title, comment: "", initial: kind === "step" && !rows.some(r => r.initial), action: null });
         return onSequence(block, rows, index);
       }, kind === "jump" && !block.editableRows.some(r => r.kind === "label"));
-      alternativeButton=node("button","secondary-button sfc-add-alternative-branch","Add alternative branch");alternativeButton.type="button";
-      alternativeButton.addEventListener("click",async()=>{
-        const entity=activeEntity,rows=entity && sfcAddBranch(block,entity,"alternative");
-        if(!rows)return;
-        alternativeButton.disabled=true;
-        try {await onSequence(block,rows,rows.findIndex(r=>r.kind==="alternative_split" && r.position.row===(sfcBranchRegion(block,entity)?.split.position.row ?? entity.row+1)));}
-        finally {if(alternativeButton.isConnected)refreshAlternative();}
-      });toolbar.append(alternativeButton);refreshAlternative();
       if (!block.editableRows.length) add("Create loop", () => onSequence(block, [
         {kind:"label",title:"Start",comment:"",initial:false,action:null},
         {kind:"step",title:"S0",comment:"",initial:true,action:null},
@@ -398,7 +386,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
       if (!extend || !anchor) anchor = entity;
       extent = entity;
       activeEntity = entity.newAction || entity.newBranch ? block.entities.find(e=>e.entityIndex===entity.ownerEntityIndex) || byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
-      showSource(activeEntity); onSelect(block,activeEntity); refreshAlternative(); paintSelection();
+      showSource(activeEntity); onSelect(block,activeEntity); paintSelection();
     };
     const focusCell = entity => {
       movingFocus = true;
@@ -588,7 +576,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
         const entity = navigation.find(e => e.row === extent.row && e.column === extent.column);
         if (entity) {
           activeEntity = entity.newAction || entity.newBranch ? block.entities.find(e=>e.entityIndex===entity.ownerEntityIndex) || byPosition.get(`${entity.row}:${entity.column - 1}`) : entity;
-          showSource(activeEntity); onSelect(block,activeEntity); refreshAlternative();
+          showSource(activeEntity); onSelect(block,activeEntity);
         }
         focusCell(entity); paintSelection();
       } else {

@@ -128,6 +128,18 @@ class XgwxEditorProvider {
         await new Promise(resolve => setImmediate(resolve));
         if (this.editors.has(editor) && panel.visible) panel.reveal(undefined,false);
         await panel.webview.postMessage({type:"iecContactInputResult",requestId:message.requestId,value});
+      } else if (message?.type === "promptNewProgram") {
+        const allowed = ["LD", "SFC"].filter(language => message.languages?.includes(language));
+        const language = await vscode.window.showQuickPick(allowed.map(language => ({label:language, description:{LD:"Ladder Diagram",SFC:"Sequential Function Chart"}[language]})), {title:"Create program", placeHolder:"Choose the program language",ignoreFocusOut:true});
+        let value = null;
+        if (language) {
+          const name = await vscode.window.showInputBox({title:`Create ${language.label} program`,value:message.name || "NewProgram",prompt:"Program name",ignoreFocusOut:true,
+            validateInput: name => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? "Use letters, digits and underscores; begin with a letter or underscore." : message.existingNames?.some(existing => existing.toLowerCase() === name.toLowerCase()) ? "A program with this name already exists." : null});
+          if (name != null) value = {language:language.label,name};
+        }
+        await new Promise(resolve => setImmediate(resolve));
+        if (this.editors.has(editor) && panel.visible) panel.reveal(undefined,false);
+        await panel.webview.postMessage({type:"iecContactInputResult",requestId:message.requestId,value});
       } else if (message?.type === "promptVariableField" || message?.type === "promptSfcField") {
         const value = await vscode.window.showInputBox({
           title: message.title, value: message.value || "", prompt: message.prompt,

@@ -738,3 +738,19 @@ test('SFC new action picker offers ST programs and preserves its kind through va
   await receive({type:'ladderInstructionValidationResult',validationId:request.validationId});await validation;
   finish('UpdateValues');await pending;assert.deepEqual(messages.at(-1).value,request.value);
 });
+
+test('program creation chooser offers allowed languages, validates names, and cancels without edits',async()=>{
+ let receive,options,selection='SFC',answer='Sequence',choices;
+ const messages=[];
+ mockVscode.window={showQuickPick:async items=>{choices=items;return items.find(i=>i.label===selection);},showInputBox:async value=>{options=value;return answer;}};
+ const document=new XgwxDocument(uri('/workspace/create.xgwx'),[1,2,3]),provider=new XgwxEditorProvider({});
+ const panel={visible:true,webview:{cspSource:'test',asWebviewUri:value=>value,onDidReceiveMessage(callback){receive=callback;return{dispose(){}};},async postMessage(m){messages.push(m);}},reveal(){},onDidDispose(){}};
+ await provider.resolveCustomEditor(document,panel);
+ const request={type:'promptNewProgram',requestId:90,languages:['LD','SFC'],name:'NewProgram1',existingNames:['NewProgram']};
+ await receive(request);assert.deepEqual(choices.map(i=>i.label),['LD','SFC']);assert.equal(options.value,'NewProgram1');
+ assert.ok(options.validateInput('newprogram'));assert.ok(options.validateInput('Bad name'));assert.equal(options.validateInput('Sequence'),null);
+ assert.deepEqual(messages.at(-1).value,{language:'SFC',name:'Sequence'});
+ selection=undefined;await receive(request);assert.equal(messages.at(-1).value,null);
+ selection='LD';answer=undefined;await receive({...request,languages:['LD']});assert.deepEqual(choices.map(i=>i.label),['LD']);assert.equal(messages.at(-1).value,null);
+ assert.deepEqual([...document.bytes],[1,2,3]);
+});

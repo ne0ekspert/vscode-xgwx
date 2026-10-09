@@ -12,6 +12,17 @@ powered by the sibling `libxgwx` project during development.
   The native template defaults to project `NewProject` and PLC `LSPLC`.
   SFC projects start with an empty main block. Use **Create loop** for a starter
   chart, or add steps, transitions, labels, and jumps individually.
+- Right-click **Programs** in the sidebar (or focus it and press Shift+F10) and
+  choose **Create program**. Native VS Code prompts select LD/SFC and a unique
+  name. Right-click a program for **Delete program**, also available with Shift+F10.
+  Deleting the last program leaves Programs available for creating a replacement.
+  The new blank scan program opens selected and uses the usual undo/save
+  lifecycle. XGK offers LD; supported XGI CPUs offer LD and SFC. IEC function
+  blocks belong to LD programs; XG5000 4.82.1's XGI program dialog has no separate
+  FBD language. Existing application code and declarations stay intact.
+- Drag programs in the sidebar to reorder them; a line marks the insertion position.
+  The saved order controls execution order within each scan/task. Task assignments,
+  the viewed program and unapplied SFC ST drafts are preserved. Reordering supports Undo.
 - Shows project counts and metadata.
 - Enables CPU choices only when the bundled writer accepts the retained hardware.
   Supported SFC projects with captured default parameters and empty I/O tables
@@ -1482,7 +1493,7 @@ All nine variable action qualifiers passed native XG5000 strict Check Program
 and Save As retention checks (`libxgwx/fixtures/sfc/action-qualifiers*`).
 
 Balanced alternative and simultaneous branches are editable. Select a step for
-**Add alternative branch**, or a step/transition for **Add simultaneous branch**;
+the canvas **+ Add simultaneous branch** control;
 selecting a step puts the split immediately before that step and its action stack;
 the following node becomes the first path. The canvas branch control appends
 a path when a matching branch is already selected. Select a split for **Add path**. **Extend paths** adds a step/transition pair to every path.
@@ -1615,9 +1626,8 @@ Captured FB pin checks and autocomplete share one table, including latch output
 against the [LS instruction manual](https://ssq.ls-electric.com/uploads/document/16411827948890/XGI_XGR_XEC_XMC_Instruction_Manual_202012_V3.8_EN.pdf),
 sections RS/SR and ST parameter calls.
 
-**Add alternative branch** is available on the chart canvas toolbar and becomes
-enabled for a supported selected step. The inspector omits Add action and Delete
-action buttons; use the canvas **+ New Action** affordance and the Delete key.
+The chart toolbar omits Add alternative branch. The inspector omits Add action
+and Delete action buttons; use the canvas **+ New Action** affordance and the Delete key.
 
 Step-row hover or step selection by click/arrow keys reveals **+ New Action** and **+ Add simultaneous branch** beside
 the action area. Both remain keyboard reachable; simultaneous creation occurs
