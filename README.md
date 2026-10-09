@@ -1481,8 +1481,20 @@ and may report errors in XG5000 until completed.
 All nine variable action qualifiers passed native XG5000 strict Check Program
 and Save As retention checks (`libxgwx/fixtures/sfc/action-qualifiers*`).
 
-Branches, nested charts, LD/IL program-backed conditions/actions, unknown qualifiers,
-bookmarks/breakpoints, unknown properties, and program names remain read only.
+Balanced alternative and simultaneous branches are editable. Select a step for
+**Add alternative branch**, or a transition for **Add simultaneous branch**;
+the following node becomes the first path. Select a split for **Add path**
+(up to eight paths). **Extend paths** adds a step/transition pair to every path.
+Select a split/join for **Remove branch**, retaining the first path. Delete on a
+node inside a branch removes its entire path; removing one of two paths restores
+a linear chart. Branch actions, Boolean conditions, ST sources, names and
+comments use the existing inspectors and text editor. Arrow keys navigate across
+paths and split/join endpoints. Branch deletion accepts a single selected node
+or action boxes; ambiguous multi-path range deletion leaves the chart unchanged.
+
+Nested/crossing branches, unequal path heights, custom alternative priorities,
+LD/IL program-backed conditions/actions, unknown qualifiers, bookmarks/breakpoints,
+unknown properties, and program names remain read only.
 Unsupported charts retain the existing bounded comment/condition edits.
 Unknown entity types are preserved and shown as placeholders; their connections
 are not inferred. Creating a chart from the blank XGI-CPUE template, deleting
@@ -1497,7 +1509,7 @@ Select a step/action or transition and choose **Create ST action** or
 Boolean expression to `TRANS`. **Use Boolean variable** converts the selected
 reference back to an operand. Shared programs update all matching references.
 ST edits participate in Save and Undo. XG5000 **Check Program** performs the ST
-syntax and type check; the webview validates file structure and declarations.
+syntax and type check; the webview validates file structure and declarations, and provides bounded local ST diagnostics.
 
 **Program variables** declares BOOL, BYTE/WORD/DWORD/LWORD, signed and unsigned
 8/16/32/64-bit integers, REAL/LREAL, TIME, DATE, TIME_OF_DAY, and DATE_AND_TIME.
@@ -1522,3 +1534,77 @@ request suggestions. Comments and strings do not trigger suggestions. Drafts are
 retained when switching chart selections and adding declarations; Apply commits
 the source through the existing SFC writer. Narrow layouts put the editor below
 the chart. Source editing and autocomplete keys stay inside the text editor.
+
+Steps support multiple independent variable or ST actions. The italic **+ New
+Action** remains available beneath the action stack and can be reached with arrow
+keys and Enter. Each action retains its own qualifier, timer, and source. The
+inspector can reorder actions; Delete removes selected action boxes and promotes
+remaining actions without deleting their step. Removing or moving a linear step
+includes its action stack. Branch paths use native continuation padding so adding
+an action preserves every other path. Empty padding is removed when no path needs
+it. Shared ST action names continue to share one source program.
+
+Mixed ST/variable stacks in linear and simultaneous-branch charts passed native
+XG5000 strict Check Program and Save As retention checks; UI interaction checks
+use the rendered webview with a mocked VS Code host. Supported qualifiers remain
+N/R/S/L/D/P/SD/DS/SL. Post-scan actions and unsupported native metadata remain
+read only. The chart limit includes continuation rows (512 physical rows).
+
+The declaration editor supports **Edit**, **Apply declaration**, and **Cancel
+editing**, plus Retain and initial values. Arrays use up to three zero-based
+inclusive bounds, for example `0..3` or `0..1, 0..2`. Initial values accept a
+comma-separated prefix or repetition such as `4(2)`; remaining elements keep
+their defaults. The editor validates BOOL, integer, real and TIME literals and
+quoted ASCII STRING values (32 bytes). Array types appear in ST completions.
+Referenced declarations keep their type and bounds; initial values, Retain and
+descriptions remain editable. System declarations, mapped declarations,
+custom structures, STRING/FB arrays, sparse initializers and uncaptured member
+overrides remain guarded. Native validation covers a mixed project using 1D,
+2D and 3D arrays in ST, retained variables and a retained TON instance, scalar
+initial values and STRING, followed by strict checking and Save As comparison.
+
+
+SFC chart clipboard controls support **Copy**, **Cut**, and **Paste**, plus
+Ctrl/Cmd+C, X, and V when the chart has focus. Copying a step includes its full
+action stack; copying action boxes appends their saved actions to the selected
+step. Other selections copy the whole physical row span, including all branch
+lanes. Include both split and join to copy a branch, and paste outside an existing
+branch. Rows insert after the selected row or complete step/action stack.
+
+The in-app clipboard persists between project/program selections in this webview.
+Paste preserves comments, qualifiers, timers and saved ST source, makes copied
+step/label/program names unique, and remaps copied label/jump pairs. Existing
+initial steps are retained. Declarations are not copied: the destination must
+already provide referenced variables. ST source remains verbatim; references
+inside it keep their original meaning. Read-only layouts, incomplete branch spans,
+missing jump labels and incompatible destination declarations are rejected before
+an edit is applied. Cut and paste use the usual document undo/redo path. Text
+editor clipboard shortcuts retain their normal behavior.
+
+A pasted simultaneous branch with stacked actions passed native XG5000 4.82.1
+all-program checks with zero errors. Duplicate-coil checking reported preserved
+output operands used by both copies. Native Save As retained the complete row
+set, saved ST programs and declarations exactly. Rendered keyboard/toolbar QA
+uses a mocked VS Code host; document undo/redo uses the existing host edit bridge.
+
+
+ST editors show **Local ST** diagnostics as you type. Click a diagnostic to select
+its source range. Checks recognize nested comments and quoted strings, balanced
+parentheses/brackets, IF/CASE/loop block boundaries, common missing semicolons,
+missing assignment expressions, unknown local/global variables, captured FB pins
+and parameter directions, simple BOOL literal assignments, constant array bounds,
+and missing TRANS assignments in transition programs. Simple inline scalar
+VAR declarations are recognized too. Declared global variables also participate
+in autocomplete; local declarations take precedence in diagnostic lookup.
+
+Diagnostics are advisory and do not disable Apply or change project bytes.
+They inspect saved source and current drafts, clear after corrections, and show
+at most 100 issues. This is not a full ST parser/type checker: custom types and
+function signatures, expression inference, dynamic indices, control-flow coverage,
+and CPU-specific instruction support still require native XG5000 Check Program.
+No issues found means only that the supported local checks found none.
+
+Captured FB pin checks and autocomplete share one table, including latch output
+`Q`. Input `:=` and output `=>` call conventions and latch pins are checked
+against the [LS instruction manual](https://ssq.ls-electric.com/uploads/document/16411827948890/XGI_XGR_XEC_XMC_Instruction_Manual_202012_V3.8_EN.pdf),
+sections RS/SR and ST parameter calls.

@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {stCompletionContext,stCompletions} from '../media/st-editor.js';
-const variables=[{name:'Count',dataType:'DINT'},{name:'Delay',dataType:'TON'},{name:'TRANS',dataType:'BOOL'}];
+const variables=[{name:'Count',dataType:'DINT'},{name:'Delay',dataType:'TON'},{name:'TRANS',dataType:'BOOL'},{name:'Latch',dataType:'RS'}];
 test('ST completions match declarations, functions, keywords, and native FB pins',()=>{
   assert.equal(stCompletions('Cou',3,variables)[0].insert,'Count');
   assert.equal(stCompletions('AD',2,variables)[0].insert,'ADD(Input1, Input2)');
   assert.ok(stCompletions('END_',4,variables).some(v=>v.label==='END_IF'));
   assert.deepEqual(stCompletions('Delay.',6,variables).map(v=>v.label),['IN','PT','Q','ET']);
   assert.equal(stCompletions('Delay(P',7,variables)[0].insert,'PT := ');
+  assert.equal(stCompletions('Latch(Q',7,variables)[0].insert,'Q => ');
   assert.equal(stCompletions('Delay(Q',7,variables)[0].insert,'Q => ');
   assert.ok(stCompletions('',0,variables,true).some(v=>v.label==='Count'));
   assert.deepEqual(stCompletions('Count',5,variables),[]);

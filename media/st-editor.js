@@ -1,7 +1,8 @@
+import {diagnoseSt,stFunctionBlockPins,stOutputPins} from './st-diagnostics.js';
 const keywords = ['IF','THEN','ELSIF','ELSE','END_IF','CASE','OF','END_CASE','FOR','TO','BY','DO','END_FOR','WHILE','END_WHILE','REPEAT','UNTIL','END_REPEAT','RETURN','EXIT','TRUE','FALSE','AND','OR','XOR','NOT','MOD'];
 const functions = {ADD:'ADD(Input1, Input2)',SUB:'SUB(Input1, Input2)',MUL:'MUL(Input1, Input2)',DIV:'DIV(Input1, Input2)',ABS:'ABS(Value)',MIN:'MIN(Input1, Input2)',MAX:'MAX(Input1, Input2)',SEL:'SEL(Condition, Input0, Input1)',LIMIT:'LIMIT(Minimum, Value, Maximum)'};
-const pins = {TON:['IN','PT','Q','ET'],TOF:['IN','PT','Q','ET'],TP:['IN','PT','Q','ET'],CTU_DINT:['CU','R','PV','Q','CV'],CTD_DINT:['CD','LD','PV','Q','CV'],CTUD_DINT:['CU','CD','R','LD','PV','QU','QD','CV'],R_TRIG:['CLK','Q'],F_TRIG:['CLK','Q'],RS:['S','R_1'],SR:['S_1','R']};
-const types = ['BOOL','BYTE','WORD','DWORD','LWORD','SINT','INT','DINT','LINT','USINT','UINT','UDINT','ULINT','REAL','LREAL','TIME','DATE','TIME_OF_DAY','DATE_AND_TIME'];
+const pins = stFunctionBlockPins;
+const types = ['BOOL','BYTE','WORD','DWORD','LWORD','SINT','INT','DINT','LINT','USINT','UINT','UDINT','ULINT','REAL','LREAL','TIME','DATE','TIME_OF_DAY','DATE_AND_TIME','STRING'];
 
 // Comments and strings are source text, not completion contexts.
 export function stCompletionContext(source, caret) {
@@ -25,9 +26,9 @@ export function stCompletions(source, caret, variables, explicit = false) {
   let items;
   const instance=variables.find(v=>v.name.toLowerCase()===(context.instance || context.call || '').toLowerCase());
   if(context.instance || instance && context.call) {
-    items=(pins[instance?.dataType] || []).map(label=>({label,detail:`${instance.dataType} pin`,insert:context.instance ? label : `${label} ${["Q","ET","CV","QU","QD"].includes(label) ? "=>" : ":="} `}));
+    items=(pins[instance?.dataType] || []).map(label=>({label,detail:`${instance.dataType} pin`,insert:context.instance ? label : `${label} ${stOutputPins.has(label) ? "=>" : ":="} `}));
   } else {
-    items=[...variables.map(v=>({label:v.name,detail:v.dataType,insert:v.name})),
+    items=[...variables.map(v=>({label:v.name,detail:v.displayType || v.dataType,insert:v.name})),
       ...keywords.map(label=>({label,detail:'Keyword',insert:label})),
       ...Object.entries(functions).map(([label,insert])=>({label,detail:'Function',insert})),
       ...types.map(label=>({label,detail:'Type',insert:label}))];
@@ -38,7 +39,7 @@ export function stCompletions(source, caret, variables, explicit = false) {
 }
 const el=(tag,cls,text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 let nextEditor=0;
-export function renderStTextEditor({name,source,draft,variables,onChange,onApply}) {
+export function renderStTextEditor({name,source,draft,variables,onChange,onApply,transition=false}) {
   const section=el('section','st-text-editor'); section.setAttribute('aria-label',`ST editor ${name}`);
   const header=el('div','st-editor-header'),title=el('strong','',`${name} · ST`);header.append(title);
   const apply=el('button','primary-button','Apply ST source');apply.type='button';apply.disabled=true;header.append(apply);section.append(header);
@@ -47,12 +48,27 @@ export function renderStTextEditor({name,source,draft,variables,onChange,onApply
   const popup=el('div','st-completions');popup.hidden=true;popup.id=`st-completions-${++nextEditor}`;popup.setAttribute('role','listbox');popup.setAttribute('aria-label','ST completions');
   input.setAttribute('aria-controls',popup.id);input.setAttribute('aria-autocomplete','list');
   const status=el('div','st-editor-status');body.append(lines,input,popup);section.append(body,status);
+  const diagnostics=el('div','st-diagnostics'),summary=el('div','st-diagnostics-summary'),list=el('div','st-diagnostics-list');
+  summary.setAttribute('role','status');summary.setAttribute('aria-live','polite');
+  diagnostics.append(summary,list,el('small','muted','Local checks cover common mistakes. Use XG5000 Check Program for full syntax and type validation.'));section.append(diagnostics);
+  let checkedSource=null,diagnosticTimer;
+  const check=()=>{
+    checkedSource=input.value;list.replaceChildren();const issues=diagnoseSt(input.value,variables,{transition});
+    const errors=issues.filter(d=>d.severity==='error').length,warnings=issues.length-errors;
+    summary.textContent=issues.length ? `Local ST: ${errors} error(s), ${warnings} warning(s)${issues.length===100 ? ' (first 100)' : ''}` : 'Local ST: no issues found in supported checks';
+    input.setAttribute('aria-invalid',String(errors>0));
+    for(const issue of issues){
+      const button=el('button',`st-diagnostic ${issue.severity}`,`Ln ${issue.line}, Col ${issue.column}: ${issue.message}`);button.type='button';
+      button.addEventListener('click',()=>{if(checkedSource!==input.value){check();return;}close();input.focus();input.setSelectionRange(issue.start,Math.min(issue.end,input.value.length));input.scrollTop=Math.max(0,(issue.line-3)*22);lines.scrollTop=input.scrollTop;paint();});list.append(button);
+    }
+  };
   let items=[],selected=0;
   const close=()=>{popup.hidden=true;input.removeAttribute('aria-activedescendant');};
   const paint=()=>{
     lines.textContent=Array.from({length:input.value.split('\n').length},(_,i)=>i+1).join('\n');
     const before=input.value.slice(0,input.selectionStart),row=before.split('\n').length,column=before.length-before.lastIndexOf('\n');
     status.textContent=`Ln ${row}, Col ${column} · Ctrl+Space autocomplete · Tab indent`;
+    if (checkedSource!==input.value) {clearTimeout(diagnosticTimer);diagnosticTimer=setTimeout(()=>{if(section.isConnected)check();},180);}
     apply.disabled=input.value===source;title.textContent=`${name} · ST${apply.disabled ? '' : ' *'}`;title.title=apply.disabled ? name : 'Draft changes — apply to include in project saves';onChange(input.value);
   };
   const choose=()=>{
@@ -107,5 +123,5 @@ export function renderStTextEditor({name,source,draft,variables,onChange,onApply
   });
   input.addEventListener('keyup',()=>paint());
   apply.addEventListener('click',async()=>{close();apply.disabled=true;try{await onApply(input.value);}finally{if(apply.isConnected)apply.disabled=input.value===source;}});
-  paint();return section;
+  paint();clearTimeout(diagnosticTimer);check();return section;
 }

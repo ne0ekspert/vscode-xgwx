@@ -2055,3 +2055,23 @@ form.iec-rung-creation {
 .st-completion { display: flex; justify-content: space-between; gap: 18px; padding: 4px 8px; cursor: pointer; }
 .st-completion.selected { color: var(--vscode-list-activeSelectionForeground, #fff); background: var(--vscode-list-activeSelectionBackground, #094771); }
 @media (max-width: 1100px) { .sfc-program-workspace.has-source { grid-template-columns: minmax(0,1fr); } .sfc-source-panel { position: static; } .st-editor-body { height: 360px; } }
+
+.sfc-entity.branch { width: 20px; min-height: 44px; padding: 0; border: 0; background: transparent; }
+
+.sfc-new-action.additional { padding: 0 4px; min-height: 18px; font-size: 12px; line-height: 18px; }
+.sfc-declaration-field { display: grid; gap: 4px; }
+.sfc-declaration-field:has(input[type="checkbox"]) { display: flex; align-items: center; gap: 8px; }
+.sfc-variable-form input[type="checkbox"] { width: auto; }
+.sfc-declaration-error { color: var(--vscode-errorForeground, #f48771); }
+.sfc-variable-form { margin-bottom: 16px; }
+.sfc-variable-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; }
+.sfc-variable-row code, .sfc-variable-row > span { grid-column: 1 / -1; }
+
+.st-diagnostics { padding: 8px; border-top: 1px solid var(--vscode-panel-border, #444); }
+.st-diagnostics-summary { margin-bottom: 6px; font-size: 12px; }
+.st-diagnostics-list { max-height: 160px; overflow-y: auto; }
+.st-diagnostic { display: block; width: 100%; padding: 4px; border: 0; background: transparent; text-align: left; white-space: normal; cursor: pointer; font-size: 12px; }
+.st-diagnostic.error { color: var(--vscode-editorError-foreground, #f48771); }
+.st-diagnostic.warning { color: var(--vscode-editorWarning-foreground, #cca700); }
+.st-diagnostic:hover { background: var(--vscode-list-hoverBackground, #333); }
+.st-diagnostics > small { display: block; margin-top: 6px; }
