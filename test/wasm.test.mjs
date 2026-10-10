@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { nativeFixturePath } from "./native-fixtures.mjs";
 import { fileURLToPath } from "node:url";
 
 import init, {
@@ -107,8 +108,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const libraryRoot = process.env.LIBXGWX_DIR || path.resolve(root, "../libxgwx");
 
 test("bundled WASM matches the native FF branch output-row deletion", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-function-output-branch/generated_l15_delete.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const generatedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-function-output-branch/generated_l15_delete.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
     context.skip("smart home and native comparison fixtures are required");
     return;
@@ -124,8 +125,8 @@ test("bundled WASM matches the native FF branch output-row deletion", async (con
 });
 
 test("bundled WASM deletes the captured EQ chain head like the native accepted file", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-eq-chain-head/generated_eq_chain_head.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const acceptedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-eq-chain-head/generated_eq_chain_head.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
     context.skip("smart home and XG5000 accepted fixtures are required");
     return;
@@ -145,8 +146,8 @@ test("bundled WASM deletes the captured EQ chain head like the native accepted f
 });
 
 test("bundled WASM deletes the heating comparison head like XG5000", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l47.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const acceptedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l47.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
     context.skip("smart home and native comparison fixtures are required");
     return;
@@ -165,8 +166,8 @@ test("bundled WASM deletes the heating comparison head like XG5000", async (cont
 });
 
 test("bundled WASM deletes both captured middle heating comparisons", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const capture = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const capture = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(capture, "generated_p6_g13_l55.xgwx"))) {
     context.skip("smart home and native comparison fixtures are required");
     return;
@@ -187,8 +188,8 @@ test("bundled WASM deletes both captured middle heating comparisons", async (con
 });
 
 test("bundled WASM deletes L58 EQ with its dangling feed", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l59_repaired.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const acceptedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l59_repaired.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
     context.skip("smart home and repaired heating comparison fixture are required");
     return;
@@ -207,8 +208,8 @@ test("bundled WASM deletes L58 EQ with its dangling feed", async (context) => {
 });
 
 test("bundled WASM deletes the contact-fed L62 EQ", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const acceptedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l63.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const acceptedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_l63.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(acceptedPath)) {
     context.skip("smart home and contact-fed comparison fixture are required");
     return;
@@ -227,8 +228,8 @@ test("bundled WASM deletes the contact-fed L62 EQ", async (context) => {
 });
 
 test("bundled WASM deletes both x15-fed heating comparisons", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const capture = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const capture = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(capture, "generated_p6_g13_l67.xgwx"))) {
     context.skip("smart home and x15-fed comparison fixtures are required");
     return;
@@ -264,8 +265,8 @@ test("bundled WASM deletes both x15-fed heating comparisons", async (context) =>
 });
 
 test("bundled WASM composes six heating comparison deletions in either order", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const expectedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_six.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const expectedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_six.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(expectedPath)) {
     context.skip("smart home and six-comparison fixtures are required");
     return;
@@ -296,8 +297,8 @@ test("bundled WASM composes six heating comparison deletions in either order", a
 });
 
 test("bundled WASM composes the repaired x3 deletion with six heating comparisons", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const expectedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_seven.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const expectedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_seven.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(expectedPath)) {
     context.skip("smart home and seven-comparison fixtures are required");
     return;
@@ -327,14 +328,14 @@ test("bundled WASM composes the repaired x3 deletion with six heating comparison
   assert.equal(summary.iecRows.filter((item) => item.groupIndex === 13).length, 25);
   assert.ok(summary.iecCircuitGraph);
   const cleaned = delete_xgwx_iec_ld_group(x3Last, 6, 13, 46);
-  const cleanedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_seven_then_group_removed.xgwx";
+  const cleanedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-group13/generated_p6_g13_seven_then_group_removed.xgwx");
   assert.deepEqual(Buffer.from(cleaned), fs.readFileSync(cleanedPath));
   assert.ok(parse_xgwx(cleaned).ladder[6].iecCircuitGraph);
 });
 
 test("bundled WASM deletes the native terminal coil and restores its IEC rung", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const nativePath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-coil-delete/COI.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const nativePath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-coil-delete/COI.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(nativePath)) {
     context.skip("smart home and native XG5000 captures are unavailable");
     return;
@@ -350,7 +351,7 @@ test("bundled WASM deletes the native terminal coil and restores its IEC rung", 
 });
 
 test("bundled WASM removes complete branched and function IEC networks", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
   if (!fs.existsSync(sourcePath)) {
     context.skip("smart home fixture is unavailable");
     return;
@@ -369,7 +370,7 @@ test("bundled WASM removes complete branched and function IEC networks", async (
 });
 
 test("bundled WASM adds a standalone IEC comment to an empty row", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
   if (!fs.existsSync(sourcePath)) {
     context.skip("smart home fixture is unavailable");
     return;
@@ -387,8 +388,8 @@ test("bundled WASM adds a standalone IEC comment to an empty row", async (contex
 });
 
 test("bundled WASM moves complete IEC networks into empty rows", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-move";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-move");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(captures, "GMS.XGWX"))
       || !fs.existsSync(path.join(captures, "GMF.XGWX"))) {
     context.skip("smart home and native move captures are unavailable");
@@ -407,8 +408,8 @@ test("bundled WASM moves complete IEC networks into empty rows", async (context)
 });
 
 test("bundled WASM copies complete IEC networks into empty rows", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(path.join(captures, "GCS.XGWX"))
       || !fs.existsSync(path.join(captures, "GCF.XGWX"))) {
     context.skip("smart home and native copy captures are unavailable");
@@ -428,8 +429,8 @@ test("bundled WASM copies complete IEC networks into empty rows", async (context
 });
 
 test("bundled WASM replaces one occupied IEC network atomically", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-network-replace/generated_l6_from_l2.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const generatedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-network-replace/generated_l6_from_l2.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
     context.skip("smart home network replacement capture is unavailable");
     return;
@@ -447,7 +448,7 @@ test("bundled WASM replaces one occupied IEC network atomically", async (context
 });
 
 test("bundled WASM gives a copied IEC function its own local instance", async (context) => {
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy");
   const copiedPath = path.join(captures, "GCF.XGWX");
   const independentPath = path.join(captures, "GCI.XGWX");
   if (!fs.existsSync(copiedPath) || !fs.existsSync(independentPath)) {
@@ -471,8 +472,8 @@ test("bundled WASM gives a copied IEC function its own local instance", async (c
 });
 
 test("parallel contact insertion matches XG5000's valid two-row branch", async (context) => {
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
-  const sourcePath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-linear-rung/generated_linear_rung_l31.xgwx";
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy");
+  const sourcePath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-linear-rung/generated_linear_rung_l31.xgwx");
   const nativePath = path.join(captures, "native_or_good.xgwx");
   const resavedPath = path.join(captures, "native_resaved_parallel.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(nativePath)) {
@@ -504,9 +505,9 @@ test("parallel contact insertion matches XG5000's valid two-row branch", async (
 });
 
 test("parallel contact insertion edits an existing smart home rung", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy/generated_original_parallel.xgwx";
-  const resavedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy/native_resaved_original_parallel.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const generatedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy/generated_original_parallel.xgwx");
+  const resavedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy/native_resaved_original_parallel.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
     context.skip("smart home fixture or generated branch is unavailable");
     return;
@@ -533,8 +534,8 @@ test("parallel contact insertion edits an existing smart home rung", async (cont
 });
 
 test("parallel contact kind insertion preserves the smart home branch shape", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy");
   const generatedPath = path.join(captures, "generated_original_parallel_nc.xgwx");
   const resavedPath = path.join(captures, "native_resaved_original_parallel_nc.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
@@ -574,8 +575,8 @@ test("parallel contact kind insertion preserves the smart home branch shape", as
 });
 
 test("parallel contact insertion supports a SET-coil smart home rung", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-parallel-set";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-parallel-set");
   const generatedPath = path.join(captures, "generated_parallel_set.xgwx");
   const nativePath = path.join(captures, "native_resaved_parallel_set.xgwx");
   if (![sourcePath, generatedPath].every(fs.existsSync)) {
@@ -601,8 +602,8 @@ test("parallel contact insertion supports a SET-coil smart home rung", async (co
 });
 
 test("final branch removal preserves a serial contact after the branch", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-branch-wire-delete";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-branch-wire-delete");
   const generatedPath = path.join(captures, "generated_branch_wire_delete.xgwx");
   const nativePath = path.join(captures, "native_branch_wire_delete.xgwx");
   const resavedPath = path.join(captures, "native_resaved_generated_branch_wire_delete.xgwx");
@@ -626,8 +627,8 @@ test("final branch removal preserves a serial contact after the branch", async (
 });
 
 test("final branch removal preserves a contact adjacent to the branch", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-direct-contact-branch-delete";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-direct-contact-branch-delete");
   const generatedPath = path.join(captures, "generated_p3_direct_branch_delete.xgwx");
   const nativePath = path.join(captures, "native_p3_direct_branch_delete.xgwx");
   const resavedPath = path.join(captures, "native_resaved_generated_p3_direct_branch_delete.xgwx");
@@ -652,8 +653,8 @@ test("final branch removal preserves a contact adjacent to the branch", async (c
 });
 
 test("final x6 branch removal preserves two leading contacts in both smart home programs", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-x6-branch-delete";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-x6-branch-delete");
   const p4Path = path.join(captures, "generated_p4_x6_branch_delete.xgwx");
   const bothPath = path.join(captures, "generated_p4_p5_x6_branch_delete.xgwx");
   const nativePath = path.join(captures, "native_p4_x6_branch_delete.xgwx");
@@ -678,8 +679,8 @@ test("final x6 branch removal preserves two leading contacts in both smart home 
 });
 
 test("short-wire branch removal preserves the smart home curtain and entrance rungs", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-short-wire-branch-delete";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-short-wire-branch-delete");
   const p1Path = path.join(captures, "generated_p1_short_wire_branch_delete.xgwx");
   const bothPath = path.join(captures, "generated_p1_p2_short_wire_branch_delete.xgwx");
   const nativePath = path.join(captures, "native_p1_short_wire_branch_delete.xgwx");
@@ -704,8 +705,8 @@ test("short-wire branch removal preserves the smart home curtain and entrance ru
 });
 
 test("output-branch removal preserves both smart home elevator rungs", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-output-branch-delete";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-output-branch-delete");
   const firstPath = path.join(captures, "generated_l52_delete.xgwx");
   const bothPath = path.join(captures, "generated_both_delete.xgwx");
   const nativePath = path.join(captures, "native_l52_delete.xgwx");
@@ -729,8 +730,8 @@ test("output-branch removal preserves both smart home elevator rungs", async (co
 });
 
 test("terminal contact-branch removal preserves the smart home elevator groups", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-three-row-contact-branch";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-three-row-contact-branch");
   const firstPath = path.join(captures, "generated_l26_delete.xgwx");
   const fivePath = path.join(captures, "generated_five_delete.xgwx");
   const nativePath = path.join(captures, "native_l26_delete.xgwx");
@@ -760,8 +761,8 @@ test("terminal contact-branch removal preserves the smart home elevator groups",
 });
 
 test("two-contact terminal branches match XG5000 and survive Save As", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-two-contact-terminal-branch";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-two-contact-terminal-branch");
   const firstPath = path.join(captures, "generated_l45_delete.xgwx");
   const twoPath = path.join(captures, "generated_two_delete.xgwx");
   const nativePath = path.join(captures, "native_l45_delete.xgwx");
@@ -788,8 +789,8 @@ test("two-contact terminal branches match XG5000 and survive Save As", async (co
 });
 
 test("two-contact middle branches match XG5000 and survive Save As", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-middle-contact-branch";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-middle-contact-branch");
   const firstPath = path.join(captures, "generated_l44_delete.xgwx");
   const twoPath = path.join(captures, "generated_two_middle_delete.xgwx");
   const nativePath = path.join(captures, "native_l44_delete.xgwx");
@@ -816,8 +817,8 @@ test("two-contact middle branches match XG5000 and survive Save As", async (cont
 });
 
 test("first lower contact branches match XG5000 and survive Save As", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-first-lower-contact-branch";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-first-lower-contact-branch");
   const firstPath = path.join(captures, "generated_l25_delete.xgwx");
   const sevenPath = path.join(captures, "generated_seven_delete.xgwx");
   const nativePath = path.join(captures, "native_l25_delete.xgwx");
@@ -849,8 +850,8 @@ test("first lower contact branches match XG5000 and survive Save As", async (con
 });
 
 test("middle short-wire contact branch matches XG5000 and survives Save As", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-middle-shortwire-branch";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-middle-shortwire-branch");
   const generatedPath = path.join(captures, "generated_l39_delete.xgwx");
   const nativePath = path.join(captures, "native_l39_delete.xgwx");
   const resavedPath = path.join(captures, "native_resaved_l39.xgwx");
@@ -873,8 +874,8 @@ test("middle short-wire contact branch matches XG5000 and survives Save As", asy
 });
 
 test("x3 terminal contact branch matches XG5000 and survives Save As", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-three-row-x3-terminal";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-three-row-x3-terminal");
   const generatedPath = path.join(captures, "generated_p3_l57_delete.xgwx");
   const resavedPath = path.join(captures, "native_resaved_generated.xgwx");
   if (![sourcePath, generatedPath, resavedPath].every(fs.existsSync)) {
@@ -891,8 +892,8 @@ test("x3 terminal contact branch matches XG5000 and survives Save As", async (co
 });
 
 test("x3 middle contact branch matches XG5000 and survives Save As", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-three-row-x3-middle";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-three-row-x3-middle");
   const generatedPath = path.join(captures, "generated_p3_l56_delete.xgwx");
   const resavedPath = path.join(captures, "native_resaved_generated.xgwx");
   if (![sourcePath, generatedPath, resavedPath].every(fs.existsSync)) {
@@ -909,8 +910,8 @@ test("x3 middle contact branch matches XG5000 and survives Save As", async (cont
 });
 
 test("nested middle contact branch rows match native XG5000 deletions", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-output-row";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-output-row");
   const resavedPath = path.join(captures, "native_resaved_generated_l4.xgwx");
   const group8ResavedPath = path.join(captures, "native_resaved_generated_g8_l21.xgwx");
   if (![sourcePath, resavedPath, path.join(captures, "generated_p6_l4.xgwx"),
@@ -941,8 +942,8 @@ test("nested middle contact branch rows match native XG5000 deletions", async (c
 });
 
 test("chained middle contact branch row matches native XG5000 deletion", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-output-row";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-output-row");
   const generatedPaths = [83, 84].map((row) => path.join(captures, `generated_p6_g14_l${row}.xgwx`));
   const resavedPath = path.join(captures, "native_resaved_generated_g14_l84.xgwx");
   if (![sourcePath, ...generatedPaths].every(fs.existsSync)) {
@@ -964,8 +965,8 @@ test("chained middle contact branch row matches native XG5000 deletion", async (
 });
 
 test("branch-only middle rows match native XG5000 deletions", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-p6-output-row";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-p6-output-row");
   const sites = [[7, 21], [8, 28]];
   const generatedPaths = sites.map(([group, row]) => path.join(captures, `generated_p2_g${group}_l${row}.xgwx`));
   if (![sourcePath, ...generatedPaths].every(fs.existsSync)) {
@@ -988,8 +989,8 @@ test("branch-only middle rows match native XG5000 deletions", async (context) =>
 });
 
 test("parallel insertion accepts an existing rising-edge top contact", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy");
   const generatedPath = path.join(captures, "generated_rising_parallel.xgwx");
   const resavedPath = path.join(captures, "native_resaved_rising_parallel.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
@@ -1020,8 +1021,8 @@ test("parallel insertion accepts an existing rising-edge top contact", async (co
 });
 
 test("cross-program IEC network copy validates destination operands and restores", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy");
   const generatedPath = path.join(captures, "generated_cross_program_contact_copy.xgwx");
   const resavedPath = path.join(captures, "native_resaved_cross_program_contact_copy.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
@@ -1051,9 +1052,9 @@ test("cross-program IEC network copy validates destination operands and restores
 });
 
 test("bundled WASM copies a typed IEC function network across programs", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-function-copy/generated_p2_word_to_udint_p3_l1.xgwx";
-  const nativePath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-function-copy/native_resaved_cross_function_copy.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const generatedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-cross-function-copy/generated_p2_word_to_udint_p3_l1.xgwx");
+  const nativePath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-cross-function-copy/native_resaved_cross_function_copy.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
     context.skip("smart home cross-program function copy capture is unavailable");
     return;
@@ -1078,8 +1079,8 @@ test("bundled WASM copies a typed IEC function network across programs", async (
 });
 
 test("bundled WASM copies cross-program networks with required mapped BOOL locals", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-local-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-cross-local-copy");
   const generatedPath = path.join(captures, "generated_cross_local_copy.xgwx");
   const nativePath = path.join(captures, "native_resaved_cross_local_copy.xgwx");
   if (![sourcePath, generatedPath].every(fs.existsSync)) {
@@ -1108,8 +1109,8 @@ test("bundled WASM copies cross-program networks with required mapped BOOL local
 });
 
 test("bundled WASM copies a cross-program network with its R_TRIG instance", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-instance-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-cross-instance-copy");
   const generatedPath = path.join(captures, "generated_cross_instance_copy.xgwx");
   const nativePath = path.join(captures, "native_resaved_cross_instance_copy.xgwx");
   if (![sourcePath, generatedPath].every(fs.existsSync)) {
@@ -1137,8 +1138,8 @@ test("bundled WASM copies a cross-program network with its R_TRIG instance", asy
 });
 
 test("bundled WASM atomically replaces a network from another IEC program", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-instance-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-cross-instance-copy");
   const generatedPath = path.join(captures, "generated_cross_instance_copy.xgwx");
   const nativePath = path.join(captures, "native_resaved_cross_instance_copy.xgwx");
   if (![sourcePath, generatedPath].every(fs.existsSync)) {
@@ -1161,8 +1162,8 @@ test("bundled WASM atomically replaces a network from another IEC program", asyn
 });
 
 test("bundled WASM copies a Unicode UDINT local with its function network", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-cross-udint-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-cross-udint-copy");
   const generatedPath = path.join(captures, "generated_cross_udint_copy.xgwx");
   const nativePath = path.join(captures, "native_resaved_cross_udint_copy.xgwx");
   if (![sourcePath, generatedPath].every(fs.existsSync)) {
@@ -1191,8 +1192,8 @@ test("bundled WASM copies a Unicode UDINT local with its function network", asyn
 });
 
 test("bundled WASM cycles all captured IEC comparison function kinds", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-comparison-cycle";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-comparison-cycle");
   const generatedPath = path.join(captures, "generated_comparison_cycle.xgwx");
   const nativePath = path.join(captures, "native_resaved_comparison_cycle.xgwx");
   if (![sourcePath, generatedPath].every(fs.existsSync)) {
@@ -1226,8 +1227,8 @@ test("bundled WASM cycles all captured IEC comparison function kinds", async (co
 });
 
 test("variable-length IEC local address survives native XG5000 Save As", async (context) => {
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-address-length";
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-address-length");
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
   const generatedPath = path.join(captures, "generated_on_mx100.xgwx");
   const nativePath = path.join(captures, "native_resaved_on_mx100.xgwx");
   if (![sourcePath, generatedPath, nativePath].every(fs.existsSync)) {
@@ -1248,8 +1249,8 @@ test("variable-length IEC local address survives native XG5000 Save As", async (
 });
 
 test("mapped IEC BOOL address can be cleared and assigned again", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-address-unmap";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-address-unmap");
   const generatedPath = path.join(captures, "generated_unmapped_on.xgwx");
   const nativePath = path.join(captures, "native_unmapped_on.xgwx");
   if (![sourcePath, generatedPath, nativePath].every(fs.existsSync)) {
@@ -1281,8 +1282,8 @@ test("mapped IEC BOOL address can be cleared and assigned again", async (context
 });
 
 test("bundled WASM clears captured IEC input and output mappings", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-address-io-unmap";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-address-io-unmap");
   const generatedPath = path.join(captures, "generated_io_unmapped.xgwx");
   const nativePath = path.join(captures, "native_resaved_generated_io_unmap.xgwx");
   if (![sourcePath, generatedPath, nativePath].every(fs.existsSync)) {
@@ -1306,8 +1307,8 @@ test("bundled WASM clears captured IEC input and output mappings", async (contex
 });
 
 test("bundled WASM removes and repairs a captured IEC horizontal wire", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const generatedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-wire-delete/generated_l52_deleted.xgwx";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const generatedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-wire-delete/generated_l52_deleted.xgwx");
   if (![sourcePath, generatedPath].every(fs.existsSync)) {
     context.skip("smart home wire deletion fixture is unavailable");
     return;
@@ -1330,8 +1331,8 @@ test("bundled WASM removes and repairs a captured IEC horizontal wire", async (c
 });
 
 test("numeric IEC function expressions are type checked and survive native Save As", async (context) => {
-  const sourcePath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy";
+  const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy");
   const generatedPath = path.join(captures, "probe_expression_0_plus_1.xgwx");
   const resavedPath = path.join(captures, "native_resaved_expression_0_plus_1.xgwx");
   if (!fs.existsSync(sourcePath) || !fs.existsSync(generatedPath)) {
@@ -1360,7 +1361,7 @@ test("numeric IEC function expressions are type checked and survive native Save 
 });
 
 test("leading IEC contact insertion restores the native captured branch", async (context) => {
-  const captures = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-branched-contact-insert";
+  const captures = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-branched-contact-insert");
   const deletedPath = path.join(captures, "native-leading-contact-deleted.xgwx");
   const insertedPath = path.join(captures, "native-leading-contact-inserted.xgwx");
   if (!fs.existsSync(deletedPath) || !fs.existsSync(insertedPath)) {
@@ -2157,7 +2158,7 @@ test("bundled WASM preserves IEC LD text from an optional XGI workspace", async 
   assert.ok(twoSerialSummary.ladder[0].iecCircuitGraph);
   assert.ok(twoSerialSummary.ladder[0].sourceStrings.some((item) =>
     item.value === "스위치_1" && item.iecPosition?.[0] === 49 && item.iecPosition?.[1] === 8));
-  const twoSerialCapture = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-group-copy/G2C.XGWX";
+  const twoSerialCapture = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-group-copy/G2C.XGWX");
   if (fs.existsSync(twoSerialCapture)) assert.deepEqual(Buffer.from(twoSerial), fs.readFileSync(twoSerialCapture));
   const deletionSite = insertedSummary.ladder[0].iecNoContactDeletionSites.find((site) => site.rowIndex === 2);
   assert.deepEqual({ contactOffset: deletionSite.contactOffset, rawX: deletionSite.rawX }, { contactOffset: 271, rawX: 7 });

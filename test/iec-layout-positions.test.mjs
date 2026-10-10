@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
+import { nativeFixturePath } from "./native-fixtures.mjs";
 import init, { parse_xgwx } from "../media/libxgwx.js";
 import { iecGapOffsets } from "../media/iec-layout-positions.js";
 
 test("IEC layout closes the visual width of a deleted wire for downstream elements", async (context) => {
-  const originalPath = "/home/ne0ekspert/Downloads/smarthome_project_0225.xgwx";
-  const deletedPath = "/home/ne0ekspert/VMs/xg5000-win10/captures/smarthome-iec-wire-delete/generated_l52_deleted.xgwx";
+  const originalPath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
+  const deletedPath = nativeFixturePath("VMs/xg5000-win10/captures/smarthome-iec-wire-delete/generated_l52_deleted.xgwx");
   if (!fs.existsSync(originalPath) || !fs.existsSync(deletedPath)) {
     context.skip("native IEC wire-deletion fixture is unavailable");
     return;

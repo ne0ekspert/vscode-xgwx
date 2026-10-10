@@ -34,6 +34,14 @@ if [[ -x "$HOME/.cargo/bin/rustup" ]] \
   export PATH="$HOME/.cargo/bin:$PATH"
 fi
 
+# Keep compiler diagnostic paths portable in the published WASM bundle.
+# Encoded flags take precedence over RUSTFLAGS when callers supply them.
+if [[ -n "${CARGO_ENCODED_RUSTFLAGS:-}" ]]; then
+  export CARGO_ENCODED_RUSTFLAGS="${CARGO_ENCODED_RUSTFLAGS}"$'\x1f'"--remap-path-prefix=$HOME=/build/home"
+else
+  export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build/home"
+fi
+
 if [[ -x "$wasm_pack" ]]; then
   build_dir="$(mktemp -d)"
   if "$wasm_pack" build "$library_dir" \

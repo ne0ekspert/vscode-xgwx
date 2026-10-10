@@ -514,6 +514,20 @@ npm run check
 npm test
 ```
 
+### Optional native validation fixtures
+
+Some regression tests use private source projects and XG5000 capture archives.
+They look under the current user's home directory by default, retaining the
+`Downloads/` and `VMs/xg5000-win10/captures/` layout. Set `XGWX_TEST_DATA_ROOT`
+to an absolute directory containing those folders to use a different location:
+
+```bash
+XGWX_TEST_DATA_ROOT=/path/to/validation-data npm test
+```
+
+Tests that require unavailable native fixtures are skipped. Public fixtures
+continue to use repository-relative paths.
+
 To refresh the bundled parser after changing `libxgwx`:
 
 ```bash
