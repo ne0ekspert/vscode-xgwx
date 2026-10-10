@@ -1,0 +1,22 @@
+{
+  "IF": {
+    "prefix": "if",
+    "body": [
+      "IF ${1:condition} THEN",
+      "  $0",
+      "END_IF;"
+    ]
+  },
+  "FOR": {
+    "prefix": "for",
+    "body": [
+      "FOR ${1:i} := ${2:0} TO ${3:10} DO",
+      "  $0",
+      "END_FOR;"
+    ]
+  },
+  "Timer": {
+    "prefix": "ton",
+    "body": "${1:Timer}(IN := ${2:TRUE}, PT := ${3:T#1s});"
+  }
+}

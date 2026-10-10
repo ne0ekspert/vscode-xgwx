@@ -1,0 +1,19 @@
+{
+  "Load and store": {
+    "prefix": "ldst",
+    "body": [
+      "LD ${1:TRUE}",
+      "ST ${2:Output}"
+    ]
+  },
+  "Conditional jump": {
+    "prefix": "jmpc",
+    "body": [
+      "LD ${1:condition}",
+      "JMPC ${2:target}",
+      "$0",
+      "${2:target}:",
+      "RET"
+    ]
+  }
+}

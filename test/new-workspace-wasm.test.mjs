@@ -45,3 +45,20 @@ for (const family of ['xgk','xgi']) {
     assert.ok(after.ladder[0].decodedLen>8);
   });
 }
+for (const language of ['ST','IL']) {
+  test(`new ${language} project starts with one editable empty source program`,async()=>{
+    const {edit_xgwx_text_program,edit_xgwx_text_variable}=await import('../media/libxgwx.js');
+    const source=fs.readFileSync(new URL(`../media/templates/new-xgi-${language.toLowerCase()}.xgwx`,import.meta.url));
+    const base=parse_xgwx(fs.readFileSync(new URL('../media/templates/new-xgi.xgwx',import.meta.url)));
+    const before=parse_xgwx(source), program=before.textPrograms[0];
+    assert.equal(before.cpu.model,'XGI-CPUE');assert.equal(before.programs.length,1);assert.equal(before.programs[0].name,'NewProgram');
+    assert.equal(before.programs[0].kind,language==='ST'?4:9);assert.deepEqual(before.ladder,[]);assert.deepEqual(before.sfc,[]);assert.equal(before.counts.ladderErrors,0);
+    assert.equal(program.language,language);assert.equal(program.source,'');assert.equal(program.editable,true);assert.deepEqual(program.variables,[]);assert.equal(program.variablesError,null);
+    assert.deepEqual(before.hardware,base.hardware);assert.deepEqual(before.variables,base.variables);
+    const declared=edit_xgwx_text_variable(source,program.objectId,{programIndex:0,expectedVariables:[],name:'Count',dataType:'INT',description:'',remove:false,update:false});
+    const code=language==='ST'?'Count := 1;':'LD 1\nST Count';
+    const edited=edit_xgwx_text_program(declared,{programIndex:0,expectedObjectId:program.objectId,expectedLanguage:language,expectedSource:'',source:code});
+    const saved=parse_xgwx(Buffer.from(edited));assert.equal(saved.textPrograms[0].source,code);assert.equal(saved.textPrograms[0].variables[0].name,'Count');
+    assert.deepEqual(saved.programs,before.programs);assert.deepEqual(saved.hardware,before.hardware);
+  });
+}

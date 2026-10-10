@@ -1,0 +1,82 @@
+{
+  "name": "IL",
+  "scopeName": "source.xgwx-il",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash",
+      "match": "//.*$"
+    },
+    {
+      "name": "comment.block.iec",
+      "begin": "\\(\\*",
+      "end": "\\*\\)",
+      "patterns": [
+        {
+          "include": "#comment"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.iec",
+      "begin": "'",
+      "end": "'(?!')",
+      "patterns": [
+        {
+          "name": "constant.character.escape.iec",
+          "match": "\\$.|''"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.double.iec",
+      "begin": "\"",
+      "end": "\"(?!\")",
+      "patterns": [
+        {
+          "name": "constant.character.escape.iec",
+          "match": "\\$.|\"\""
+        }
+      ]
+    },
+    {
+      "name": "constant.numeric.iec",
+      "match": "(?i)\\b(?:[a-z_]+#|(?:2|8|16)#)[a-z0-9_.:+-]+|\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b"
+    },
+    {
+      "name": "variable.other.address.iec",
+      "match": "%[IQM][XBWDL]?\\d+(?:\\.\\d+)*"
+    },
+    {
+      "name": "storage.type.iec",
+      "match": "(?i)\\b(?:BOOL|BYTE|WORD|DWORD|LWORD|SINT|INT|DINT|LINT|USINT|UINT|UDINT|ULINT|REAL|LREAL|TIME|DATE|TIME_OF_DAY|DATE_AND_TIME|STRING|WSTRING|ARRAY|OF|STRUCT|END_STRUCT)\\b"
+    },
+    {
+      "name": "entity.name.label.iec",
+      "match": "^\\s*[A-Za-z_]\\w*(?=\\s*:)"
+    },
+    {
+      "name": "keyword.control.iec",
+      "match": "(?i)\\b(?:LD|LDN|ST|STN|S|R|AND|ANDN|OR|ORN|XOR|XORN|NOT|ADD|SUB|MUL|DIV|MOD|GT|GE|EQ|NE|LE|LT|JMP|JMPC|JMPCN|CAL|CALC|CALCN|SCAL|RET|RETC|RETCN)\\b"
+    },
+    {
+      "name": "constant.language.iec",
+      "match": "(?i)\\b(?:TRUE|FALSE)\\b"
+    },
+    {
+      "name": "keyword.operator.iec",
+      "match": "(?i)\\b(?:AND|OR|XOR|NOT|MOD)\\b|:=|=>|<>|<=|>=|[+*/=<>-]"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.block.iec",
+      "begin": "\\(\\*",
+      "end": "\\*\\)",
+      "patterns": [
+        {
+          "include": "#comment"
+        }
+      ]
+    }
+  }
+}

@@ -17,13 +17,14 @@ const mock = {
 };
 const originalLoad = Module._load;
 Module._load = function(request,...args){return request === 'vscode' ? mock : originalLoad.call(this,request,...args);};
-const {createNewWorkspace} = require('../new-workspace.cjs');
+const {createNewWorkspace,PROJECT_TEMPLATES} = require('../new-workspace.cjs');
 Module._load = originalLoad;
-const context={extensionUri:uri(root)};
+const initialViews=new Map();
+const context={extensionUri:uri(root),workspaceState:{update:async(key,value)=>initialViews.set(key,value)}};
 function reset(){selection=0;destination=uri('/workspace/Created');applied=opened=undefined;failures=[];existing=false;}
 
 test('creates each native binary template and opens it with the XGWX editor',async()=>{
-  for(const [index,file] of [[0,'new-xgk.xgwx'],[1,'new-xgi.xgwx'],[2,'new-xgi-sfc.xgwx']]){
+  for(const [index,{file}] of PROJECT_TEMPLATES.entries()){
     reset();selection=index;
     const result=await createNewWorkspace(context);
     assert.equal(result.path,'/workspace/Created.xgwx');
@@ -31,6 +32,7 @@ test('creates each native binary template and opens it with the XGWX editor',asy
     assert.equal(applied.options.overwrite,false);
     assert.equal(opened[0],'vscode.openWith');assert.equal(opened[2],'xgwx.workspaceViewer');
     assert.deepEqual(failures,[]);
+    if(PROJECT_TEMPLATES[index].programView) assert.equal(initialViews.get(`xgwx.initialProgramView:${result.toString()}`),"vendorIl");
   }
 });
 test('cancel does not create a file, and an existing file is never overwritten',async()=>{

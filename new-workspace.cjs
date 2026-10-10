@@ -4,6 +4,11 @@ const PROJECT_TEMPLATES = [
   { label: 'XGK ladder project', description: 'XGK-CPUSN · Ladder Diagram', file: 'new-xgk.xgwx' },
   { label: 'XGI IEC ladder project', description: 'XGI-CPUE · IEC Ladder Diagram', file: 'new-xgi.xgwx' },
   { label: 'XGI SFC project', description: 'XGI-CPUE · Sequential Function Chart', file: 'new-xgi-sfc.xgwx' },
+  { label: 'XGI ST project', description: 'XGI-CPUE · Structured Text', file: 'new-xgi-st.xgwx' },
+  { label: 'XGI IL project', description: 'XGI-CPUE · Instruction List (IEC)', file: 'new-xgi-il.xgwx' },
+  { label: 'XGK IL project', description: 'XGK-CPUSN · Vendor Instruction List', file: 'new-xgk.xgwx', programView: 'vendorIl' },
+  { label: 'XGK ST project', description: 'XGK-CPUA · Auto-allocation Structured Text', file: 'new-xgk-auto-st.xgwx' },
+  ...[['xece','XEC-E'],['xech','XEC-H'],['xecs','XEC-S'],['xecu','XEC-U'],['xemh2','XEM-H2'],['xemhp','XEM-HP'],['gipam','GIPAM'],['kl','KL'],['xgr','XGR-CPUH']].flatMap(([stem,cpu]) => ['ST','IL'].map(language => ({label:`${cpu} ${language} project`, description: `${cpu} · ${language === 'ST' ? 'Structured Text' : 'Instruction List (IEC)'}`, file:`new-${stem}-${language.toLowerCase()}.xgwx`}))),
 ];
 
 async function createNewWorkspace(context) {
@@ -25,6 +30,7 @@ async function createNewWorkspace(context) {
     if (!await vscode.workspace.applyEdit(edit)) {
       throw new Error('The file could not be created. Choose a new file name.');
     }
+    if (template.programView) await context.workspaceState?.update(`xgwx.initialProgramView:${target.toString()}`, template.programView);
     await vscode.commands.executeCommand('vscode.openWith', target, 'xgwx.workspaceViewer', { preview: false });
     return target;
   } catch (error) {

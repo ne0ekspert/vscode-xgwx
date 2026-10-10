@@ -71,13 +71,60 @@
           "group": "file@10"
         }
       ]
-    }
+    },
+    "languages": [
+      {
+        "id": "xgwx-st",
+        "aliases": [
+          "Structured Text (XG5000)",
+          "ST"
+        ],
+        "extensions": [
+          ".st"
+        ],
+        "configuration": "./syntaxes/iec-language-configuration.json"
+      },
+      {
+        "id": "xgwx-il",
+        "aliases": [
+          "Instruction List (XG5000)",
+          "IL"
+        ],
+        "extensions": [
+          ".il"
+        ],
+        "configuration": "./syntaxes/iec-language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "xgwx-st",
+        "scopeName": "source.xgwx-st",
+        "path": "./syntaxes/st.tmLanguage.json"
+      },
+      {
+        "language": "xgwx-il",
+        "scopeName": "source.xgwx-il",
+        "path": "./syntaxes/il.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "xgwx-st",
+        "path": "./snippets/st.json"
+      },
+      {
+        "language": "xgwx-il",
+        "path": "./snippets/il.json"
+      }
+    ]
   },
   "scripts": {
     "check": "node --check extension.js && node --check media/main.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check new-workspace.cjs",
     "test": "node --test test/*.test.js test/*.test.mjs",
     "build:wasm": "bash scripts/build-wasm.sh",
-    "package": "npx @vscode/vsce package"
+    "package": "npx @vscode/vsce package",
+    "build:text-templates": "node scripts/build-text-project-templates.mjs"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.6.0"

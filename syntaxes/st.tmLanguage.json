@@ -1,0 +1,78 @@
+{
+  "name": "ST",
+  "scopeName": "source.xgwx-st",
+  "patterns": [
+    {
+      "name": "comment.line.double-slash",
+      "match": "//.*$"
+    },
+    {
+      "name": "comment.block.iec",
+      "begin": "\\(\\*",
+      "end": "\\*\\)",
+      "patterns": [
+        {
+          "include": "#comment"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.single.iec",
+      "begin": "'",
+      "end": "'(?!')",
+      "patterns": [
+        {
+          "name": "constant.character.escape.iec",
+          "match": "\\$.|''"
+        }
+      ]
+    },
+    {
+      "name": "string.quoted.double.iec",
+      "begin": "\"",
+      "end": "\"(?!\")",
+      "patterns": [
+        {
+          "name": "constant.character.escape.iec",
+          "match": "\\$.|\"\""
+        }
+      ]
+    },
+    {
+      "name": "constant.numeric.iec",
+      "match": "(?i)\\b(?:[a-z_]+#|(?:2|8|16)#)[a-z0-9_.:+-]+|\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b"
+    },
+    {
+      "name": "variable.other.address.iec",
+      "match": "%[IQM][XBWDL]?\\d+(?:\\.\\d+)*"
+    },
+    {
+      "name": "storage.type.iec",
+      "match": "(?i)\\b(?:BOOL|BYTE|WORD|DWORD|LWORD|SINT|INT|DINT|LINT|USINT|UINT|UDINT|ULINT|REAL|LREAL|TIME|DATE|TIME_OF_DAY|DATE_AND_TIME|STRING|WSTRING|ARRAY|OF|STRUCT|END_STRUCT)\\b"
+    },
+    {
+      "name": "keyword.control.iec",
+      "match": "(?i)\\b(?:IF|THEN|ELSIF|ELSE|END_IF|CASE|END_CASE|FOR|TO|BY|DO|END_FOR|WHILE|END_WHILE|REPEAT|UNTIL|END_REPEAT|RETURN|EXIT|VAR|VAR_INPUT|VAR_OUTPUT|VAR_IN_OUT|VAR_TEMP|VAR_EXTERNAL|VAR_GLOBAL|END_VAR|CONSTANT|RETAIN|NON_RETAIN|AT|TYPE|END_TYPE|FUNCTION|END_FUNCTION|FUNCTION_BLOCK|END_FUNCTION_BLOCK|PROGRAM|END_PROGRAM)\\b"
+    },
+    {
+      "name": "constant.language.iec",
+      "match": "(?i)\\b(?:TRUE|FALSE)\\b"
+    },
+    {
+      "name": "keyword.operator.iec",
+      "match": "(?i)\\b(?:AND|OR|XOR|NOT|MOD)\\b|:=|=>|<>|<=|>=|[+*/=<>-]"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.block.iec",
+      "begin": "\\(\\*",
+      "end": "\\*\\)",
+      "patterns": [
+        {
+          "include": "#comment"
+        }
+      ]
+    }
+  }
+}

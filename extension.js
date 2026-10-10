@@ -52,14 +52,18 @@ class XgwxEditorProvider {
       }
 
       try {
+        const initialViewKey = `xgwx.initialProgramView:${document.uri.toString()}`;
+        const initialProgramView = this.context.workspaceState?.get(initialViewKey);
         await panel.webview.postMessage({
           type: "load",
+          initialProgramView,
           fileName: path.basename(document.uri.fsPath || document.uri.path),
           uri: document.uri.toString(),
           byteLength: document.bytes.byteLength,
           bytes: Array.from(document.bytes),
           dirty: document.dirty,
         });
+        if (initialProgramView) await this.context.workspaceState.update(initialViewKey, undefined);
       } catch (error) {
         await panel.webview.postMessage({
           type: "error",
@@ -129,8 +133,8 @@ class XgwxEditorProvider {
         if (this.editors.has(editor) && panel.visible) panel.reveal(undefined,false);
         await panel.webview.postMessage({type:"iecContactInputResult",requestId:message.requestId,value});
       } else if (message?.type === "promptNewProgram") {
-        const allowed = ["LD", "SFC"].filter(language => message.languages?.includes(language));
-        const language = await vscode.window.showQuickPick(allowed.map(language => ({label:language, description:{LD:"Ladder Diagram",SFC:"Sequential Function Chart"}[language]})), {title:"Create program", placeHolder:"Choose the program language",ignoreFocusOut:true});
+        const allowed = ["LD", "SFC", "ST", "IL"].filter(language => message.languages?.includes(language));
+        const language = await vscode.window.showQuickPick(allowed.map(language => ({label:language, description:{LD:"Ladder Diagram",SFC:"Sequential Function Chart",ST:"Structured Text",IL:"Instruction List (IEC)"}[language]})), {title:"Create program", placeHolder:"Choose the program language",ignoreFocusOut:true});
         let value = null;
         if (language) {
           const name = await vscode.window.showInputBox({title:`Create ${language.label} program`,value:message.name || "NewProgram",prompt:"Program name",ignoreFocusOut:true,

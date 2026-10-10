@@ -1,3 +1,5 @@
+import {xgkIlCompletions, diagnoseXgkIl} from './xgk-il-editor.js';
+import {ilCompletions, diagnoseIl} from './il-editor.js';
 import {diagnoseSt,stFunctionBlockPins,stOutputPins} from './st-diagnostics.js';
 const keywords = ['IF','THEN','ELSIF','ELSE','END_IF','CASE','OF','END_CASE','FOR','TO','BY','DO','END_FOR','WHILE','END_WHILE','REPEAT','UNTIL','END_REPEAT','RETURN','EXIT','TRUE','FALSE','AND','OR','XOR','NOT','MOD'];
 const functions = {ADD:'ADD(Input1, Input2)',SUB:'SUB(Input1, Input2)',MUL:'MUL(Input1, Input2)',DIV:'DIV(Input1, Input2)',ABS:'ABS(Value)',MIN:'MIN(Input1, Input2)',MAX:'MAX(Input1, Input2)',SEL:'SEL(Condition, Input0, Input1)',LIMIT:'LIMIT(Minimum, Value, Maximum)'};
@@ -39,13 +41,16 @@ export function stCompletions(source, caret, variables, explicit = false) {
 }
 const el=(tag,cls,text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 let nextEditor=0;
-export function renderStTextEditor({name,source,draft,variables,onChange,onApply,transition=false}) {
-  const section=el('section','st-text-editor'); section.setAttribute('aria-label',`ST editor ${name}`);
-  const header=el('div','st-editor-header'),title=el('strong','',`${name} · ST`);header.append(title);
-  const apply=el('button','primary-button','Apply ST source');apply.type='button';apply.disabled=true;header.append(apply);section.append(header);
+export function renderStTextEditor({name,source,draft,variables,onChange,onApply,transition=false,language="ST",sourceLabel,dialect="IEC"}) {
+  const displaySource=source.replace(/\r\n?/g,"\n");
+  const serialize=value=>source.includes("\r\n") ? value.replace(/\r\n?/g,"\n").replace(/\n/g,"\r\n") : value;
+  const completions=language === "IL" ? (dialect === "XGK" ? xgkIlCompletions : ilCompletions) : stCompletions;
+  const section=el('section','st-text-editor'); section.setAttribute('aria-label',`${language} editor ${name}`);
+  const header=el('div','st-editor-header'),title=el('strong','',`${name} · ${language}`);header.append(title);
+  const apply=el('button','primary-button',`Apply ${language} source`);apply.type='button';apply.disabled=true;header.append(apply);section.append(header);
   const body=el('div','st-editor-body'),lines=el('pre','st-line-numbers'),input=el('textarea','st-source-input');
-  input.value=draft ?? source;input.spellcheck=false;input.wrap='off';input.setAttribute('aria-label','SFC ST source');input.dataset.sfcStSource='true';input.autocapitalize='off';input.autocomplete='off';
-  const popup=el('div','st-completions');popup.hidden=true;popup.id=`st-completions-${++nextEditor}`;popup.setAttribute('role','listbox');popup.setAttribute('aria-label','ST completions');
+  input.value=(draft ?? source).replace(/\r\n?/g,"\n");input.spellcheck=false;input.wrap='off';input.setAttribute('aria-label',sourceLabel || "SFC ST source");if(!sourceLabel)input.dataset.sfcStSource='true';input.autocapitalize='off';input.autocomplete='off';
+  const popup=el('div','st-completions');popup.hidden=true;popup.id=`st-completions-${++nextEditor}`;popup.setAttribute('role','listbox');popup.setAttribute('aria-label',`${language} completions`);
   input.setAttribute('aria-controls',popup.id);input.setAttribute('aria-autocomplete','list');
   const status=el('div','st-editor-status');body.append(lines,input,popup);section.append(body,status);
   const diagnostics=el('div','st-diagnostics'),summary=el('div','st-diagnostics-summary'),list=el('div','st-diagnostics-list');
@@ -53,9 +58,9 @@ export function renderStTextEditor({name,source,draft,variables,onChange,onApply
   diagnostics.append(summary,list,el('small','muted','Local checks cover common mistakes. Use XG5000 Check Program for full syntax and type validation.'));section.append(diagnostics);
   let checkedSource=null,diagnosticTimer;
   const check=()=>{
-    checkedSource=input.value;list.replaceChildren();const issues=diagnoseSt(input.value,variables,{transition});
+    checkedSource=input.value;list.replaceChildren();const issues=language === "IL" ? (dialect === "XGK" ? diagnoseXgkIl(input.value) : diagnoseIl(input.value)) : diagnoseSt(input.value,variables,{transition});
     const errors=issues.filter(d=>d.severity==='error').length,warnings=issues.length-errors;
-    summary.textContent=issues.length ? `Local ST: ${errors} error(s), ${warnings} warning(s)${issues.length===100 ? ' (first 100)' : ''}` : 'Local ST: no issues found in supported checks';
+    summary.textContent=issues.length ? `Local ${language}: ${errors} error(s), ${warnings} warning(s)${issues.length===100 ? ' (first 100)' : ''}` : `Local ${language}: no issues found in supported checks`;
     input.setAttribute('aria-invalid',String(errors>0));
     for(const issue of issues){
       const button=el('button',`st-diagnostic ${issue.severity}`,`Ln ${issue.line}, Col ${issue.column}: ${issue.message}`);button.type='button';
@@ -69,12 +74,12 @@ export function renderStTextEditor({name,source,draft,variables,onChange,onApply
     const before=input.value.slice(0,input.selectionStart),row=before.split('\n').length,column=before.length-before.lastIndexOf('\n');
     status.textContent=`Ln ${row}, Col ${column} · Ctrl+Space autocomplete · Tab indent`;
     if (checkedSource!==input.value) {clearTimeout(diagnosticTimer);diagnosticTimer=setTimeout(()=>{if(section.isConnected)check();},180);}
-    apply.disabled=input.value===source;title.textContent=`${name} · ST${apply.disabled ? '' : ' *'}`;title.title=apply.disabled ? name : 'Draft changes — apply to include in project saves';onChange(input.value);
+    apply.disabled=input.value===displaySource;title.textContent=`${name} · ${language}${apply.disabled ? '' : ' *'}`;title.title=apply.disabled ? name : 'Draft changes — apply to include in project saves';onChange(input.value);
   };
   const choose=()=>{
     const item=items[selected];if(!item)return;
     // A stale popup must never replace text at an old caret position.
-    const context=stCompletionContext(input.value,input.selectionStart);
+    const context=language === "IL" ? completions(input.value,input.selectionStart,variables,true).find(v=>v.label===item.label) : stCompletionContext(input.value,input.selectionStart);
     if(!context||context.start!==item.start||context.end!==item.end) {close();return;}
     input.setRangeText(item.insert,item.start,item.end,'end');close();paint();input.focus();
   };
@@ -84,7 +89,7 @@ export function renderStTextEditor({name,source,draft,variables,onChange,onApply
   };
   const complete=(explicit=false)=>{
     if(input.selectionStart!==input.selectionEnd){close();return;}
-    items=stCompletions(input.value,input.selectionStart,variables,explicit);selected=0;popup.replaceChildren();
+    items=completions(input.value,input.selectionStart,variables,explicit);selected=0;popup.replaceChildren();
     if(!items.length){close();return;}
     for(const [i,item] of items.entries()){
       const option=el('div','st-completion');option.id=`${popup.id}-${i}`;option.setAttribute('role','option');option.append(el('span','',item.label),el('small','muted',item.detail));
@@ -122,6 +127,6 @@ export function renderStTextEditor({name,source,draft,variables,onChange,onApply
     if(event.key.startsWith('Arrow')||['Home','End','PageUp','PageDown'].includes(event.key))close();
   });
   input.addEventListener('keyup',()=>paint());
-  apply.addEventListener('click',async()=>{close();apply.disabled=true;try{await onApply(input.value);}finally{if(apply.isConnected)apply.disabled=input.value===source;}});
+  apply.addEventListener('click',async()=>{close();apply.disabled=true;try{await onApply(serialize(input.value));}finally{if(apply.isConnected)apply.disabled=input.value===displaySource;}});
   paint();clearTimeout(diagnosticTimer);check();return section;
 }

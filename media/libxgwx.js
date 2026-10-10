@@ -1303,6 +1303,60 @@ export function edit_xgwx_sfc_variable(bytes, patch) {
 }
 
 /**
+ * @param {Uint8Array} bytes
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_text_program(bytes, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_text_program(ptr0, len0, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {string} expected_object_id
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_text_variable(bytes, expected_object_id, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_object_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_text_variable(ptr0, len0, ptr1, len1, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {any} patch
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_vendor_il(bytes, patch) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_vendor_il(ptr0, len0, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Extend an IEC group into the adjacent implicit blank row.
  * @param {Uint8Array} bytes
  * @param {number} program_index

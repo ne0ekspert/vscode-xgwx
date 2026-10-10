@@ -1,3 +1,4 @@
+import { renderStTextEditor } from "./st-editor.js";
 import { actionGroup } from "./sfc-actions.js";
 import { renderSfcDiagram, renderSfcProperties, renderSfcVariables, sfcRowsAfterEdit, sfcRowIndex, sfcTextField } from "./sfc.js";
 import { moveIecCursor, iecCursorRecord } from "./iec-navigation.js";
@@ -7,6 +8,9 @@ import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
+  edit_xgwx_vendor_il,
+  edit_xgwx_text_variable,
+  edit_xgwx_text_program,
   edit_xgwx_sfc_entity,
   replace_xgwx_sfc_sequence,
   edit_xgwx_sfc_variable,
@@ -278,6 +282,10 @@ async function loadWorkspace(file) {
     const activeId=previousPrograms?.[selectedProgramIndex]?.objectId;
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
     if(previousPrograms && (previousPrograms.length!==summary.programs.length || previousPrograms.some((p,i)=>p.objectId!==summary.programs[i]?.objectId)))reconcileProgramOrder(previousPrograms,activeId);
+    if (file.initialProgramView === "vendorIl") {
+      const program=summary.vendorIlPrograms?.[0];
+      if(program) {vendorIlViews.add(`${file.uri}:${program.objectId}`); selectedProgramIndex=program.programIndex; activeView="programs";}
+    }
     dirty = Boolean(file.dirty);
     const modules = summary.hardware?.modules || [];
     const bases = summary.hardware?.bases || [];
@@ -447,12 +455,9 @@ function showProgramItemContextMenu(x, y, index, program) {
   menu.append(item);positionLadderOverlay(menu,x,y);item.focus();
 }
 function newProgramLanguages() {
-  const cpu = current?.summary.cpu;
-  if(current?.summary.counts?.configurations !== 1)return [];
-  if(cpu?.family === "XGK")return ["LD"];
-  if(cpu?.family === "XGI")return ["LD", ...([100,102,104,106,107,111].includes(cpu.typeCode) ? ["SFC"] : [])];
-  return [];
+  return current?.summary.programLanguages || [];
 }
+
 let programPromptOpen = false;
 async function createProgram() {
   if(programPromptOpen)return;programPromptOpen=true;
@@ -467,7 +472,7 @@ async function createProgram() {
     if(value == null || current.file.uri !== fileUri)return;
     const patch={...value,objectId:crypto.randomUUID(),symbolId:crypto.randomUUID()};
     await applyEdit(()=>create_xgwx_program(current.file.bytes,patch),`Create ${value.language} program ${value.name}`,()=>{
-      selectedProgramIndex=current.summary.programs.findIndex(program=>program.objectId===patch.objectId);selectedSfcEntity=null;selectedIecRow=null;selectedIecElement=null;selectedIecInsertion=null;selectedIecBlank=null;resetLadderSelection();activeView="programs";
+      selectedProgramIndex=current.summary.programs.findIndex(program=>program.objectId===patch.objectId);if(value.language === "IL" && current.summary.cpu?.family === "XGK")vendorIlViews.add(`${fileUri}:${patch.objectId}`);selectedSfcEntity=null;selectedIecRow=null;selectedIecElement=null;selectedIecInsertion=null;selectedIecBlank=null;resetLadderSelection();activeView="programs";
     });
   } finally {programPromptOpen=false;}
 }
@@ -1192,6 +1197,7 @@ async function applySfcSequence(block, rows, selectedRow, action = false) {
 }
 
 const sfcStDrafts = new Map();
+const textProgramDrafts = new Map();
 const sfcClipboard = {};
 let sfcPromptOpen = false;
 async function showSfcTextInput(block, entity, field = sfcTextField(block, entity)) {
@@ -1258,10 +1264,57 @@ async function showSfcTextInput(block, entity, field = sfcTextField(block, entit
   }
 }
 
+const vendorIlViews = new Set();
 function renderProgramsEditor(canvas, inspector, programs) {
   if (selectedProgramIndex >= programs.length) selectedProgramIndex = 0;
   const selected = programs[selectedProgramIndex] || null;
   const ladder = (current.summary.ladder || []).find((item) => item.programIndex === selectedProgramIndex) || null;
+
+  const vendor = (current.summary.vendorIlPrograms || []).find(item=>item.programIndex===selectedProgramIndex);
+  const viewKey = `${current.file.uri}:${selected?.objectId}`;
+  if(vendor) {
+    const toggle=button(vendorIlViews.has(viewKey)?"Show ladder":"Edit XGK IL","secondary-button",()=>{
+      if(vendorIlViews.has(viewKey))vendorIlViews.delete(viewKey);else vendorIlViews.add(viewKey);
+      renderWorkspace();
+    });toggle.textContent=vendorIlViews.has(viewKey)?"Show ladder":"Edit XGK IL";canvas.append(toggle);
+    if(vendorIlViews.has(viewKey)) {
+      canvas.append(editorHeader("XGK Instruction List",selected?.name || ""));
+      canvas.append(element("p","muted","XGK IL saves as native ladder data. Series contacts and catalog application instructions are editable; branches and comments use the ladder view."));
+      if(vendor.editable && typeof vendor.source === "string") {
+        const stored=textProgramDrafts.get(viewKey),fileUri=current.file.uri;
+        canvas.append(renderStTextEditor({name:selected.name,language:"IL",dialect:"XGK",sourceLabel:"XGK IL program source",source:vendor.source,
+          draft:stored?.source===vendor.source?stored.value:vendor.source,variables:current.summary.variables || [],
+          onChange:value=>textProgramDrafts.set(viewKey,{source:vendor.source,value}),
+          onApply:value=>{if(current.file.uri!==fileUri)return;return applyEdit(()=>edit_xgwx_vendor_il(current.file.bytes,{programIndex:vendor.programIndex,expectedObjectId:vendor.objectId,expectedSource:vendor.source,source:value}),`Edit XGK IL program ${selected.name}`);},
+        }));
+      }else {canvas.append(element("p","muted",vendor.reason || "IL source is read only."));if(typeof vendor.source==="string")canvas.append(element("pre","text-program-readonly",vendor.source));}
+      renderProgramInspector(inspector,selected,null,null);return;
+    }
+  }
+  const text = (current.summary.textPrograms || []).find(item => item.programIndex === selectedProgramIndex);
+  if (text) {
+    canvas.append(editorHeader(text.language === "IL" ? "Instruction List" : "Structured Text", selected?.name || ""));
+    if (text.editable && typeof text.source === "string") {
+      const fileUri = current.file.uri, key = `${fileUri}:${text.objectId}`;
+      const stored = textProgramDrafts.get(key);
+      canvas.append(renderStTextEditor({name:selected.name, language:text.language, sourceLabel:`${text.language} program source`, source:text.source,
+        draft:stored?.source === text.source ? stored.value : text.source,
+        variables:[...(current.summary.variables || []),...(text.variables || [])],
+        onChange:value=>textProgramDrafts.set(key,{source:text.source,value}),
+        onApply:value=>{
+          if (current.file.uri !== fileUri) return;
+          return applyEdit(()=>edit_xgwx_text_program(current.file.bytes, {
+            programIndex:text.programIndex,expectedObjectId:text.objectId,expectedLanguage:text.language,expectedSource:text.source,source:value,
+          }), `Edit ${text.language} program ${selected.name}`);
+        },
+      }));
+    } else {
+      canvas.append(element("p", "muted", text.reason || "Source is unavailable for this program."));
+      if (typeof text.source === "string") canvas.append(element("pre", "text-program-readonly", text.source));
+    }
+    renderProgramInspector(inspector, selected, null, null);
+    return;
+  }
 
   const sfc = (current.summary.sfc || []).find(item => item.programIndex === selectedProgramIndex);
   if (sfc) {
@@ -5660,6 +5713,16 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     return;
   }
 
+  const text = (current.summary.textPrograms || []).find(item => item.programIndex === selectedProgramIndex);
+  if (text) {
+    inspector.append(element("p", "muted", `${text.language} source changes are drafts until Apply. Applied changes participate in Undo, Redo, Save and Save As. Declare program variables below.`));
+    if (text.editable) inspector.append(renderSfcVariables({...text,scalarOnly:current.summary.cpu?.family === "XGK",variableTypes:current.summary.cpu?.family === "XGK" ? ["BOOL","BYTE","WORD","DWORD","LWORD","SINT","INT","DINT","LINT","USINT","UINT","UDINT","ULINT","REAL","LREAL"] : undefined}, patch => applyEdit(() => edit_xgwx_text_variable(current.file.bytes, text.objectId, {
+      programIndex:text.programIndex, expectedVariables:text.variables, name:patch.name, dataType:patch.dataType, description:patch.description, remove:patch.remove, declaration:patch.declaration, update:patch.update || false,
+    }), patch.remove ? "Remove declaration" : patch.update ? "Edit declaration" : "Add declaration")));
+    return;
+  }
+
+  if(vendorIlViews.has(`${current.file.uri}:${program.objectId}`)) return;
   const cellSection = element("section", "cell-editor");
   if (ladder?.projectType === 2 && programLanguage(ladder) === "Ladder Diagram") {
     cellSection.append(element("h3", "", cell || insertion || iecBlankCell ? "Ladder cell" : "Ladder row"));
@@ -6956,7 +7019,7 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
   const cpuNote = element("p", "module-selection-note", currentCpu?.family === "XGK"
     ? "Available CPU changes preserve hardware within the target CPU limits. Check program compatibility in XG5000 after changing CPU."
     : currentCpu?.family === "XGI" && !cpuSelect.disabled
-    ? "Supported XGI models update captured default parameters and preserve SFC programs. CPUUN includes local Ethernet defaults. Custom settings and configured modules require migration. Check program compatibility in XG5000 after changing CPU."
+    ? "Supported XGI models update captured default parameters and preserve SFC, ST and IL programs. CPUUN includes local Ethernet defaults. Custom settings and configured modules require migration. Check program compatibility in XG5000 after changing CPU."
     : "CPU conversion is not supported for this workspace. Existing hardware is preserved.");
   const applyCpu = button("Apply CPU selection", "primary-button", async () => {
     const entry = cpuCatalog.find((item) => item.model === cpuSelect.value);

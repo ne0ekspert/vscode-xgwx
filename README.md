@@ -8,12 +8,13 @@ powered by the sibling `libxgwx` project during development.
 - Opens `*.xgwx` files directly as a VS Code custom editor.
 - Creates blank projects from **File → New File… → XGWX: New File**, or the
   **XGWX: New File** command. Choose XGK ladder (XGK-CPUSN), XGI IEC ladder,
-  or XGI SFC (XGI-CPUE), choose a new `.xgwx` path, and open `NewProgram`.
+  XGI SFC, XGI ST, or XGI IL (XGI-CPUE), choose a new `.xgwx` path,
+  and open `NewProgram`. ST and IL projects start with one empty source program.
   The native template defaults to project `NewProject` and PLC `LSPLC`.
   SFC projects start with an empty main block. Use **Create loop** for a starter
   chart, or add steps, transitions, labels, and jumps individually.
 - Right-click **Programs** in the sidebar (or focus it and press Shift+F10) and
-  choose **Create program**. Native VS Code prompts select LD/SFC and a unique
+  choose **Create program**. Native VS Code prompts select LD/SFC/ST/IL and a unique
   name. Right-click a program for **Delete program**, also available with Shift+F10.
   Deleting the last program leaves Programs available for creating a replacement.
   The new blank scan program opens selected and uses the usual undo/save
@@ -25,12 +26,15 @@ powered by the sibling `libxgwx` project during development.
   the viewed program and unapplied SFC ST drafts are preserved. Reordering supports Undo.
 - Shows project counts and metadata.
 - Enables CPU choices only when the bundled writer accepts the retained hardware.
-  Supported SFC projects with captured default parameters and empty I/O tables
+  Supported SFC, ST and IEC IL projects with captured default parameters and empty I/O tables
   can switch among XGI-CPUE, CPUS, CPUH, CPUU, CPUU/D and CPUUN. Changes preserve
-  ST source and declarations and update default memory ranges. CPUUN adds/removes
+  all program source and declarations and update default memory ranges. CPUUN adds/removes
   its default local Ethernet and empty motion sections. Custom settings and other
   XGI conversions require migration or further native validation.
   Cross-family and compact-model conversions are disabled.
+  Standalone ST/IL conversions preserve source and local declarations; native
+  XG5000 strict checks on all six models and Save As round trips passed with zero
+  errors and warnings. All six captured model pairs are covered by writer/WASM tests.
 - Identifies the captured XBM-DR16S built-in I/O and disables unsupported compact
   module selection, deletion, and settings. Module comments remain editable.
 - Edits module comments through the normal Save and Undo/Redo document flow.
@@ -1645,3 +1649,50 @@ the action area. Both remain keyboard reachable; simultaneous creation occurs
 before the selected step. Initial steps and unsupported entry/exit layouts keep
 branch creation disabled, and nested branch creation stays guarded. The inspector
 omits Add simultaneous branch. Touch surfaces show the affordances directly.
+
+
+### ST and IL programming
+
+Open a supported `.xgwx`, select a standalone ST or IL program in the tree, and edit
+its source. The program inspector provides local declarations, including
+primitive variables, arrays, initial values, Retain, STRING and supported
+function-block instances. Create ST/IL programs through the program tree's
+**Create program** command. **New File → XGWX** includes XGI, XGK Auto-allocation ST, XGK vendor IL, XEC-E/H/S/U, XEM-H2/HP, GIPAM, KL and XGR-CPUH text projects.
+
+XGK ST requires an Auto-allocation project and supports captured scalar declarations. Its variable type codes and native D allocation differ from IEC declarations. Arrays, STRING, timer/counter instances, initial values and Retain remain guarded for XGK. Classic XGK offers LD and vendor IL; the IL view writes native ladder records. Use **Edit XGK IL** / **Show ladder** to switch views. Series contacts, edge operators, outputs and validated catalog application instructions are editable. Branch/comment programs and Auto-allocation ladder IL remain read only in the text view; use the ladder editor for those programs.
+
+XEC, XEM, GIPAM, KL and XGR source projects use the captured IEC ST/IL layouts and declarations. XGI-CPUS/P is excluded from source creation and conversion because its native profile was absent from the installed XG5000 CPU chooser.
+
+The text editor provides line numbers, indentation, declaration completions,
+and advisory diagnostics. **Ctrl+Space** requests completions; **Ctrl+Enter**
+applies source. Drafts survive switching between programs. Click **Apply ST
+source** or **Apply IL source** before saving; applied source and declaration
+changes participate in the custom document's Undo, Redo, Save and Save As.
+Referenced declarations cannot be deleted or have their type/bounds changed.
+Source retains its existing CRLF convention when edited.
+
+Standalone `.st` and `.il` files also have VS Code language modes, syntax
+highlighting, comment/bracket support and snippets. IL uses IEC operators such
+as `LD`, `ST`, `AND`, `JMPC` and `CAL`.
+
+The source writer checks the original program identity, language and source,
+limits code to 65536 UTF-16 units, and keeps unknown layouts, encryption and
+bookmark/breakpoint metadata read only. Local checks cover a limited set of
+mistakes; use XG5000 **Check Program** for full syntax and type validation.
+
+
+Native acceptance on XG5000 4.82.1: four generated ST/IL programs passed strict
+syntax and type checks with **0 errors and 0 warnings**. Native Save As retained
+all sources, program identities and declarations. Fixtures and screenshots are
+in the companion library's `fixtures/text-programs/`. Rendered editing,
+declaration forms, drafts, completions and persisted-byte Undo/Redo simulation
+were checked in a local webview harness at desktop and compact sizes; the VS
+Code host was mocked for those browser checks.
+
+
+Standalone IEC IL programs use IEC operators; the XGK IL view uses the vendor dialect. XGK-CPUSN uses the vendor ladder/IL
+mnemonics documented in the [LS XGK/XGB instruction manual](https://www.ls-electric.com/upload/customer/download/1375/XGK_XGB_Instruction_English_Manual_V2.0.pdf),
+including LOAD, OUT, AND NOT, LOADP and LOADN. The editor reports recognized XGK
+mnemonics in IEC IL source; it does not automatically translate instructions.
+In particular, XGK ANDN is a falling-edge contact while IEC IL ANDN means
+negated AND. The CPU picker changes XGI models and preserves the existing dialect.

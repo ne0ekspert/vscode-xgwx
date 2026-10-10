@@ -806,11 +806,12 @@ export function renderSfcVariables(program, onEdit) {
   const section=node("section","cell-editor sfc-variables");section.append(node("h3","","Program variables"));
   if(program.variablesError){section.append(node("p","muted",program.variablesError));return section;}
   const list=node("div","sfc-variable-list"),form=node("form","sfc-variable-form");let editing=null;
-  const input=(label,placeholder="")=>{const result=node("input","");result.setAttribute("aria-label",`SFC variable ${label}`);result.placeholder=placeholder;return result;};
+  const variableLabel = program.language || "SFC";
+  const input=(label,placeholder="")=>{const result=node("input","");result.setAttribute("aria-label",`${variableLabel} variable ${label}`);result.placeholder=placeholder;return result;};
   const labeled=(label,control)=>{const item=node("label","sfc-declaration-field");item.append(node("span","",label),control);return item;};
   const name=input("name","Variable or instance name");name.required=true;name.maxLength=32;
-  const type=node("select","");type.setAttribute("aria-label","SFC variable type");
-  for(const [label,types]of [["Variables",sfcVariableTypes],["Function blocks",Object.keys(sfcFunctionBlocks)]]){
+  const type=node("select","");type.setAttribute("aria-label",`${variableLabel} variable type`);
+  for(const [label,types]of [["Variables",program.variableTypes || sfcVariableTypes],["Function blocks",program.scalarOnly ? [] : Object.keys(sfcFunctionBlocks)]]){
     const group=document.createElement("optgroup");group.label=label;
     for(const value of types){const option=node("option","",value);option.value=value;group.append(option);}type.append(group);
   }
@@ -820,7 +821,7 @@ export function renderSfcVariables(program, onEdit) {
   const error=node("p","sfc-declaration-error");error.setAttribute("role","alert");error.hidden=true;
   const add=node("button","primary-button","Add declaration");add.type="submit";
   const cancel=node("button","secondary-button","Cancel editing");cancel.type="button";cancel.hidden=true;
-  const shape=()=>{const fb=Boolean(sfcFunctionBlocks[type.value]);bounds.disabled=fb||type.value==="STRING";initial.disabled=fb;
+  const shape=()=>{const fb=Boolean(sfcFunctionBlocks[type.value]);bounds.disabled=program.scalarOnly||fb||type.value==="STRING";initial.disabled=program.scalarOnly||fb;retain.disabled=Boolean(program.scalarOnly);
     if(bounds.disabled)bounds.value="";if(initial.disabled)initial.value="";
     initial.placeholder=type.value==="STRING" ? "Quoted ASCII string, up to 32 bytes" : "Literal, for example 7 or T#2s";
   };
@@ -845,6 +846,7 @@ export function renderSfcVariables(program, onEdit) {
     }list.append(item);
   }
   form.append(labeled("Name",name),labeled("Type",type),labeled("Array bounds (optional)",bounds),labeled("Initial value (optional)",initial),labeled("Retain between restarts",retain),labeled("Description",description),error,add,cancel);
+  if(program.scalarOnly) for(const control of [bounds,initial,retain]) control.closest("label").style.display="none";
   form.addEventListener("submit",async event=>{event.preventDefault();error.hidden=true;add.disabled=true;
     try {
       const dimensions=bounds.disabled?[]:parseSfcArrayBounds(bounds.value);
@@ -854,5 +856,5 @@ export function renderSfcVariables(program, onEdit) {
     }catch(e){error.textContent=String(e.message||e);error.hidden=false;}
     finally{if(add.isConnected)add.disabled=false;}
   });
-  shape();section.append(form,list,node("p","muted","Declarations are shared by the chart’s action and transition programs. TRANS is the Boolean transition result. STRING holds 32 bytes. Referenced variables keep their type and array bounds."));return section;
+  shape();section.append(form,list,node("p","muted",program.scalarOnly ? "Declare scalar variables used by this program. XG5000 assigns their device addresses." : program.language ? "Declare variables used by this program. Referenced variables keep their type and array bounds. STRING holds 32 bytes." : "Declarations are shared by the chart’s action and transition programs. TRANS is the Boolean transition result. STRING holds 32 bytes. Referenced variables keep their type and array bounds."));return section;
 }

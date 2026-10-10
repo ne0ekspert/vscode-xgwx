@@ -15,8 +15,8 @@ test('blank program creation persists metadata, sources and original programs th
 test('duplicate names and unsupported CPU languages are rejected without changing source bytes',()=>{
  const before=fixture('new-xgk'),copy=Buffer.from(before);
  assert.throws(()=>create_xgwx_program(before,request('LD','newprogram')),/already exists/);
- assert.throws(()=>create_xgwx_program(before,request('SFC')),/unsupported/);
- assert.throws(()=>create_xgwx_program(before,request('FBD')),/unsupported/);
+ assert.throws(()=>create_xgwx_program(before,request('SFC')),/unsupported|unvalidated/);
+ assert.throws(()=>create_xgwx_program(before,request('FBD')),/unsupported|unvalidated/);
  assert.deepEqual(before,copy);
 });
 

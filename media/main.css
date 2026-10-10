@@ -2086,3 +2086,5 @@ form.iec-rung-creation {
 .sfc-row-affordance.row-hover, .sfc-row-affordance.row-selected, .sfc-row-affordance:focus-visible, .sfc-row-affordance.range-selected { opacity: 1; pointer-events: auto; }
 .sfc-new-branch:focus-visible { outline: 2px solid var(--vscode-focusBorder, #71b7ff); outline-offset: 3px; }
 @media (hover: none) { .sfc-row-affordance { opacity: 1; pointer-events: auto; } }
+
+.text-program-readonly { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; }

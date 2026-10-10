@@ -40,7 +40,7 @@ if [[ -x "$wasm_pack" ]]; then
     --target web \
     --out-dir "$build_dir" \
     --out-name libxgwx \
-    --features wasm,write \
+    --features wasm,write,il \
     --no-default-features; then
     package_dir="$build_dir"
   else
@@ -52,7 +52,7 @@ if [[ -x "$wasm_pack" ]]; then
       --manifest-path "$library_dir/Cargo.toml" \
       --release \
       --target wasm32-unknown-unknown \
-      --features wasm,write \
+      --features wasm,write,il \
       --no-default-features
     "$wasm_bindgen" \
       "$library_dir/target/wasm32-unknown-unknown/release/xgwx.wasm" \
