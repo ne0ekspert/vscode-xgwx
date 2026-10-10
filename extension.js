@@ -15,9 +15,15 @@ class XgwxDocument {
     this.bytes = Uint8Array.from(bytes);
     this.savedBytes = Uint8Array.from(bytes);
     this.dirty = false;
+    this.disposed = false;
+    this.disposables = [];
   }
 
-  dispose() {}
+  dispose() {
+    this.disposed = true;
+    for (const disposable of this.disposables) disposable.dispose();
+    this.disposables.length = 0;
+  }
 }
 
 class XgwxEditorProvider {
@@ -36,7 +42,33 @@ class XgwxEditorProvider {
       document.savedBytes = Uint8Array.from(await vscode.workspace.fs.readFile(uri));
       document.dirty = !bytesEqual(document.bytes, document.savedBytes);
     }
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(
+      vscode.Uri.joinPath(uri, ".."), path.posix.basename(uri.path),
+    ), false, false, true);
+    // Serialize notifications so an older read cannot replace a newer one.
+    let pending = Promise.resolve();
+    const reload = () => {
+      pending = pending.then(() => this.reloadUnmodifiedDocument(document)).catch(error => {
+        // Atomic replacements can temporarily make the file unavailable. Keep
+        // the current document and allow the next notification to retry.
+        console.warn("XGWX: Could not reload externally changed file", error);
+      });
+    };
+    document.disposables.push(watcher, watcher.onDidChange(reload), watcher.onDidCreate(reload));
     return document;
+  }
+
+  async reloadUnmodifiedDocument(document) {
+    if (document.disposed || document.dirty) return;
+    const previous = document.bytes;
+    const saved = document.savedBytes;
+    const bytes = await vscode.workspace.fs.readFile(document.uri);
+    // Editing, saving, reverting, or closing during the read invalidates it.
+    if (document.disposed || document.dirty || document.bytes !== previous || document.savedBytes !== saved) return;
+    if (bytesEqual(bytes, previous)) return;
+    document.bytes = Uint8Array.from(bytes);
+    document.savedBytes = Uint8Array.from(bytes);
+    await this.broadcast(document);
   }
 
   async resolveCustomEditor(document, panel) {

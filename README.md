@@ -6,6 +6,8 @@ With an XGWX editor active, open **Ctrl+Shift+P → XGWX: Edit XGK IL** to view 
 
 XGWX uses VS Code's native `.xgwx` file tabs. The webview has no internal tab strip; the editor canvas begins directly below VS Code's breadcrumbs. Sidebar selections reuse the file tab, and separate `.xgwx` files retain their own native tabs. Save, Undo/Redo, splitting, and closing continue through the custom document lifecycle.
 
+Open files are watched for external changes, including files outside the workspace. When the document has no unsaved edits, changes on disk automatically reload all its open editors. Documents with unsaved edits keep their current content.
+
 ## XG5000 Explorer sidebar
 
 Open an `.xgwx` file to see **XG5000 Explorer** in VS Code's Explorer sidebar. Select workspace, hardware bases, programs, network modules, variables, or parameters to navigate the custom editor. The tree follows the most recently active XGWX editor and updates after edits and Undo/Redo. Closing that editor selects another open XGWX document, or shows an empty view.

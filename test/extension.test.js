@@ -19,12 +19,27 @@ class MockEventEmitter {
 
 const files = new Map();
 const writes = [];
+const watchers = [];
 const mockVscode = {
   EventEmitter: MockEventEmitter,
+  RelativePattern: class { constructor(base, pattern) { this.baseUri = base; this.pattern = pattern; } },
   Uri: {
     parse: (value) => ({ value, toString: () => value }),
+    joinPath: (base, ...parts) => uri(path.posix.join(base.path, ...parts)),
   },
   workspace: {
+    createFileSystemWatcher: (pattern, ignoreCreate, ignoreChange, ignoreDelete) => {
+      const change = new MockEventEmitter();
+      const create = new MockEventEmitter();
+      const watcher = {
+        pattern, ignoreCreate, ignoreChange, ignoreDelete,
+        onDidChange: change.event, onDidCreate: create.event,
+        change: () => change.fire(), create: () => create.fire(),
+        dispose() { this.disposed = true; change.listeners.clear(); create.listeners.clear(); },
+      };
+      watchers.push(watcher);
+      return watcher;
+    },
     fs: {
       readFile: async (uri) => Uint8Array.from(files.get(uri.toString()) || []),
       writeFile: async (uri, bytes) => {
@@ -155,6 +170,70 @@ test("opening a hot-exit backup restores its dirty state against disk", async ()
   assert.equal(document.dirty, true);
   assert.deepEqual(Array.from(document.bytes), [4, 8, 6]);
   assert.deepEqual(Array.from(document.savedBytes), [4, 5, 6]);
+  document.dispose();
+});
+
+test("file watcher reloads clean documents and siblings, ignores own saves, and disposes on close", async () => {
+  const target = uri("/outside-workspace/watched.xgwx");
+  files.set(target.toString(), [1]);
+  const provider = new XgwxEditorProvider({});
+  const document = await provider.openCustomDocument(target, {});
+  const watcher = watchers.at(-1);
+  assert.equal(watcher.pattern.baseUri.path, "/outside-workspace");
+  assert.equal(watcher.pattern.pattern, "watched.xgwx");
+  assert.equal(watcher.ignoreDelete, true);
+  const messages = [];
+  for (let i = 0; i < 2; i++) provider.editors.add({ document, panel: {
+    webview: { postMessage: async message => messages.push(message) },
+  } });
+  files.set(target.toString(), [2]);
+  watcher.change();
+  watcher.create();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(Array.from(document.bytes), [2]);
+  assert.deepEqual(Array.from(document.savedBytes), [2]);
+  assert.equal(document.dirty, false);
+  assert.equal(messages.length, 2);
+  assert.ok(messages.every(message => message.type === "load" && message.bytes[0] === 2));
+  await provider.saveCustomDocument(document);
+  messages.length = 0;
+  watcher.change();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(messages.length, 0);
+  provider.updateDocument(document, [3], "Local edit");
+  await new Promise(resolve => setImmediate(resolve));
+  messages.length = 0;
+  files.set(target.toString(), [4]);
+  watcher.change();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(Array.from(document.bytes), [3]);
+  assert.equal(document.dirty, true);
+  assert.equal(messages.length, 0);
+  document.dispose();
+  assert.equal(watcher.disposed, true);
+  watcher.change();
+  assert.equal(messages.length, 0);
+});
+
+test("external reload preserves edits and ignores documents closed during the read", async () => {
+  const provider = new XgwxEditorProvider({});
+  const readFile = mockVscode.workspace.fs.readFile;
+  try {
+    for (const action of ["edit", "close"]) {
+      const document = new XgwxDocument(uri("/workspace/race.xgwx"), [1]);
+      let finishRead;
+      mockVscode.workspace.fs.readFile = () => new Promise(resolve => { finishRead = resolve; });
+      const reload = provider.reloadUnmodifiedDocument(document);
+      if (action === "edit") provider.updateDocument(document, [3], "Concurrent edit");
+      else document.dispose();
+      finishRead(Uint8Array.from([2]));
+      await reload;
+      assert.deepEqual(Array.from(document.bytes), action === "edit" ? [3] : [1]);
+      assert.deepEqual(Array.from(document.savedBytes), [1]);
+    }
+  } finally {
+    mockVscode.workspace.fs.readFile = readFile;
+  }
 });
 
 test("an edit updates sibling editors without echoing bytes to its source", async () => {
