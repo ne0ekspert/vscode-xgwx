@@ -55,6 +55,28 @@
         "command": "xgwx.newFile",
         "title": "XGWX: New File",
         "icon": "$(new-file)"
+      },
+      {
+        "command": "xgwx.explorerCreateProgram",
+        "title": "Create Program",
+        "icon": "$(add)"
+      },
+      {
+        "command": "xgwx.explorerDeleteProgram",
+        "title": "Delete Program",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "xgwx.editXgkIl",
+        "title": "Edit XGK IL",
+        "category": "XGWX",
+        "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
+      },
+      {
+        "command": "xgwx.showXgkLadder",
+        "title": "Show XGK Ladder",
+        "category": "XGWX",
+        "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
       }
     ],
     "menus": {
@@ -69,6 +91,28 @@
         {
           "command": "xgwx.newFile",
           "group": "file@10"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "xgwx.explorerCreateProgram",
+          "when": "view == xgwx.explorer && viewItem == xgwxPrograms",
+          "group": "navigation"
+        },
+        {
+          "command": "xgwx.explorerDeleteProgram",
+          "when": "view == xgwx.explorer && viewItem == xgwxProgram",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "xgwx.editXgkIl",
+          "when": "activeCustomEditorId == xgwx.workspaceViewer"
+        },
+        {
+          "command": "xgwx.showXgkLadder",
+          "when": "activeCustomEditorId == xgwx.workspaceViewer"
         }
       ]
     },
@@ -117,10 +161,19 @@
         "language": "xgwx-il",
         "path": "./snippets/il.json"
       }
-    ]
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "xgwx.explorer",
+          "name": "XG5000 Explorer",
+          "contextualTitle": "XG5000"
+        }
+      ]
+    }
   },
   "scripts": {
-    "check": "node --check extension.js && node --check media/main.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check new-workspace.cjs",
+    "check": "node --check extension.js && node --check media/main.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check new-workspace.cjs && node --check explorer.cjs && node --check media/explorer-model.js",
     "test": "node --test test/*.test.js test/*.test.mjs",
     "build:wasm": "bash scripts/build-wasm.sh",
     "package": "npx @vscode/vsce package"

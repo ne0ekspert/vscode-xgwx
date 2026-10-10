@@ -48,7 +48,7 @@ test("optimizes the production WASM bundle when wasm-opt is available", () => {
 
 test("uses editable custom-document save support", () => {
   const commands = manifest.contributes.commands.map((command) => command.command);
-  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile"]);
+  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile", "xgwx.explorerCreateProgram", "xgwx.explorerDeleteProgram", "xgwx.editXgkIl", "xgwx.showXgkLadder"]);
   const extension = fs.readFileSync(path.join(root, "extension.js"), "utf8");
   for (const method of ["saveCustomDocument", "saveCustomDocumentAs", "revertCustomDocument", "backupCustomDocument"]) {
     assert.match(extension, new RegExp(`\\b${method}\\b`));
@@ -59,9 +59,11 @@ test("uses editor workbench structure without decorative gradients", () => {
   const script = fs.readFileSync(path.join(root, "media/main.js"), "utf8");
   const styles = fs.readFileSync(path.join(root, "media/main.css"), "utf8");
 
-  for (const className of ["editor-shell", "explorer-pane", "editor-pane", "inspector-pane", "status-bar"]) {
+  for (const className of ["editor-shell", "editor-pane", "inspector-pane", "status-bar"]) {
     assert.match(script, new RegExp(className));
   }
+  assert.doesNotMatch(script, /editor-tabs|editor-tab active/);
+  assert.doesNotMatch(styles, /\.editor-tabs\b|\.editor-tab\b/);
   assert.doesNotMatch(styles, /(?:linear|radial|conic)-gradient/);
   assert.doesNotMatch(script, /metric-card|rack-card/);
 });
@@ -145,8 +147,8 @@ test("shows configured network modules in the explorer", () => {
   const script = fs.readFileSync(path.join(root, "media/main.js"), "utf8");
   const styles = fs.readFileSync(path.join(root, "media/main.css"), "utf8");
 
-  assert.match(script, /function buildNetworkGroup\b/);
-  assert.match(script, /network\.modules \|\| \[\]/);
+  const model = fs.readFileSync(path.join(root, "media/explorer-model.js"), "utf8");
+  assert.match(model, /network\.modules \|\| \[\]/);
   assert.match(script, /function networkModuleLabel\b/);
   assert.match(script, /function renderNetworkInspector\b/);
   assert.match(script, /appendNetworkConfigurationFields/);

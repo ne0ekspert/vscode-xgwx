@@ -1,3 +1,17 @@
+## XGK IL commands
+
+With an XGWX editor active, open **Ctrl+Shift+P → XGWX: Edit XGK IL** to view the selected XGK program as an instruction list. **XGWX: Show XGK Ladder** returns to the ladder view. The file identity and Save controls use VS Code's native tab and **Ctrl+S**; **XGWX: Refresh Workspace Viewer** remains available in the Command Palette and editor title.
+
+## Native editor tab
+
+XGWX uses VS Code's native `.xgwx` file tabs. The webview has no internal tab strip; the editor canvas begins directly below VS Code's breadcrumbs. Sidebar selections reuse the file tab, and separate `.xgwx` files retain their own native tabs. Save, Undo/Redo, splitting, and closing continue through the custom document lifecycle.
+
+## XG5000 Explorer sidebar
+
+Open an `.xgwx` file to see **XG5000 Explorer** in VS Code's Explorer sidebar. Select workspace, hardware bases, programs, network modules, variables, or parameters to navigate the custom editor. The tree follows the most recently active XGWX editor and updates after edits and Undo/Redo. Closing that editor selects another open XGWX document, or shows an empty view.
+
+Right-click **Programs** to create a program, or a program to delete it. Drag a program onto another program to move it to that program's position, preserving task assignments through the existing writer. VS Code's view controls can move XG5000 Explorer to another sidebar or view container.
+
 # XGWX Workspace Editor for VS Code
 
 A custom editor for LS ELECTRIC XG5000 `.xgwx` workspace files,

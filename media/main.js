@@ -1,3 +1,4 @@
+import { explorerNodes } from "./explorer-model.js";
 import { renderStTextEditor } from "./st-editor.js";
 import { actionGroup } from "./sfc-actions.js";
 import { renderSfcDiagram, renderSfcProperties, renderSfcVariables, sfcRowsAfterEdit, sfcRowIndex, sfcTextField } from "./sfc.js";
@@ -234,6 +235,51 @@ window.addEventListener("message", async ({ data }) => {
       });
     }
   }
+  if (data?.type === "setProgramView" && current?.file.uri === data.uri) {
+    const selected = current.summary.programs?.[selectedProgramIndex];
+    const vendor = current.summary.vendorIlPrograms?.find(program => program.programIndex === selectedProgramIndex);
+    if (!selected || !vendor) {
+      vscode.postMessage({ type: "showError", message: "Select an XGK program to use its instruction list or ladder view." });
+      return;
+    }
+    const key = `${current.file.uri}:${selected.objectId}`;
+    if (data.view === "vendorIl") vendorIlViews.add(key);
+    else if (data.view === "ladder") vendorIlViews.delete(key);
+    else return;
+    activeView = "programs";
+    renderWorkspace();
+    return;
+  }
+  if (data?.type === "explorerAction" && current?.file.uri === data.uri) {
+    const target = data.target || {};
+    if (data.action === "createProgram") { void createProgram(); return; }
+    const index = current.summary.programs.findIndex(program => program.objectId === target.objectId);
+    if (data.action === "deleteProgram") {
+      if (index >= 0) void deleteProgram(index, current.summary.programs[index]);
+      return;
+    }
+    if (data.action === "moveProgram") {
+      const from = current.summary.programs.findIndex(program => program.objectId === data.sourceObjectId);
+      if (from >= 0 && index >= 0) void moveProgram(from, index);
+      return;
+    }
+    if (target.view === "hardware") {
+      selectedBase = target.base ?? current.summary.hardware?.bases?.[0]?.base ?? null;
+      selectedModule = null; selectedHardwareSlot = null;
+    }
+    if (target.view === "programs" && target.objectId && index < 0) return;
+    if (target.view === "programs" && index >= 0) {
+      selectedProgramIndex = index;
+      selectedIecRow = null; selectedIecElement = null; selectedIecInsertion = null; selectedIecBlank = null;
+      selectedSfcEntity = null; resetLadderSelection();
+    }
+    if (target.view === "networks") {
+      selectedNetworkIndex = target.networkIndex ?? 0;
+      selectedNetworkModuleKey = target.networkModuleKey ?? null;
+    }
+    if (["overview", "hardware", "programs", "networks", "variables", "parameters"].includes(target.view)) selectView(target.view);
+    return;
+  }
   if (data?.type === "load") await loadWorkspace(data);
   if (data?.type === "error") renderError(data.message);
   if (data?.type === "saved" || data?.type === "reverted") {
@@ -243,13 +289,6 @@ window.addEventListener("message", async ({ data }) => {
     } else if (current) {
       // A save acknowledgment changes status, not the diagram. Rebuilding it
       // would discard keyboard focus and unfinished inspector input.
-      const state = app.querySelector(".edit-state");
-      if (state) {
-        state.textContent = dirty ? "Unsaved changes" : "Saved";
-        state.classList.toggle("dirty", dirty);
-      }
-      const save = app.querySelector('button[aria-label="Save workspace"]');
-      if (save) save.disabled = !dirty;
       app.querySelector(".status-bar")?.replaceWith(renderStatusBar(current.summary));
     }
   }
@@ -306,6 +345,10 @@ async function loadWorkspace(file) {
 function renderWorkspace() {
   closeLadderOverlay();
   const { file, summary } = current;
+  vscode.postMessage({ type: "explorerState", state: explorerNodes(file, summary, {
+    view: activeView, base: selectedBase, programIndex: selectedProgramIndex,
+    networkIndex: selectedNetworkIndex, networkModuleKey: selectedNetworkModuleKey,
+  }) });
   const oldShell = app.querySelector(".editor-shell");
   const sameProgram = activeView === "programs" && oldShell?.dataset.view === activeView
     && oldShell.dataset.programIndex === String(selectedProgramIndex);
@@ -319,7 +362,6 @@ function renderWorkspace() {
   shell.dataset.view = activeView;
   shell.dataset.programIndex = String(selectedProgramIndex);
   shell.append(
-    renderCommandBar(file, summary),
     renderWorkbench(file, summary),
     renderStatusBar(summary),
   );
@@ -333,108 +375,17 @@ function renderWorkspace() {
   }
 }
 
-function renderCommandBar(file, summary) {
-  const bar = element("header", "command-bar");
-  const identity = element("div", "file-identity");
-  identity.append(icon("file"), element("span", "file-name", file.fileName));
-
-  const context = element("div", "command-context");
-  context.append(
-    element("span", "project-name", display(summary.project?.name, "Unnamed project")),
-    element("span", "context-separator", "/"),
-    element("span", "view-name", viewTitle()),
-  );
-
-  const actions = element("div", "command-actions");
-  const save = button("Save workspace", "text-button", () => vscode.postMessage({ type: "save" }));
-  save.append(icon("save"), element("span", "", "Save"));
-  save.disabled = !dirty;
-  const refresh = button("Refresh workspace", "icon-button", () => vscode.postMessage({ type: "refresh" }));
-  refresh.append(icon("refresh"));
-  actions.append(element("span", `edit-state${dirty ? " dirty" : ""}`, dirty ? "Unsaved changes" : "Saved"), save, refresh);
-  bar.append(identity, context, actions);
-  return bar;
-}
-
 function renderWorkbench(file, summary) {
   const workbench = element("div", "workbench");
-  const explorer = renderExplorer(file, summary);
   const editor = element("main", "editor-pane");
   const inspector = element("aside", "inspector-pane");
 
   renderEditor(editor, summary, inspector);
-  workbench.append(explorer, editor, inspector);
+  workbench.append(editor, inspector);
   return workbench;
 }
 
-function renderExplorer(file, summary) {
-  const explorer = element("aside", "explorer-pane");
-  const heading = element("div", "pane-heading");
-  heading.append(element("span", "", "EXPLORER"), element("span", "pane-actions", "•••"));
-
-  const tree = element("div", "project-tree");
-  const root = treeRow(file.fileName, "file", false, true);
-  root.classList.add("root-row");
-  tree.append(root);
-
-  tree.append(treeItem("Workspace", "overview", icon("settings"), activeView === "overview"));
-
-  const hardwareGroup = treeGroup("Hardware", icon("hardware"), true);
-  const bases = summary.hardware?.bases || [];
-  const modules = summary.hardware?.modules || [];
-  bases.forEach((base) => {
-    const count = modules.filter((module) => module.base === base.base).length;
-    const item = treeItem(`Base ${display(base.base)} (${count})`, "hardware", icon("rack"), activeView === "hardware" && selectedBase === base.base);
-    item.dataset.base = String(base.base);
-    item.addEventListener("click", () => {
-      if (selectedBase !== base.base) {
-        selectedModule = null;
-        selectedHardwareSlot = null;
-      }
-      selectedBase = base.base;
-      selectView("hardware");
-    });
-    hardwareGroup.children.append(item);
-  });
-  tree.append(hardwareGroup.container);
-
-  tree.append(buildProgramGroup(summary.programs || []));
-  tree.append(buildNetworkGroup(summary.networks || []));
-  tree.append(treeItem(`Variables (${display(summary.counts?.variables, "0")})`, "variables", icon("symbol"), activeView === "variables"));
-  tree.append(treeItem(`Parameters (${summary.parameters?.length || 0})`, "parameters", icon("sliders"), activeView === "parameters"));
-
-  explorer.append(heading, tree);
-  return explorer;
-}
-
-function buildDataGroup(label, view, items, iconName, itemLabel) {
-  const group = treeGroup(`${label} (${items.length})`, icon(iconName), true);
-  group.header.addEventListener("click", () => selectView(view));
-  items.slice(0, 30).forEach((item, index) => {
-    const row = treeRow(itemLabel(item, index), iconName, true, false);
-    row.addEventListener("click", () => selectView(view));
-    group.children.append(row);
-  });
-  return group.container;
-}
-
-function showProgramContextMenu(x, y) {
-  closeLadderOverlay();
-  const menu = element("div", "ladder-context-menu");
-  menu.setAttribute("role", "menu");menu.setAttribute("aria-label", "Programs actions");
-  const close = installLadderOverlayDismissal(menu);
-  const item = button("Create program", "ladder-context-item", () => {close();void createProgram();});
-  item.setAttribute("role", "menuitem");item.textContent="Create program";
-  item.disabled = !newProgramLanguages().length;
-  menu.append(item);positionLadderOverlay(menu,x,y);item.focus();
-}
-function showProgramItemContextMenu(x, y, index, program) {
-  closeLadderOverlay();
-  const menu=element("div","ladder-context-menu");
-  menu.setAttribute("role","menu");menu.setAttribute("aria-label",`Program ${program.name || index+1} actions`);
-  const close=installLadderOverlayDismissal(menu);
-  const item=button("Delete program","ladder-context-item",async()=>{
-    close();
+async function deleteProgram(index, program) {
     const active=current.summary.programs[selectedProgramIndex]?.objectId;
     await applyEdit(()=>delete_xgwx_program(current.file.bytes,index,program.objectId),`Delete program ${program.name || index+1}`,()=>{
       const prefix=`${current.file.uri}:`,moved=[];
@@ -450,9 +401,6 @@ function showProgramItemContextMenu(x, y, index, program) {
       selectedProgramIndex=retained>=0 ? retained : Math.max(0,Math.min(index,current.summary.programs.length-1));
       selectedSfcEntity=null;selectedIecRow=null;selectedIecElement=null;selectedIecInsertion=null;selectedIecBlank=null;resetLadderSelection();
     });
-  });
-  item.setAttribute("role","menuitem");item.textContent="Delete program";item.disabled=!program.objectId;
-  menu.append(item);positionLadderOverlay(menu,x,y);item.focus();
 }
 function newProgramLanguages() {
   return current?.summary.programLanguages || [];
@@ -477,10 +425,6 @@ async function createProgram() {
   } finally {programPromptOpen=false;}
 }
 
-let draggedProgram = null;
-function clearProgramDropMarkers() {
-  document.querySelectorAll(".program-drop-before,.program-drop-after").forEach(row=>row.classList.remove("program-drop-before","program-drop-after"));
-}
 function reconcileProgramOrder(previousPrograms, activeId) {
   const prefix=`${current.file.uri}:`,indices=new Map(current.summary.programs.map((p,i)=>[p.objectId,i]));
   for(const cache of [sfcStDrafts,ladderCanvasExtents,ladderCanvasScroll]) {
@@ -512,53 +456,6 @@ async function moveProgram(from, to) {
   });
 }
 
-function buildProgramGroup(programs) {
-  const group = treeGroup(`Programs (${programs.length})`, icon("program"), true);
-  group.header.addEventListener("click", () => selectView("programs"));
-  group.header.addEventListener("contextmenu", event => {event.preventDefault();showProgramContextMenu(event.clientX,event.clientY);});
-  group.header.addEventListener("keydown", event => {if(event.key === "ContextMenu" || event.shiftKey && event.key === "F10") {event.preventDefault();const rect=group.header.getBoundingClientRect();showProgramContextMenu(rect.left,rect.bottom);}});
-  programs.forEach((program, index) => {
-    const row = treeRow(program.name || `Program ${index + 1}`, "program", true, false);
-    row.tabIndex=0;row.setAttribute("role","button");
-    row.draggable=!!program.objectId;
-    row.title="Drag to change program order; task assignments are preserved";
-    row.addEventListener("dragstart",event=>{
-      closeLadderOverlay();draggedProgram={index,objectId:program.objectId,uri:current.file.uri};
-      event.dataTransfer.effectAllowed="move";event.dataTransfer.setData("application/x-xgwx-program",program.objectId);
-      row.classList.add("program-dragging");
-    });
-    row.addEventListener("dragend",()=>{draggedProgram=null;row.classList.remove("program-dragging");clearProgramDropMarkers();});
-    const dropPosition=event=>event.clientY < row.getBoundingClientRect().top+row.getBoundingClientRect().height/2;
-    const acceptsDrag=()=>draggedProgram?.uri===current.file.uri && programs[draggedProgram.index]?.objectId===draggedProgram.objectId;
-    row.addEventListener("dragover",event=>{
-      clearProgramDropMarkers();if(!acceptsDrag())return;
-      event.preventDefault();event.dataTransfer.dropEffect="move";
-      row.classList.add(dropPosition(event) ? "program-drop-before" : "program-drop-after");
-    });
-    row.addEventListener("dragleave",()=>row.classList.remove("program-drop-before","program-drop-after"));
-    row.addEventListener("drop",event=>{
-      clearProgramDropMarkers();if(!acceptsDrag())return;
-      event.preventDefault();event.stopPropagation();
-      const from=draggedProgram.index,insertion=index+(dropPosition(event) ? 0 : 1),to=insertion-(from<insertion ? 1 : 0);
-      draggedProgram=null;void moveProgram(from,to);
-    });
-    row.classList.toggle("selected", activeView === "programs" && selectedProgramIndex === index);
-    row.addEventListener("click", () => {
-      selectedProgramIndex = index;
-      selectedIecRow = null;
-      selectedIecElement = null;
-      selectedIecInsertion = null;
-      selectedIecBlank = null;
-      resetLadderSelection();
-      selectView("programs");
-    });
-    row.addEventListener("contextmenu",event=>{event.preventDefault();showProgramItemContextMenu(event.clientX,event.clientY,index,program);});
-    row.addEventListener("keydown",event=>{if(event.key === "Enter" || event.key === " ") {event.preventDefault();row.click();return;}if(event.key==="ContextMenu" || event.shiftKey && event.key==="F10") {event.preventDefault();const rect=row.getBoundingClientRect();showProgramItemContextMenu(rect.left,rect.bottom,index,program);}});
-    group.children.append(row);
-  });
-  return group.container;
-}
-
 function networkModuleKey(module) {
   return `${module.base}:${module.slot}:${module.id}`;
 }
@@ -568,82 +465,12 @@ function networkModuleLabel(module) {
   return `${name} (Base ${module.base}, Slot ${module.slot})`;
 }
 
-function buildNetworkGroup(networks) {
-  const group = treeGroup(`Networks (${networks.length})`, icon("network"), true);
-  group.header.addEventListener("click", () => selectView("networks"));
-  networks.slice(0, 30).forEach((network, index) => {
-    const networkRow = treeRow(network.name || `Network ${index + 1}`, "network", true, false);
-    networkRow.classList.toggle("selected", activeView === "networks" && selectedNetworkIndex === index && !selectedNetworkModuleKey);
-    networkRow.addEventListener("click", () => {
-      selectedNetworkIndex = index;
-      selectedNetworkModuleKey = null;
-      selectView("networks");
-    });
-    group.children.append(networkRow);
-
-    (network.modules || []).slice(0, 30).forEach((module) => {
-      const moduleRow = treeRow(networkModuleLabel(module), "network", true, false);
-      moduleRow.classList.add("network-module-row");
-      moduleRow.classList.toggle(
-        "selected",
-        activeView === "networks" && selectedNetworkIndex === index && selectedNetworkModuleKey === networkModuleKey(module),
-      );
-      moduleRow.addEventListener("click", () => {
-        selectedNetworkIndex = index;
-        selectedNetworkModuleKey = networkModuleKey(module);
-        selectView("networks");
-      });
-      group.children.append(moduleRow);
-    });
-  });
-  return group.container;
-}
-
-function treeGroup(label, glyph, expanded) {
-  const container = element("div", "tree-group");
-  const header = element("button", "tree-row tree-group-row");
-  header.type = "button";
-  const disclosure = icon("chevron");
-  if (expanded) disclosure.classList.add("expanded");
-  header.append(disclosure, glyph, element("span", "tree-label", label));
-  const children = element("div", `tree-children${expanded ? " expanded" : ""}`);
-  header.addEventListener("click", () => {
-    disclosure.classList.toggle("expanded");
-    children.classList.toggle("expanded");
-  });
-  container.append(header, children);
-  return { container, header, children };
-}
-
-function treeItem(label, view, glyph, selected) {
-  const row = element("button", `tree-row tree-item${selected ? " selected" : ""}`);
-  row.type = "button";
-  row.append(element("span", "tree-spacer"), glyph, element("span", "tree-label", label));
-  row.addEventListener("click", () => {
-    selectView(view);
-  });
-  return row;
-}
-
-function treeRow(label, iconName, nested, expanded) {
-  const row = element("div", `tree-row${nested ? " nested" : ""}`);
-  const disclosure = icon("chevron");
-  if (expanded) disclosure.classList.add("expanded");
-  row.append(disclosure, icon(iconName), element("span", "tree-label", label));
-  return row;
-}
-
 function selectView(view) {
   activeView = view;
   renderWorkspace();
 }
 
 function renderEditor(editor, summary, inspector) {
-  const tabs = element("div", "editor-tabs");
-  const tab = element("div", "editor-tab active");
-  tab.append(icon(viewIcon()), element("span", "", viewTitle()));
-  tabs.append(tab);
-
   const canvas = element("section", "editor-canvas");
   if (activeView === "hardware") renderHardwareEditor(canvas, inspector, summary.hardware || {});
   if (activeView === "programs") renderProgramsEditor(canvas, inspector, summary.programs || []);
@@ -652,7 +479,7 @@ function renderEditor(editor, summary, inspector) {
   if (activeView === "parameters") renderParametersEditor(canvas, inspector, summary.parameters || []);
   if (activeView === "overview") renderOverviewEditor(canvas, inspector, summary, current.file);
 
-  editor.append(tabs, canvas);
+  editor.append(canvas);
 }
 
 function showIoVariableGeneration(canvas) {
@@ -1273,10 +1100,6 @@ function renderProgramsEditor(canvas, inspector, programs) {
   const vendor = (current.summary.vendorIlPrograms || []).find(item=>item.programIndex===selectedProgramIndex);
   const viewKey = `${current.file.uri}:${selected?.objectId}`;
   if(vendor) {
-    const toggle=button(vendorIlViews.has(viewKey)?"Show ladder":"Edit XGK IL","secondary-button",()=>{
-      if(vendorIlViews.has(viewKey))vendorIlViews.delete(viewKey);else vendorIlViews.add(viewKey);
-      renderWorkspace();
-    });toggle.textContent=vendorIlViews.has(viewKey)?"Show ladder":"Edit XGK IL";canvas.append(toggle);
     if(vendorIlViews.has(viewKey)) {
       canvas.append(editorHeader("XGK Instruction List",selected?.name || ""));
       canvas.append(element("p","muted","XGK IL saves as native ladder data. Series contacts and catalog application instructions are editable; branches and comments use the ladder view."));
@@ -7137,6 +6960,7 @@ function renderLoading(message) {
 }
 
 function renderError(message) {
+  if (current) vscode.postMessage({ type: "explorerState", uri: current.file.uri, state: null });
   app.replaceChildren();
   const screen = element("div", "error-screen");
   screen.append(icon("warning"), element("h1", "", "Unable to open XGWX workspace"), element("pre", "", message));
@@ -7189,21 +7013,6 @@ function button(label, className, listener) {
 
 function display(value, fallback = "—") {
   return value === null || value === undefined || value === "" ? fallback : String(value);
-}
-
-function viewTitle() {
-  return {
-    hardware: selectedBase === null ? "Hardware Configuration" : `Base ${selectedBase}`,
-    programs: "Programs",
-    networks: "Networks",
-    variables: "Variables",
-    parameters: "Parameters",
-    overview: "Workspace Overview",
-  }[activeView];
-}
-
-function viewIcon() {
-  return { hardware: "hardware", programs: "program", networks: "network", variables: "symbol", parameters: "sliders", overview: "file" }[activeView];
 }
 
 function moduleText(module) {

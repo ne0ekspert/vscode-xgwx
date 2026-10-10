@@ -5,6 +5,8 @@ const { operandError, suggestionMatches } = require("./media/ladder-operand-rule
 
 const { createNewWorkspace } = require("./new-workspace.cjs");
 
+const { XgwxExplorer } = require("./explorer.cjs");
+
 const VIEW_TYPE = "xgwx.workspaceViewer";
 
 class XgwxDocument {
@@ -45,6 +47,10 @@ class XgwxEditorProvider {
     };
     const editor = { document, panel, ready: false };
     this.editors.add(editor);
+    if (panel.active || !this.explorer?.editor) this.explorer?.setEditor(editor);
+    const viewState = panel.onDidChangeViewState?.(() => {
+      if (panel.active) this.explorer?.setEditor(editor);
+    });
 
     const load = async () => {
       if (!editor.ready) {
@@ -75,7 +81,11 @@ class XgwxEditorProvider {
     const validations = new Map();
     let nextValidationId = 0;
     const messages = panel.webview.onDidReceiveMessage(async (message) => {
-      if (message?.type === "ready") {
+      if (message?.type === "explorerState") {
+        if ((message.state?.uri || message.uri) !== document.uri.toString()) return;
+        editor.explorerState = message.state;
+        if (this.explorer?.editor === editor) this.explorer.update(message.state);
+      } else if (message?.type === "ready") {
         editor.ready = true;
         await load();
       } else if (message?.type === "refresh") {
@@ -194,6 +204,9 @@ class XgwxEditorProvider {
 
     panel.onDidDispose(() => {
       this.editors.delete(editor);
+      viewState?.dispose();
+      if (this.explorer?.editor === editor) this.explorer.setEditor(
+        [...this.editors].find(other => other.panel.active) || [...this.editors].find(other => other.panel.visible) || [...this.editors].at(-1));
       messages.dispose();
       for (const resolve of validations.values()) resolve("Editor closed");
       validations.clear();
@@ -281,6 +294,12 @@ class XgwxEditorProvider {
     if (active) {
       await active.panel.webview.postMessage({ type: "requestRefresh" });
     }
+  }
+
+  async setActiveProgramView(view) {
+    const active = [...this.editors].find(editor => editor.panel.active && editor.ready);
+    if (!active) return;
+    await active.panel.webview.postMessage({ type: "setProgramView", view, uri: active.document.uri.toString() });
   }
 
   getHtml(webview) {
@@ -584,11 +603,25 @@ async function recoverStartupEditors() {
 
 function activate(context) {
   const provider = new XgwxEditorProvider(context);
+  const explorer = new XgwxExplorer(async (editor, message) => {
+    if (!provider.editors.has(editor) || !editor.ready) return;
+    editor.panel.reveal(undefined, false);
+    await editor.panel.webview.postMessage(message);
+  });
+  provider.explorer = explorer;
+  explorer.view = vscode.window.createTreeView("xgwx.explorer", { treeDataProvider: explorer, dragAndDropController: explorer, showCollapseAll: true });
+  explorer.update();
   context.subscriptions.push(
+    explorer, explorer.view,
+    vscode.commands.registerCommand("xgwx.explorerNavigate", item => explorer.dispatch(item)),
+    vscode.commands.registerCommand("xgwx.explorerCreateProgram", item => explorer.dispatch(item, "createProgram")),
+    vscode.commands.registerCommand("xgwx.explorerDeleteProgram", item => explorer.dispatch(item, "deleteProgram")),
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
       supportsMultipleEditorsPerDocument: true,
       webviewOptions: { retainContextWhenHidden: true },
     }),
+    vscode.commands.registerCommand("xgwx.editXgkIl", () => provider.setActiveProgramView("vendorIl")),
+    vscode.commands.registerCommand("xgwx.showXgkLadder", () => provider.setActiveProgramView("ladder")),
     vscode.commands.registerCommand("xgwx.refreshViewer", () => provider.refreshActive()),
     vscode.commands.registerCommand("xgwx.newFile", () => createNewWorkspace(context)),
   );

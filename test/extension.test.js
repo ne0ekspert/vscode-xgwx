@@ -780,3 +780,17 @@ test('program creation chooser offers allowed languages, validates names, and ca
  selection='LD';answer=undefined;await receive({...request,languages:['LD']});assert.deepEqual(choices.map(i=>i.label),['LD']);assert.equal(messages.at(-1).value,null);
  assert.deepEqual([...document.bytes],[1,2,3]);
 });
+
+test('palette program-view commands target only the active ready XGWX editor', async () => {
+  const provider = new XgwxEditorProvider({});
+  const messages = [];
+  const inactive = {document:new XgwxDocument(uri('/inactive.xgwx'),[]),ready:true,panel:{active:false,webview:{postMessage:async()=>assert.fail('inactive editor received command')}}};
+  const active = {document:new XgwxDocument(uri('/active.xgwx'),[]),ready:true,panel:{active:true,webview:{postMessage:async message=>messages.push(message)}}};
+  provider.editors.add(inactive); provider.editors.add(active);
+  await provider.setActiveProgramView('vendorIl');
+  await provider.setActiveProgramView('ladder');
+  assert.deepEqual(messages,[{type:'setProgramView',view:'vendorIl',uri:'/active.xgwx'},{type:'setProgramView',view:'ladder',uri:'/active.xgwx'}]);
+  active.panel.active=false;
+  await provider.setActiveProgramView('vendorIl');
+  assert.equal(messages.length,2);
+});
