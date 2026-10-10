@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import test from 'node:test';
-import init,{parse_xgwx,insert_xgwx_module,edit_xgwx_fenet_field,edit_xgwx_browser_network} from '../media/libxgwx.js';
+import init,{create_xgwx_project,parse_xgwx,insert_xgwx_module,edit_xgwx_fenet_field,edit_xgwx_browser_network} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
 test('FEnet address and DHCP edits preserve the second module and ladder',()=>{
-  let bytes=fs.readFileSync(new URL('../media/templates/new-xgk.xgwx',import.meta.url));
+  let bytes=create_xgwx_project('XGK-CPUSN','LD');
   bytes=insert_xgwx_module(bytes,0,0,'XGL-EFMT(B)');bytes=insert_xgwx_module(bytes,0,1,'XGL-EFMT(B)');
   const before=parse_xgwx(bytes),patch={base:0,slot:0,field:'ipAddress',expectedValue:'192.168.0.100',replacement:'10.20.30.40'};
   let edited=edit_xgwx_fenet_field(bytes,patch),after=parse_xgwx(edited);
@@ -16,7 +16,7 @@ test('FEnet address and DHCP edits preserve the second module and ladder',()=>{
 });
 
 test('FEnet common values use native driver IDs and reject invalid ranges',()=>{
-  let bytes=fs.readFileSync(new URL('../media/templates/new-xgk.xgwx',import.meta.url));
+  let bytes=create_xgwx_project('XGK-CPUSN','LD');
   bytes=insert_xgwx_module(bytes,0,0,'XGL-EFMT(B)');
   const before=parse_xgwx(bytes);
   for(const [field,expectedValue,replacement] of [['stationNo','0','63'],['driverType','2','5'],['driverType','5','7'],['rcvWaitTime','100','255'],['clientWaitTime','60','2'],['glofaSocketCount','3','16']]) {

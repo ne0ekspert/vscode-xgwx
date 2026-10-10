@@ -1,7 +1,7 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import test from 'node:test';
-import init,{parse_xgwx,create_xgwx_program,delete_xgwx_program,move_xgwx_program} from '../media/libxgwx.js';
+import init,{create_xgwx_project,parse_xgwx,create_xgwx_program,delete_xgwx_program,move_xgwx_program} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const fixture=file=>fs.readFileSync(new URL(`../media/templates/${file}.xgwx`,import.meta.url));
+const fixture=file=>create_xgwx_project(file==='new-xgk'?'XGK-CPUSN':'XGI-CPUE',file==='new-xgi-sfc'?'SFC':'LD');
 const request=(language,name='AddedProgram')=>({name,language,objectId:'abcdef01-1234-4567-89ab-0123456789ab',symbolId:'abcdef02-1234-4567-89ab-0123456789ab'});
 test('blank program creation persists metadata, sources and original programs through WASM',()=>{
  for(const [file,language] of [['new-xgk','LD'],['new-xgi','LD'],['new-xgi-sfc','SFC']]) {
@@ -13,7 +13,7 @@ test('blank program creation persists metadata, sources and original programs th
  }
 });
 test('duplicate names and unsupported CPU languages are rejected without changing source bytes',()=>{
- const before=fixture('new-xgk'),copy=Buffer.from(before);
+ const before=fixture('new-xgk'),copy=Uint8Array.from(before);
  assert.throws(()=>create_xgwx_program(before,request('LD','newprogram')),/already exists/);
  assert.throws(()=>create_xgwx_program(before,request('SFC')),/unsupported|unvalidated/);
  assert.throws(()=>create_xgwx_program(before,request('FBD')),/unsupported|unvalidated/);

@@ -1,5 +1,5 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import test from 'node:test';
-import init,{parse_xgwx,edit_xgwx_text_program,create_xgwx_program} from '../media/libxgwx.js';
+import init,{create_xgwx_project,parse_xgwx,edit_xgwx_text_program,create_xgwx_program} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
 const native=fs.readFileSync(new URL('../../libxgwx/fixtures/text-programs/native-blank.xgwx',import.meta.url));
 test('ST and IL native source edits pass through WASM without changing neighbors',()=>{
@@ -18,7 +18,7 @@ test('ST and IL native source edits pass through WASM without changing neighbors
  }
 });
 test('new XGI text programs use native blank templates and can immediately be edited',()=>{
- const bytes=fs.readFileSync(new URL('../media/templates/new-xgi.xgwx',import.meta.url));
+ const bytes=create_xgwx_project('XGI-CPUE','LD');
  for(const language of ['ST','IL']){
   const added=create_xgwx_program(bytes,{name:'AddedText',language,objectId:'abcd0001-1234-4567-89ab-0123456789ab',symbolId:'abcd0002-1234-4567-89ab-0123456789ab'}),program=parse_xgwx(added).textPrograms[0];
   assert.equal(program.language,language);assert.equal(program.source,'');assert.equal(program.editable,true);

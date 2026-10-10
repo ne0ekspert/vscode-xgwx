@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import init, {parse_xgwx, select_xgwx_cpu, edit_xgwx_text_program, edit_xgwx_text_variable} from '../media/libxgwx.js';
+import init, {create_xgwx_project,parse_xgwx, select_xgwx_cpu, edit_xgwx_text_program, edit_xgwx_text_variable} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
 const models=['XGI-CPUU','XGI-CPUH','XGI-CPUS','XGI-CPUE','XGI-CPUU/D','XGI-CPUUN'];
 for(const language of ['ST','IL']) {
   test(`new ${language} project preserves edited source and declarations through every XGI CPU conversion`,()=>{
-    let source=fs.readFileSync(new URL(`../media/templates/new-xgi-${language.toLowerCase()}.xgwx`,import.meta.url));
+    let source=create_xgwx_project('XGI-CPUE',language);
     const program=parse_xgwx(source).textPrograms[0];
     source=edit_xgwx_text_variable(source,program.objectId,{programIndex:0,expectedVariables:[],name:'Count',dataType:'INT',description:'Preserve this declaration',remove:false,update:false});
     source=edit_xgwx_text_program(source,{programIndex:0,expectedObjectId:program.objectId,expectedLanguage:language,expectedSource:'',source:language==='ST'?'Count := Count + 1;\r\n':'LD Count\r\nADD 1\r\nST Count\r\n'});

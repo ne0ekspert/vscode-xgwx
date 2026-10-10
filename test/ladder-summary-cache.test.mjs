@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import init, {parse_xgwx, insert_xgwx_iec_ld_single_element} from '../media/libxgwx.js';
+import init, {create_xgwx_project,parse_xgwx, insert_xgwx_iec_ld_single_element} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const xgi=fs.readFileSync(new URL('../media/templates/new-xgi.xgwx',import.meta.url));
-const xgk=fs.readFileSync(new URL('../media/templates/new-xgk.xgwx',import.meta.url));
+const xgi=create_xgwx_project('XGI-CPUE','LD');
+const xgk=create_xgwx_project('XGK-CPUSN','LD');
 const fresh=bytes=>{parse_xgwx(xgk);return parse_xgwx(bytes);};
 test('cached ladder summaries invalidate across edits, undo, workspace and returned-object mutations',()=>{
  const original=fresh(xgi);

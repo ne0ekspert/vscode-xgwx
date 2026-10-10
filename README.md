@@ -10,7 +10,8 @@ powered by the sibling `libxgwx` project during development.
   **XGWX: New File** command. Choose XGK ladder (XGK-CPUSN), XGI IEC ladder,
   XGI SFC, XGI ST, or XGI IL (XGI-CPUE), choose a new `.xgwx` path,
   and open `NewProgram`. ST and IL projects start with one empty source program.
-  The native template defaults to project `NewProject` and PLC `LSPLC`.
+  The library generates the workspace with project `NewProject` and PLC `LSPLC`;
+  New File does not read a template `.xgwx` file.
   SFC projects start with an empty main block. Use **Create loop** for a starter
   chart, or add steps, transitions, labels, and jumps individually.
 - Right-click **Programs** in the sidebar (or focus it and press Shift+F10) and

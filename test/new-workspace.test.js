@@ -11,7 +11,7 @@ const mock = {
   window: {showQuickPick:async items=>selection == null ? undefined : items[selection],
     showSaveDialog:async ()=>destination, showErrorMessage:async message=>failures.push(message)},
   WorkspaceEdit: class {createFile(target,options){this.target=target;this.options=options;}},
-  workspace: {fs:{readFile:async target=>fs.readFileSync(target.path)},
+  workspace: {fs:{readFile:async ()=>{throw new Error('New File must not read template files');}},
     applyEdit:async edit=>{applied=edit;return !existing;}},
   commands:{executeCommand:async(...args)=>opened=args},
 };
@@ -23,12 +23,14 @@ const initialViews=new Map();
 const context={extensionUri:uri(root),workspaceState:{update:async(key,value)=>initialViews.set(key,value)}};
 function reset(){selection=0;destination=uri('/workspace/Created');applied=opened=undefined;failures=[];existing=false;}
 
-test('creates each native binary template and opens it with the XGWX editor',async()=>{
-  for(const [index,{file}] of PROJECT_TEMPLATES.entries()){
+test('generates each CPU/language choice and opens it with the XGWX editor',async()=>{
+  const library = await import('../media/libxgwx.js');
+  await library.default({module_or_path:fs.readFileSync(path.join(root,'media/libxgwx_bg.wasm'))});
+  for(const [index,{cpuModel,language}] of PROJECT_TEMPLATES.entries()){
     reset();selection=index;
     const result=await createNewWorkspace(context);
     assert.equal(result.path,'/workspace/Created.xgwx');
-    assert.deepEqual(applied.options.contents,fs.readFileSync(path.join(root,'media/templates',file)));
+    assert.deepEqual(applied.options.contents,library.create_xgwx_project(cpuModel,language));
     assert.equal(applied.options.overwrite,false);
     assert.equal(opened[0],'vscode.openWith');assert.equal(opened[2],'xgwx.workspaceViewer');
     assert.deepEqual(failures,[]);

@@ -1,9 +1,10 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import test from 'node:test';
-import init,{parse_xgwx,create_xgwx_program,edit_xgwx_text_program,edit_xgwx_text_variable,edit_xgwx_vendor_il} from '../media/libxgwx.js';
+import init,{create_xgwx_project,parse_xgwx,create_xgwx_program,edit_xgwx_text_program,edit_xgwx_text_variable,edit_xgwx_vendor_il} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-test('all captured CPU templates create, declare and edit supported source through WASM',()=>{
+const cpuModels={'xgk-auto':'XGK-CPUA',xece:'XGB-XECE',xech:'XGB-XECH',xecs:'XGB-XECS',xecu:'XGB-XECU',xemh2:'XGB-XEMH2',xemhp:'XGB-XEMHP',gipam:'XGB-GIPAM',kl:'XGB-KL',xgr:'XGR-CPUH'};
+test('all generated CPU projects create, declare and edit supported source through WASM',()=>{
  for(const stem of ['xgk-auto','xece','xech','xecs','xecu','xemh2','xemhp','gipam','kl','xgr']) {
-  const original=fs.readFileSync(new URL(`../media/templates/new-${stem}-st.xgwx`,import.meta.url)),before=parse_xgwx(original);
+  const original=create_xgwx_project(cpuModels[stem],'ST'),before=parse_xgwx(original);
   assert.ok(before.programLanguages.includes('ST'));assert.equal(before.textPrograms[0].editable,true);
   for(const language of before.programLanguages.filter(l=>['ST','IL'].includes(l))) {
    let bytes=create_xgwx_program(original,{name:'Added'+language,language,objectId:'abcd0001-1234-4567-89ab-0123456789ab',symbolId:'abcd0002-1234-4567-89ab-0123456789ab'});
@@ -16,7 +17,7 @@ test('all captured CPU templates create, declare and edit supported source throu
  }
 });
 test('XGK vendor IL saves native ladder records and rejects IEC dialect and branch replacement',()=>{
- const bytes=fs.readFileSync(new URL('../media/templates/new-xgk.xgwx',import.meta.url)),before=parse_xgwx(bytes),p=before.vendorIlPrograms[0];
+ const bytes=create_xgwx_project('XGK-CPUSN','LD'),before=parse_xgwx(bytes),p=before.vendorIlPrograms[0];
  assert.deepEqual(before.programLanguages,['LD','IL']);assert.ok(p.editable);
  const patch={programIndex:p.programIndex,expectedObjectId:p.objectId,expectedSource:p.source,source:'LOAD M00000\nAND NOT M00001\nOUT M00002'};
  const changed=edit_xgwx_vendor_il(bytes,patch),after=parse_xgwx(changed);assert.equal(after.vendorIlPrograms[0].source,patch.source);assert.equal(after.programs[0].kind,0);assert.deepEqual(after.hardware,before.hardware);

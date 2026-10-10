@@ -123,8 +123,7 @@
     "check": "node --check extension.js && node --check media/main.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check new-workspace.cjs",
     "test": "node --test test/*.test.js test/*.test.mjs",
     "build:wasm": "bash scripts/build-wasm.sh",
-    "package": "npx @vscode/vsce package",
-    "build:text-templates": "node scripts/build-text-project-templates.mjs"
+    "package": "npx @vscode/vsce package"
   },
   "devDependencies": {
     "@vscode/vsce": "^3.6.0"

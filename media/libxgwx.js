@@ -159,6 +159,26 @@ export function create_xgwx_program(bytes, patch) {
 }
 
 /**
+ * Generate a new blank project from library-owned native defaults.
+ * @param {string} cpu_model
+ * @param {string} language
+ * @returns {Uint8Array}
+ */
+export function create_xgwx_project(cpu_model, language) {
+    const ptr0 = passStringToWasm0(cpu_model, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(language, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.create_xgwx_project(ptr0, len0, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Delete one implicit IEC LD blank row, matching XG5000 Ctrl+D coordinate
  * shifting while rejecting rows referenced by decoded records.
  * @param {Uint8Array} bytes

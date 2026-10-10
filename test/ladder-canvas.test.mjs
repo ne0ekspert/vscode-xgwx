@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
-import init, { parse_xgwx, insert_xgwx_ladder_row, edit_xgwx_ladder_cell,
+import init, { create_xgwx_project,parse_xgwx, insert_xgwx_ladder_row, edit_xgwx_ladder_cell,
   insert_xgwx_iec_ld_single_element } from '../media/libxgwx.js';
 import { attachGrowingCanvas, xgkCanvasRowValues } from '../media/ladder-canvas.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm', import.meta.url))});
-const source = family => fs.readFileSync(new URL(`../media/templates/new-${family}.xgwx`, import.meta.url));
+const source = family => create_xgwx_project(family==='xgk'?'XGK-CPUSN':'XGI-CPUE','LD');
 test('scroll growth is view state, windows stay bounded, and format limits stop growth', () => {
   const sizes = [], windows = [];
   const viewport = {scrollTop:0, clientHeight:560, addEventListener(_event, listener) {this.scroll = listener;}};
