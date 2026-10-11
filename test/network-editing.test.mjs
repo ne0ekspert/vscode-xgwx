@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import test from 'node:test';
-import init,{create_xgwx_project,parse_xgwx,insert_xgwx_module,edit_xgwx_fenet_field,edit_xgwx_browser_network} from '../media/libxgwx.js';
+import init,{create_xgwx_project,parse_xgwx,update_xgwx_module,insert_xgwx_module,edit_xgwx_fenet_field,edit_xgwx_browser_network} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
 test('hardware JSON keeps installed module fields with the new Rust module API',()=>{
   let bytes=create_xgwx_project('XGK-CPUSN','LD');
@@ -73,4 +73,34 @@ test('serialized base modules retain configuration scope when base numbers repea
   assert.deepEqual(summary.hardware.bases.map(b=>[b.baseIndex,b.configurationIndex,b.base,b.slotCount]),[[0,0,0,4],[1,1,0,8]]);
   assert.deepEqual(summary.hardware.bases.map(b=>b.modules.map(m=>[m.kind,m.hardware.slot,m.hardware.id])),[[['io',0,42242]],[['other',1,999999]]]);
   assert.equal(summary.hardware.typedModules.length,2);
+});
+
+
+test('hardware writes reject ambiguous coordinates and conflicting base ownership',async()=>{
+  const {gzipSync}=await import('node:zlib');
+  const encode=xml=>Buffer.concat([Buffer.from('XG'),gzipSync(xml)]);
+  const duplicate=encode('<Project><Configuration>A<Base Base="0"><Module Base="0" Slot="0" Comment="A"/></Base></Configuration><Configuration>B<Base Base="0"><Module Base="0" Slot="0" Comment="B"/></Base></Configuration></Project>');
+  const duplicateBefore=parse_xgwx(duplicate);
+  assert.throws(()=>update_xgwx_module(duplicate,0,0,{comment:'Changed'}),/multiple modules match/i);
+  assert.deepEqual(parse_xgwx(duplicate),duplicateBefore);
+  const conflict=encode('<Project><Base Base="0"><Module Base="1" Slot="0" Comment="A"/></Base></Project>');
+  assert.throws(()=>update_xgwx_module(conflict,1,0,{comment:'Changed'}),/owning base/);
+  assert.equal(parse_xgwx(conflict).hardware.modules[0].comment,'A');
+});
+
+test('selected network writes reject another parent and ambiguous protocol associations',async()=>{
+  const {gzipSync,gunzipSync}=await import('node:zlib');
+  const encode=xml=>Buffer.concat([Buffer.from('XG'),gzipSync(xml)]);
+  const bytes=encode('<Project><Network Name="A"/><Network Name="B"><NetworkModule Base="0" Slot="1" Alias="Original"/></Network></Project>');
+  assert.throws(()=>edit_xgwx_browser_network(bytes,{networkIndex:0,module:true,base:0,slot:1,field:'alias',expectedValue:'Original',replacement:'Changed'}),/selected network/);
+  assert.equal(parse_xgwx(bytes).networks[1].modules[0].alias,'Original');
+  let generated=create_xgwx_project('XGK-CPUSN','LD');
+  generated=insert_xgwx_module(generated,0,0,'XGL-EFMT(B)');
+  const header=parse_xgwx(generated).header;
+  const xml=gunzipSync(Buffer.from(generated).subarray(header.gzipOffset,header.gzipOffset+header.compressedSizeHint)).toString();
+  const record=xml.match(/<XGPD_CONFIG_INFO_FENET\b[\s\S]*?<\/XGPD_CONFIG_INFO_FENET>/)?.[0];
+  assert.ok(record);
+  const ambiguous=encode(xml.replace(record,record+record));
+  assert.throws(()=>edit_xgwx_fenet_field(ambiguous,{base:0,slot:0,field:'ipAddress',expectedValue:'192.168.0.100',replacement:'10.0.0.1'}),/association.*ambiguous/);
+  assert.equal(parse_xgwx(ambiguous).fenet[0].ipAddress,'192.168.0.100');
 });
