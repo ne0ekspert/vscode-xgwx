@@ -29,7 +29,7 @@ test('FEnet common values use native driver IDs and reject invalid ranges',()=>{
   }
 });
 test('Native timeout units are exposed and retained through count edits',()=>{
-  const bytes=fs.readFileSync(new URL('../../libxgwx/fixtures/networks/fenet-smart-native.xgwx',import.meta.url));
+  const bytes=fs.readFileSync(new URL('./fixtures/networks/fenet-smart-native.xgwx',import.meta.url));
   const before=parse_xgwx(bytes);
   assert.equal(before.fenet[0].driverType,7);
   assert.equal(before.fenet[0].rcvWaitTimeUnit,1);

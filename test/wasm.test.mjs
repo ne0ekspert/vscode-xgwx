@@ -105,7 +105,7 @@ import { hardwareSlotRows } from "../media/hardware-slots.js";
 import { groupModuleOptions } from "../media/module-option-groups.js";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const libraryRoot = process.env.LIBXGWX_DIR || path.resolve(root, "../libxgwx");
+const fixtureRoot = path.join(root, "test/fixtures");
 
 test("bundled WASM matches the native FF branch output-row deletion", async (context) => {
   const sourcePath = nativeFixturePath("Downloads/smarthome_project_0225.xgwx");
@@ -1401,7 +1401,7 @@ test("leading IEC contact insertion restores the native captured branch", async 
 });
 
 test("bundled WASM parses hardware modules from a real fixture", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
+  const fixture = path.join(fixtureRoot, "elements.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2236,7 +2236,7 @@ test("bundled WASM preserves IEC LD text from an optional XGI workspace", async 
 });
 
 test("bundled WASM allows XGK CPU changes and rejects cross-family conversion", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
+  const fixture = path.join(fixtureRoot, "elements.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2262,7 +2262,7 @@ test("bundled WASM allows XGK CPU changes and rejects cross-family conversion", 
 });
 
 test("bundled WASM edits catalog-backed module dropdown options", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2282,7 +2282,7 @@ test("bundled WASM edits catalog-backed module dropdown options", async (context
 });
 
 test("bundled WASM exposes and edits XGF high-speed-counter options", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2332,7 +2332,7 @@ test("bundled WASM exposes and edits XGF high-speed-counter options", async (con
 });
 
 test("bundled WASM exposes and edits both DT4A output groups", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2375,8 +2375,8 @@ test("bundled AH6A options form separate input and output channel groups", async
 });
 
 test("bundled catalog treats TC4UD as occupying two physical slots", async (context) => {
-  const denseFixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
-  const sparseFixture = path.join(libraryRoot, "fixtures/elements.xgwx");
+  const denseFixture = path.join(fixtureRoot, "elements-io.xgwx");
+  const sparseFixture = path.join(fixtureRoot, "elements.xgwx");
   if (!fs.existsSync(denseFixture) || !fs.existsSync(sparseFixture)) {
     context.skip("libxgwx fixtures not found");
     return;
@@ -2407,7 +2407,7 @@ test("bundled catalog treats TC4UD as occupying two physical slots", async (cont
 });
 
 test("bundled catalog exposes RY1A and RY2A/B emergency outputs", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2474,7 +2474,7 @@ test("bundled catalog exposes every audited channel instance", async () => {
 });
 
 test("bundled WASM rewrites program metadata and a same-length ladder cell", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
+  const fixture = path.join(fixtureRoot, "elements.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2503,7 +2503,7 @@ test("bundled WASM rewrites program metadata and a same-length ladder cell", asy
 
 test("bundled WASM inserts, replaces and removes actual linear ladder records", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  let bytes = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/linear.xgwx")));
+  let bytes = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "ladder-edit/linear.xgwx")));
   assert.equal(parse_xgwx(bytes).ladder[0].structuralEditing, true);
   const element = { kind: "NormallyClosed", operand: "M42" };
   bytes = edit_xgwx_ladder_cell(bytes, 0, { rawY: 0, column: 2, expected: null, replacement: element });
@@ -2512,14 +2512,14 @@ test("bundled WASM inserts, replaces and removes actual linear ladder records", 
   bytes = edit_xgwx_ladder_cell(bytes, 0, { rawY: 0, column: 2, expected: element, replacement: null });
   assert.equal(parse_xgwx(bytes).ladder[0].cells.some(cell => cell.rawX === 7 && cell.rawY === 0), false);
   assert.throws(() => edit_xgwx_ladder_cell(bytes, 0, { rawY: 4, column: 9, expected: null, replacement: element }), /column|instruction/);
-  const complex = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx")));
+  const complex = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "elements.xgwx")));
   assert.equal(parse_xgwx(complex).ladder[0].structuralEditing, true);
   assert.throws(() => edit_xgwx_ladder_cell(complex, 0, { rawY: 0, column: 2, expected: null, replacement: element }), /comment/);
 });
 
 test("bundled WASM inserts every additional program-inspector element kind", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/empty.xgwx")));
+  const source = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "ladder-edit/empty.xgwx")));
   const cases = [
     ["AddressedRisingPulse", "M1", 2, "contact", "P_CONTACT"],
     ["AddressedRisingPulseNot", "M1", 2, "contact", "P_NOT_CONTACT"],
@@ -2549,7 +2549,7 @@ test("bundled WASM inserts every additional program-inspector element kind", asy
 
 test("bundled WASM edits and creates rung and output comments", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx")));
+  const source = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "elements.xgwx")));
   let bytes = edit_xgwx_ladder_comment(source, 0, {
     kind: "Rung",
     rawY: 0,
@@ -2578,7 +2578,7 @@ test("bundled WASM edits and creates rung and output comments", async () => {
   });
   assert.deepEqual(parse_xgwx(restored).ladder[0], parse_xgwx(source).ladder[0]);
 
-  const empty = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/empty.xgwx")));
+  const empty = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "ladder-edit/empty.xgwx")));
   const rung = parse_xgwx(edit_xgwx_ladder_comment(empty, 0, {
     kind: "Rung", rawY: 0, expected: null, replacement: "Created rung comment",
   })).ladder[0];
@@ -2590,7 +2590,7 @@ test("bundled WASM edits and creates rung and output comments", async () => {
 });
 
 test("bundled WASM rewrites same-length variable fields and its numeric address", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements.xgwx");
+  const fixture = path.join(fixtureRoot, "elements.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2615,7 +2615,7 @@ test("bundled WASM rewrites same-length variable fields and its numeric address"
 });
 
 test("bundled WASM selects a module from the XG5000 catalog", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2644,7 +2644,7 @@ test("bundled WASM selects a module from the XG5000 catalog", async (context) =>
 });
 
 test("bundled WASM deletes one hardware module", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2675,7 +2675,7 @@ test("bundled WASM deletes one hardware module", async (context) => {
 });
 
 test("bundled WASM synchronizes captured network-module configurations", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2728,7 +2728,7 @@ test("bundled WASM synchronizes captured network-module configurations", async (
 });
 
 test("bundled WASM edits network and network-module metadata", async (context) => {
-  const fixture = path.join(libraryRoot, "fixtures/elements-io.xgwx");
+  const fixture = path.join(fixtureRoot, "elements-io.xgwx");
   if (!fs.existsSync(fixture)) {
     context.skip(`libxgwx fixture not found at ${fixture}`);
     return;
@@ -2756,9 +2756,11 @@ test("bundled WASM edits network and network-module metadata", async (context) =
   assert.equal(module.description, "Plant Ethernet");
 });
 
-test("bundled WASM protects compact hardware while preserving comment edits", async () => {
+test("bundled WASM protects compact hardware while preserving comment edits", async (context) => {
+  const fixture = process.env.LIBXGWX_XGB_FIXTURE;
+  if (!fixture || !fs.existsSync(fixture)) { context.skip("set LIBXGWX_XGB_FIXTURE to an authorized XGB Enet sample"); return; }
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/XGB_Enet01.xgwx")));
+  const source = new Uint8Array(fs.readFileSync(fixture));
   const before = parse_xgwx(source);
   assert.equal(before.hardware.cpuProfile.variant, "XBM-DR16S");
   assert.throws(() => delete_xgwx_module(source, 0, 0), /built-in/);
@@ -2774,7 +2776,7 @@ test("bundled WASM protects compact hardware while preserving comment edits", as
 
 test("bundled WASM edits branches and inserts sparse rows without phantom wires", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  let bytes = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/linear.xgwx")));
+  let bytes = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "ladder-edit/linear.xgwx")));
   bytes = insert_xgwx_ladder_row(bytes, 0, 4);
   assert.deepEqual(parse_xgwx(bytes).ladder[0].rungs.map(r => r.rawY), [0, 4, 8]);
   const branch = { rawY: 0, boundary: 1, expected: false, present: true };
@@ -2796,7 +2798,7 @@ test("bundled WASM edits branches and inserts sparse rows without phantom wires"
 
 test("instruction text edits accept different lengths and preserve following instruction offsets", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const before = parse_xgwx(source).ladder[0];
   const mov = before.cells.find(cell => cell.value === "MOV");
   const xdst = before.cells.find(cell => cell.value === "XDST");
@@ -2816,7 +2818,7 @@ test("instruction text edits accept different lengths and preserve following ins
 
 
 test("instruction replacement uses catalog opcodes and resizes operand records", () => {
-  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx")));
+  const source = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "elements.xgwx")));
   let bytes = source;
   for (const text of ["ADD,1,2,D000000", "TON,T0000,100", "SUB,9,3,D1", "MOV,0,D000000"]) {
     const summary = parse_xgwx(bytes);
@@ -2832,7 +2834,7 @@ test("instruction replacement uses catalog opcodes and resizes operand records",
 
 test("base slot counts persist independently and protect occupied slots", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   let edited = set_xgwx_base_slot_count(source, 0, 8);
   edited = set_xgwx_base_slot_count(edited, 1, 6);
   assert.deepEqual(parse_xgwx(edited).hardware.bases.map(b => b.slotCount), [8,6,12,12]);
@@ -2846,7 +2848,7 @@ test("base slot counts persist independently and protect occupied slots", async 
 
 test("function placement exports preserve operand metadata and enforce manual device permissions", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const before = Buffer.from(source);
   const choices = parse_xgwx(source).ladder[0].instructionChoices;
   for (const choice of choices.filter(choice => choice.operandRules.length)) {
@@ -2883,7 +2885,7 @@ test("function placement exports preserve operand metadata and enforce manual de
 
 test("all XGK word comparisons insert and replace as contacts", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const names = ["=", ">", "<", ">=", "<=", "<>"];
   const choices = parse_xgwx(source).ladder[0].comparisonChoices.filter(choice => names.includes(choice.mnemonic));
   assert.deepEqual(choices.map(choice => choice.mnemonic), names);
@@ -2905,7 +2907,7 @@ test("all XGK word comparisons insert and replace as contacts", async () => {
 
 test("operandless XGK applications insert and resize through the editor WASM exports", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const choices = parse_xgwx(source).ladder[0].instructionChoices;
   assert.equal(choices.filter(choice => choice.operandCount === 0).length, 15);
   for (const name of ["STOP", "WDT", "CLC", "EI", "INIT_DONE"]) {
@@ -2923,7 +2925,7 @@ test("operandless XGK applications insert and resize through the editor WASM exp
 
 test("XGK application deletion clears its feed and BRST uses manual BIT and WORD operands", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const choices = parse_xgwx(source).ladder[0].instructionChoices;
   for (const name of ["BRST", "BRSTP"]) {
     const choice = choices.find(c => c.mnemonic === name);
@@ -2942,7 +2944,7 @@ test("XGK application deletion clears its feed and BRST uses manual BIT and WORD
 
 test("all XGK comparison families expose types, reserve their spans and restore after deletion", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const choices = parse_xgwx(source).ladder[0].comparisonChoices.filter(choice => !["B", "BN"].includes(choice.mnemonic));
   assert.equal(choices.length, 78);
   const types = { "": "INT", D: "DINT", R: "REAL", L: "LREAL", "$": "STRING",
@@ -2967,7 +2969,7 @@ test("all XGK comparison families expose types, reserve their spans and restore 
 
 test("XGK indexed-bit inputs and FF use manual types and guarded edit records", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   for (const name of ["B", "BN"]) {
     const choice = parse_xgwx(source).ladder[0].comparisonChoices.find(c => c.mnemonic === name);
     assert.deepEqual(choice.operandRules.map(r => r.dataTypes), [["WORD"], ["WORD"]]);
@@ -2992,7 +2994,7 @@ test("XGK indexed-bit inputs and FF use manual types and guarded edit records", 
 
 test("comparison deletion removes a full contact and rejects stale edits", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = fs.readFileSync(path.join(libraryRoot, "fixtures/elements.xgwx"));
+  const source = fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   for (const name of ["=", ">", "<", ">=", "<=", "<>"]) {
     let bytes = insert_xgwx_ladder_comparison(source, 0, 52, 0, name, JSON.stringify(["D100", "D102"]));
     bytes = insert_xgwx_ladder_instruction(bytes, 0, 52, "MOV", JSON.stringify(["0", "D200"]));
@@ -3062,7 +3064,7 @@ test("IEC terminal feed deletion reports open endpoints and cleans up without lo
 
 test("XGK contacts and coils store D register bit operands", async () => {
   await init({ module_or_path: fs.readFileSync(path.join(root, "media/libxgwx_bg.wasm")) });
-  const source = new Uint8Array(fs.readFileSync(path.join(libraryRoot, "fixtures/ladder-edit/empty.xgwx")));
+  const source = new Uint8Array(fs.readFileSync(path.join(fixtureRoot, "ladder-edit/empty.xgwx")));
   for (const [kind, column] of [["NormallyOpen", 0], ["NormallyClosed", 1], ["Output", 9]]) {
     for (const bit of '0123456789ABCDEF') {
       const operand = `D0000.${bit}`;
@@ -4483,7 +4485,7 @@ test("IEC refills native contact-first Delete Line captures", async t => {
 
 test("XGK quoted string operands preserve embedded spaces and commas through edits", async () => {
   await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
-  const source=fs.readFileSync(path.join(libraryRoot,"fixtures/elements.xgwx"));
+  const source=fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const operands=["'Room A, on (night)'","D100"];
   const inserted=insert_xgwx_ladder_instruction(source,0,52,"$MOV",JSON.stringify(operands));
   const cell=parse_xgwx(inserted).ladder[0].cells.find(c=>c.rawY===52&&c.value==="$MOV");
@@ -4501,7 +4503,7 @@ test("XGK quoted string operands preserve embedded spaces and commas through edi
 
 test("XGK instruction choices and writes honor reviewed CPU model restrictions", async () => {
   await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
-  const source=fs.readFileSync(path.join(libraryRoot,"fixtures/elements.xgwx"));
+  const source=fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   for (const [model, supported] of [["XGK-CPUH",false],["XGK-CPUHN",true],["XGK-CPUSN",true],["XGK-CPUUN",true]]) {
     const bytes=select_xgwx_cpu(source,model);
     const choices=parse_xgwx(bytes).ladder[0].instructionChoices.map(c=>c.mnemonic);
@@ -4531,7 +4533,7 @@ test("XGK instruction choices and writes honor reviewed CPU model restrictions",
 test("XGK output commands from interior branch cursors preserve the branch and existing output", async () => {
   await init({module_or_path:fs.readFileSync(path.join(root,"media/libxgwx_bg.wasm"))});
   const {xgkBlankCommands,xgkInsertionColumn}=await import('../media/ladder-commands.js');
-  const source=fs.readFileSync(path.join(libraryRoot,"fixtures/elements.xgwx"));
+  const source=fs.readFileSync(path.join(fixtureRoot, "elements.xgwx"));
   const before=parse_xgwx(source).ladder[0];
   for (const [rawY,column,mnemonic,operands] of [[12,2,'OUT',['M00030']],[16,5,'SET',['M00031']],[12,8,'MOV',['1','D100']]]) {
     const position={rawY,column};const choice=xgkBlankCommands(before,position).find(c=>c.mnemonic===mnemonic);

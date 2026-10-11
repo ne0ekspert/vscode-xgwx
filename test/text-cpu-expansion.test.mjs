@@ -34,7 +34,7 @@ test('XGK completion and diagnostics keep vendor edge operators separate from IE
 });
 test('native CPU-family Save As preserves all source and typed declarations through WASM',()=>{
  for(const stem of ['xgk-auto','xece','xech','xecs','xecu','xemh2','xemhp','gipam','kl','xgr']) {
-  const read=suffix=>parse_xgwx(fs.readFileSync(new URL(`../../libxgwx/fixtures/text-cpus/${stem}-${suffix}.xgwx`,import.meta.url)));
+  const read=suffix=>parse_xgwx(fs.readFileSync(new URL(`./fixtures/text-cpus/${stem}-${suffix}.xgwx`,import.meta.url)));
   const generated=read('generated'),saved=read('native-roundtrip');
   for(const p of generated.textPrograms) {const actual=saved.textPrograms.find(v=>v.objectId===p.objectId);assert.equal(actual.variablesError,null,stem);assert.equal(actual.source,p.source,stem);assert.deepEqual(actual.variables,p.variables,stem);assert.ok(actual.editable);}
  }

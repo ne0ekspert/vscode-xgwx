@@ -526,16 +526,18 @@ XGWX_TEST_DATA_ROOT=/path/to/validation-data npm test
 ```
 
 Tests that require unavailable native fixtures are skipped. Public fixtures
-continue to use repository-relative paths.
+use repository-relative paths. The author-provided XGB Enet sample is optional
+and may be supplied with `LIBXGWX_XGB_FIXTURE=/path/to/XGB_Enet01.xgwx`.
 
 To refresh the bundled parser after changing `libxgwx`:
 
 ```bash
-npm run build:wasm
+LIBXGWX_DIR=/path/to/libxgwx npm run build:wasm
 ```
 
-The script expects `libxgwx` at `../libxgwx` by default. Set `LIBXGWX_DIR` to
-override that path. If a rustup toolchain with the WASM target is installed, the
+The script requires `LIBXGWX_DIR` to point to a checkout of
+[libxgwx](https://github.com/ne0ekspert/libxgwx). Tests use bundled public
+fixtures under `test/fixtures/` and do not require a library checkout. If a rustup toolchain with the WASM target is installed, the
 script prefers it over a system Rust installation without that target. A failed
 WASM rebuild stops the build instead of copying an older package.
 
@@ -1536,7 +1538,7 @@ and may report errors in XG5000 until completed.
 
 
 All nine variable action qualifiers passed native XG5000 strict Check Program
-and Save As retention checks (`libxgwx/fixtures/sfc/action-qualifiers*`).
+and Save As retention checks ([library action qualifier fixtures](https://github.com/ne0ekspert/libxgwx/tree/837ba63ec3cf6d00b040346a25be9ce417dff91b/fixtures/sfc)).
 
 Balanced alternative and simultaneous branches are editable. Select a step for
 the canvas **+ Add simultaneous branch** control;

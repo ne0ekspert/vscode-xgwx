@@ -15,7 +15,7 @@ test('native blank SFC template opens as an empty SFC main block',()=>{
     languageType:3,language:2,rows:0,columns:0,entities:[],editableRows:[]}],variables:[
       {name:"GOTO_INIT",dataType:"BOOL",description:"",system:true},
       {name:"TRANS",dataType:"BOOL",description:"",system:true}],variablesError:null}]);
-  assert.deepEqual(summary.sfc,parse_xgwx(fs.readFileSync(new URL('../../libxgwx/fixtures/sfc/new-xgi-sfc.xgwx',import.meta.url))).sfc);
+  assert.deepEqual(summary.sfc,parse_xgwx(fs.readFileSync(new URL('./fixtures/sfc/new-xgi-sfc.xgwx',import.meta.url))).sfc);
 });
 for (const family of ['xgk','xgi']) {
   test(`blank ${family} handles XGL-EFMT(B) at Base 0 Slot 0`,()=>{

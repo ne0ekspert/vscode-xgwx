@@ -22,8 +22,8 @@ test('duplicate names and unsupported CPU languages are rejected without changin
 
 test('native Save As retains newly created programs and existing editable sources',()=>{
  for(const stem of ['xgk-ld','xgi-ld','xgi-sfc','xgk-ld-delete','xgi-ld-delete','xgi-sfc-delete','xgi-sfc-order']) {
-  const source=fs.readFileSync(new URL(`../../libxgwx/fixtures/program-create/${stem}-generated.xgwx`,import.meta.url));
-  const saved=fs.readFileSync(new URL(`../../libxgwx/fixtures/program-create/${stem}-roundtrip.xgwx`,import.meta.url));
+  const source=fs.readFileSync(new URL(`./fixtures/program-create/${stem}-generated.xgwx`,import.meta.url));
+  const saved=fs.readFileSync(new URL(`./fixtures/program-create/${stem}-roundtrip.xgwx`,import.meta.url));
   const a=parse_xgwx(source),b=parse_xgwx(saved);
   assert.deepEqual(b.programs,a.programs);assert.deepEqual(b.localVariables,a.localVariables);
   for(const chart of a.sfc) {
@@ -35,7 +35,7 @@ test('native Save As retains newly created programs and existing editable source
 
 test('program deletion removes the targeted program and preserves surviving sources',()=>{
  for(const stem of ['xgk-ld','xgi-ld','xgi-sfc']) {
-  const source=fs.readFileSync(new URL(`../../libxgwx/fixtures/program-create/${stem}-generated.xgwx`,import.meta.url));const before=parse_xgwx(source);
+  const source=fs.readFileSync(new URL(`./fixtures/program-create/${stem}-generated.xgwx`,import.meta.url));const before=parse_xgwx(source);
   for(const index of [0,1]) {
    const bytes=delete_xgwx_program(source,index,before.programs[index].objectId),after=parse_xgwx(bytes);
    assert.deepEqual(after.programs,[before.programs[1-index]]);

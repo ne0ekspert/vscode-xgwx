@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import init, {parse_xgwx, edit_xgwx_sfc_entity, replace_xgwx_sfc_sequence, edit_xgwx_sfc_variable, select_xgwx_cpu} from '../media/libxgwx.js';
 await init({module_or_path: fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const fixture = name => fs.readFileSync(new URL(`../../libxgwx/fixtures/sfc/${name}.xgwx`,import.meta.url));
+const fixture = name => fs.readFileSync(new URL(`./fixtures/sfc/${name}.xgwx`,import.meta.url));
 const patch = {programIndex:0,blockIndex:0,entityIndex:2,expectedType:1,expectedRow:2,expectedColumn:0,
   field:'condition',expectedValue:'%MX0',replacement:'%MX2'};
 

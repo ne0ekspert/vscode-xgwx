@@ -3,7 +3,12 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 extension_dir="$(cd "$script_dir/.." && pwd)"
-library_dir="${LIBXGWX_DIR:-$extension_dir/../libxgwx}"
+if [[ -z "${LIBXGWX_DIR:-}" || ! -f "$LIBXGWX_DIR/Cargo.toml" ]]; then
+  echo "Set LIBXGWX_DIR to a libxgwx checkout containing Cargo.toml to rebuild WASM." >&2
+  echo "The extension already includes a WASM bundle for normal use." >&2
+  exit 1
+fi
+library_dir="$(cd "$LIBXGWX_DIR" && pwd)"
 package_dir="$library_dir/web/dist/pkg"
 output_dir="$extension_dir/media"
 wasm_pack="${WASM_PACK:-$HOME/.cargo/bin/wasm-pack}"

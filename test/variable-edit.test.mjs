@@ -4,7 +4,7 @@ import test from 'node:test';
 import init, { parse_xgwx, update_xgwx_variable, rename_xgwx_iec_local_symbol } from '../media/libxgwx.js';
 import { buildVariableEdit, globalAddress, variableAddressConflict } from '../media/variable-edit.js';
 await init({ module_or_path: fs.readFileSync(new URL('../media/libxgwx_bg.wasm', import.meta.url)) });
-const source = fs.readFileSync(new URL('../../libxgwx/fixtures/elements.xgwx', import.meta.url));
+const source = fs.readFileSync(new URL('./fixtures/elements.xgwx', import.meta.url));
 
 test('global address popup decodes hex bit positions and swaps only addresses', () => {
   const summary = parse_xgwx(source), variable = { ...summary.variables[0], globalVariableIndex: 0 };

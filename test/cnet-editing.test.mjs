@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 import init,{parse_xgwx,edit_xgwx_cnet_settings,insert_xgwx_module,delete_xgwx_module} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const source=fs.readFileSync(new URL('../../libxgwx/fixtures/networks/cnetbase-native.xgwx',import.meta.url));
+const source=fs.readFileSync(new URL('./fixtures/networks/cnetbase-native.xgwx',import.meta.url));
 const change=(portIndex,field,expectedValue,replacement)=>({portIndex,field,expectedValue,replacement});
 const edit=(bytes,changes,slot=2)=>edit_xgwx_cnet_settings(bytes,{base:0,slot,changes});
 test('Cnet edits combine operation mode, station and framing without changing the other port or programs',()=>{
@@ -24,7 +24,7 @@ test('Repeater requires two matching baud rates and native selectors display the
   const after=parse_xgwx(edit(source,[change(0,'repeater','0','1'),change(1,'repeater','0','1'),change(0,'bps','8','14'),change(1,'bps','8','14')]));
   assert.deepEqual(after.cnet[0].ports.map(p=>p.baudRate),[115200,115200]);
   assert.deepEqual(after.cnet[0].ports.map(p=>p.repeater),[1,1]);
-  const native=parse_xgwx(fs.readFileSync(new URL('../../libxgwx/fixtures/networks/cnetascii-native.xgwx',import.meta.url)));
+  const native=parse_xgwx(fs.readFileSync(new URL('./fixtures/networks/cnetascii-native.xgwx',import.meta.url)));
   assert.deepEqual(native.cnet[0].ports.map(p=>p.baudRate),[300,64000]);
   assert.equal(native.cnet[0].ports[1].requestDelayTime,17);assert.equal(native.cnet[0].ports[0].parityErrorIgnore,1);
 });

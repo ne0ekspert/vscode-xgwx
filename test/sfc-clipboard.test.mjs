@@ -5,7 +5,7 @@ import init,{parse_xgwx,replace_xgwx_sfc_sequence} from '../media/libxgwx.js';
 import {actionGroup} from '../media/sfc-actions.js';
 import {captureSfcClipboard,cutSfcClipboard,pasteSfcClipboard} from '../media/sfc-clipboard.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const fixture=name=>fs.readFileSync(new URL(`../../libxgwx/fixtures/sfc/${name}.xgwx`,import.meta.url));
+const fixture=name=>fs.readFileSync(new URL(`./fixtures/sfc/${name}.xgwx`,import.meta.url));
 const block=bytes=>parse_xgwx(bytes).sfc[0].blocks[0];
 const apply=(bytes,edit)=>{const b=block(bytes);return replace_xgwx_sfc_sequence(bytes,{programIndex:0,blockIndex:0,expectedEntities:b.entities,expectedRows:b.editableRows,rows:edit.rows});};
 test('copy step includes all actions and paste preserves source, timers, variables and unique names',()=>{

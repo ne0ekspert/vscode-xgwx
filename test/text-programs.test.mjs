@@ -1,7 +1,7 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import test from 'node:test';
 import init,{create_xgwx_project,parse_xgwx,edit_xgwx_text_program,create_xgwx_program} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const native=fs.readFileSync(new URL('../../libxgwx/fixtures/text-programs/native-blank.xgwx',import.meta.url));
+const native=fs.readFileSync(new URL('./fixtures/text-programs/native-blank.xgwx',import.meta.url));
 test('ST and IL native source edits pass through WASM without changing neighbors',()=>{
  const before=parse_xgwx(native);
  assert.deepEqual(before.textPrograms.map(p=>[p.language,p.source,p.editable]),[['ST','',true],['IL','',true]]);
@@ -39,8 +39,8 @@ test('native source programs expose declarations and reject changes to reference
  }
 });
 test('XG5000 strict-check Save As retains all four generated sources and advanced declarations',()=>{
- const generated=parse_xgwx(fs.readFileSync(new URL('../../libxgwx/fixtures/text-programs/generated.xgwx',import.meta.url)));
- const saved=parse_xgwx(fs.readFileSync(new URL('../../libxgwx/fixtures/text-programs/native-roundtrip.xgwx',import.meta.url)));
+ const generated=parse_xgwx(fs.readFileSync(new URL('./fixtures/text-programs/generated.xgwx',import.meta.url)));
+ const saved=parse_xgwx(fs.readFileSync(new URL('./fixtures/text-programs/native-roundtrip.xgwx',import.meta.url)));
  assert.equal(saved.textPrograms.length,4);assert.equal(saved.counts.ladderErrors,0);
  for(const p of generated.textPrograms){const actual=saved.textPrograms.find(v=>v.objectId===p.objectId);assert.equal(actual.language,p.language);assert.equal(actual.source,p.source);assert.deepEqual(actual.variables,p.variables);assert.equal(actual.editable,true);}
 });

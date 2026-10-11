@@ -26,7 +26,7 @@ for(const language of ['ST','IL']) {
   });
 }
 test('native ST and IL fixture preserves source, advanced declarations and program metadata during conversion',()=>{
-  const source=fs.readFileSync(new URL('../../libxgwx/fixtures/text-programs/native-roundtrip.xgwx',import.meta.url)),before=parse_xgwx(source);
+  const source=fs.readFileSync(new URL('./fixtures/text-programs/native-roundtrip.xgwx',import.meta.url)),before=parse_xgwx(source);
   for(const model of models) {
     const after=parse_xgwx(select_xgwx_cpu(source,model));
     assert.deepEqual(after.textPrograms,before.textPrograms);
@@ -35,8 +35,8 @@ test('native ST and IL fixture preserves source, advanced declarations and progr
 });
 test('native saves for every converted CPU preserve ST/IL semantics and convert back through WASM',()=>{
   for(const stem of ['cpue','cpus','cpuh','cpuu','cpuud','cpuun']) {
-    const generated=parse_xgwx(fs.readFileSync(new URL(`../../libxgwx/fixtures/text-programs/cpu/${stem}-generated.xgwx`,import.meta.url)));
-    const saved=fs.readFileSync(new URL(`../../libxgwx/fixtures/text-programs/cpu/${stem}-native.xgwx`,import.meta.url));
+    const generated=parse_xgwx(fs.readFileSync(new URL(`./fixtures/text-programs/cpu/${stem}-generated.xgwx`,import.meta.url)));
+    const saved=fs.readFileSync(new URL(`./fixtures/text-programs/cpu/${stem}-native.xgwx`,import.meta.url));
     assert.deepEqual(parse_xgwx(saved).textPrograms,generated.textPrograms);
     const reversed=parse_xgwx(select_xgwx_cpu(saved,'XGI-CPUE'));
     assert.equal(reversed.cpu.model,'XGI-CPUE');assert.deepEqual(reversed.textPrograms,generated.textPrograms);

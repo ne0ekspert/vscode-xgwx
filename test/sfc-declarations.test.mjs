@@ -2,7 +2,7 @@ import test from 'node:test';import assert from 'node:assert/strict';import fs f
 import {parseSfcArrayBounds,sfcDeclarationType} from '../media/sfc-declarations.js';
 import init,{parse_xgwx,edit_xgwx_sfc_variable} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const fixture=name=>fs.readFileSync(new URL(`../../libxgwx/fixtures/sfc/${name}.xgwx`,import.meta.url));
+const fixture=name=>fs.readFileSync(new URL(`./fixtures/sfc/${name}.xgwx`,import.meta.url));
 test('inclusive array input rejects invalid bounds and distinguishes element types',()=>{
  assert.deepEqual(parseSfcArrayBounds('0..1, 0..2'),[{lower:0,upper:1},{lower:0,upper:2}]);
  for(const invalid of ['1..2','-1..2','3..2','0..65536','0..255,0..256','0..1,0..1,0..1,0..1','0...2'])assert.throws(()=>parseSfcArrayBounds(invalid));

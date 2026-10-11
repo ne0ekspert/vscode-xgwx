@@ -25,7 +25,7 @@ import fs from 'node:fs';
 import init,{parse_xgwx,replace_xgwx_sfc_sequence} from '../media/libxgwx.js';
 import {sfcRowsAfterDelete,sfcAddPath,sfcExtendPaths} from '../media/sfc.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
-const fixture=name=>fs.readFileSync(new URL(`../../libxgwx/fixtures/sfc/${name}.xgwx`,import.meta.url));
+const fixture=name=>fs.readFileSync(new URL(`./fixtures/sfc/${name}.xgwx`,import.meta.url));
 const block=bytes=>parse_xgwx(bytes).sfc[0].blocks[0];
 const apply=(bytes,rows)=>{const b=block(bytes);return replace_xgwx_sfc_sequence(bytes,{programIndex:0,blockIndex:0,expectedEntities:b.entities,expectedRows:b.editableRows,rows});};
 test('native mixed stacks survive individual edits, reordering, and deletion through WASM',()=>{

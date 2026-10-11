@@ -26,7 +26,7 @@ test('symbol, FB direction, literal type and static array checks are bounded',()
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
 test('native validated SFC ST fixtures have no local diagnostics',()=>{
  for(const name of ['st-programs-native-roundtrip','declarations-roundtrip','multi-action-branch-roundtrip','clipboard-branch-roundtrip']){
-  const sfc=parse_xgwx(fs.readFileSync(new URL(`../../libxgwx/fixtures/sfc/${name}.xgwx`,import.meta.url))).sfc[0];
+  const sfc=parse_xgwx(fs.readFileSync(new URL(`./fixtures/sfc/${name}.xgwx`,import.meta.url))).sfc[0];
   for(const b of sfc.blocks)for(const r of b.editableRows || [])for(const key of ['actionCode','transitionCode'])if(r[key]!=null)assert.deepEqual(diagnoseSt(r[key],sfc.variables,{transition:key==='transitionCode'}),[],`${name} ${r.title} ${key}`);
  }
 });
