@@ -77,3 +77,12 @@ test('global names/comments grow and shrink while later variable fields stay int
   assert.equal(parse_xgwx(combined).variables[0].address, 'P0002A');
   assert.throws(() => update_xgwx_variable(source, 0, { description: 'x'.repeat(256) }), /255/);
 });
+
+test('selected global writes reject ambiguous tables and record-marker names',async()=>{
+  const {gzipSync}=await import('node:zlib');
+  const bytes=Buffer.concat([Buffer.from('XG'),gzipSync('<Project><Symbols/><Symbols/></Project>')]);
+  assert.throws(()=>update_xgwx_variable(bytes,0,{description:'Changed'}),/multiple symbol tables/);
+  const before=parse_xgwx(source);
+  assert.throws(()=>update_xgwx_variable(source,0,{name:'SV5.0'}));
+  assert.deepEqual(parse_xgwx(source),before);
+});

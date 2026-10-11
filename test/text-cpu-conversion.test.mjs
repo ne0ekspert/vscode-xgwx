@@ -42,3 +42,11 @@ test('native saves for every converted CPU preserve ST/IL semantics and convert 
     assert.equal(reversed.cpu.model,'XGI-CPUE');assert.deepEqual(reversed.textPrograms,generated.textPrograms);
   }
 });
+
+test('selected CPU writes retain the single-configuration guard even for the current model',async()=>{
+  const {gzipSync}=await import('node:zlib');
+  const bytes=Buffer.concat([Buffer.from('XG'),gzipSync('<Project><Configuration Type="17">PLC</Configuration><Configuration Type="17">PLC</Configuration></Project>')]);
+  const before=parse_xgwx(bytes);
+  assert.throws(()=>select_xgwx_cpu(bytes,'XGK-CPUSN'),/exactly one Configuration/i);
+  assert.deepEqual(parse_xgwx(bytes),before);
+});
