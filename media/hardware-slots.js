@@ -24,3 +24,17 @@ export function hardwareSlotRows(base, slotCount, modules, slotSpan) {
 export function occupiedSlotCount(modules, slotCount, slotSpan) {
   return hardwareSlotRows(null, slotCount, modules, slotSpan).filter((row) => row.module).length;
 }
+
+// Base record identity is distinct from its PLC-local native base number.
+export function baseRecordIndex(base, index) {
+  return base.baseIndex ?? index;
+}
+
+export function installedBaseModules(base, hardware) {
+  if (Array.isArray(base?.modules)) {
+    // Multiple network memberships can point at the same installed hardware.
+    const installed = base.modules.flatMap(module => module.hardware ? [module.hardware] : []);
+    return [...new Map(installed.map(module => [JSON.stringify(module), module])).values()];
+  }
+  return (hardware.modules || []).filter(module => module.base === base?.base);
+}

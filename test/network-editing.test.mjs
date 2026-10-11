@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import test from 'node:test';
 import init,{create_xgwx_project,parse_xgwx,insert_xgwx_module,edit_xgwx_fenet_field,edit_xgwx_browser_network} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
+test('hardware JSON keeps installed module fields with the new Rust module API',()=>{
+  let bytes=create_xgwx_project('XGK-CPUSN','LD');
+  bytes=insert_xgwx_module(bytes,0,0,'XGL-EFMT(B)');
+  bytes=insert_xgwx_module(bytes,0,1,'XGL-EFMT(B)');
+  const summary=parse_xgwx(bytes);
+  assert.equal(summary.counts.modules,2);
+  assert.deepEqual(summary.hardware.modules.map(m=>[m.base,m.slot,m.id]),[[0,0,23041],[0,1,23041]]);
+  assert.ok(summary.hardware.modules.every(m=>typeof m.name==='string' && !('Network' in m)));
+  assert.equal(summary.networks.flatMap(n=>n.modules).length,2);
+});
 test('FEnet address and DHCP edits preserve the second module and ladder',()=>{
   let bytes=create_xgwx_project('XGK-CPUSN','LD');
   bytes=insert_xgwx_module(bytes,0,0,'XGL-EFMT(B)');bytes=insert_xgwx_module(bytes,0,1,'XGL-EFMT(B)');
@@ -39,4 +49,28 @@ test('Native timeout units are exposed and retained through count edits',()=>{
   assert.equal(after.fenet[0].clientWaitTimeUnit,1);
   assert.equal(after.fenet[0].rcvWaitTimeUnit,1);
   assert.deepEqual(after.fenet[1],before.fenet[1]);
+});
+
+test('base modules carry typed hardware and uniquely matched network settings',()=>{
+  let bytes=create_xgwx_project('XGK-CPUSN','LD');
+  bytes=insert_xgwx_module(bytes,0,0,'XGL-EFMT(B)');
+  const {hardware}=parse_xgwx(bytes);
+  const base=hardware.bases.find(b=>b.base===0);
+  assert.equal(base.baseIndex,0);
+  assert.equal(base.configurationIndex,0);
+  const module=base.modules.find(m=>m.hardware?.id===23041);
+  assert.equal(module.kind,'network');
+  assert.equal(module.configurationIndex,0);
+  assert.equal(module.configuration.status,'matched');
+  assert.equal(module.configuration.settings.kind,'fenet');
+  assert.equal(module.configuration.settings.value.ipAddress,'192.168.0.100');
+});
+
+test('serialized base modules retain configuration scope when base numbers repeat',async()=>{
+  const {gzipSync}=await import('node:zlib');
+  const xml='<Project><Configuration>A<Base Base="0" SlotCount="4"><Module Base="0" Slot="0" Id="42242" SubType="0"/></Base></Configuration><Configuration>B<Base Base="0" SlotCount="8"><Module Base="0" Slot="1" Id="999999" SubType="0"/></Base></Configuration></Project>';
+  const summary=parse_xgwx(Buffer.concat([Buffer.from('XG'),gzipSync(xml)]));
+  assert.deepEqual(summary.hardware.bases.map(b=>[b.baseIndex,b.configurationIndex,b.base,b.slotCount]),[[0,0,0,4],[1,1,0,8]]);
+  assert.deepEqual(summary.hardware.bases.map(b=>b.modules.map(m=>[m.kind,m.hardware.slot,m.hardware.id])),[[['io',0,42242]],[['other',1,999999]]]);
+  assert.equal(summary.hardware.typedModules.length,2);
 });

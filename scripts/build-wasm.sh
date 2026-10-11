@@ -9,6 +9,10 @@ if [[ -z "${LIBXGWX_DIR:-}" || ! -f "$LIBXGWX_DIR/Cargo.toml" ]]; then
   exit 1
 fi
 library_dir="$(cd "$LIBXGWX_DIR" && pwd)"
+artifact_dir="${CARGO_TARGET_DIR:-$library_dir/target}"
+if [[ "$artifact_dir" != /* ]]; then
+  artifact_dir="$(pwd)/$artifact_dir"
+fi
 package_dir="$library_dir/web/dist/pkg"
 output_dir="$extension_dir/media"
 wasm_pack="${WASM_PACK:-$HOME/.cargo/bin/wasm-pack}"
@@ -68,7 +72,7 @@ if [[ -x "$wasm_pack" ]]; then
       --features wasm,write,il \
       --no-default-features
     "$wasm_bindgen" \
-      "$library_dir/target/wasm32-unknown-unknown/release/xgwx.wasm" \
+      "$artifact_dir/wasm32-unknown-unknown/release/xgwx.wasm" \
       --target web \
       --out-dir "$build_dir" \
       --out-name libxgwx

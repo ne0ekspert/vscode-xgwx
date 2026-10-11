@@ -1729,3 +1729,12 @@ including LOAD, OUT, AND NOT, LOADP and LOADN. The editor reports recognized XGK
 mnemonics in IEC IL source; it does not automatically translate instructions.
 In particular, XGK ANDN is a falling-edge contact while IEC IL ANDN means
 negated AND. The CPU picker changes XGI models and preserves the existing dialect.
+
+The hardware browser identifies bases by document record index. Each base reads
+its installed modules from the library's scoped `base.modules()` inventory, so
+repeated native base numbers in different PLC configurations stay separate.
+The WASM summary exposes `hardware.bases[].baseIndex`, `configurationIndex`, and
+`modules`, plus the complete `hardware.typedModules` inventory. Typed entries
+retain their I/O category, network membership, and matched/missing/ambiguous
+configuration status. Hardware write coordinates remain native base/slot values;
+editing continues to require a single supported XGK configuration.

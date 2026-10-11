@@ -1,3 +1,4 @@
+import { baseRecordIndex, installedBaseModules } from "./hardware-slots.js";
 import { explorerNodes } from "./explorer-model.js";
 import { renderStTextEditor } from "./st-editor.js";
 import { actionGroup } from "./sfc-actions.js";
@@ -189,6 +190,7 @@ let moduleCatalog = [];
 let cpuCatalog = [];
 let activeView = "overview";
 let selectedBase = null;
+let selectedBaseIndex = null;
 let selectedModule = null;
 let selectedHardwareSlot = null;
 let selectedProgramIndex = 0;
@@ -264,6 +266,7 @@ window.addEventListener("message", async ({ data }) => {
       return;
     }
     if (target.view === "hardware") {
+      selectedBaseIndex = target.baseIndex ?? 0;
       selectedBase = target.base ?? current.summary.hardware?.bases?.[0]?.base ?? null;
       selectedModule = null; selectedHardwareSlot = null;
     }
@@ -328,9 +331,13 @@ async function loadWorkspace(file) {
     dirty = Boolean(file.dirty);
     const modules = summary.hardware?.modules || [];
     const bases = summary.hardware?.bases || [];
-    if (activeView === "hardware" && !bases.some((base) => base.base === selectedBase)) {
+    if (activeView === "hardware" && !bases.some((base, index) => baseRecordIndex(base, index) === selectedBaseIndex)) {
+      selectedBaseIndex = bases.length ? baseRecordIndex(bases[0], 0) : null;
       selectedBase = bases[0]?.base ?? null;
       if (selectedBase === null) activeView = "overview";
+    }
+    if (activeView === "hardware") {
+      selectedBase = bases.find((base, index) => baseRecordIndex(base, index) === selectedBaseIndex)?.base ?? null;
     }
     selectedModule = modules.find((module) => module.inputFilter) || modules[0] || null;
     selectedHardwareSlot = selectedModule?.slot ?? null;
@@ -346,7 +353,7 @@ function renderWorkspace() {
   closeLadderOverlay();
   const { file, summary } = current;
   vscode.postMessage({ type: "explorerState", state: explorerNodes(file, summary, {
-    view: activeView, base: selectedBase, programIndex: selectedProgramIndex,
+    view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
     networkIndex: selectedNetworkIndex, networkModuleKey: selectedNetworkModuleKey,
   }) });
   const oldShell = app.querySelector(".editor-shell");
@@ -523,9 +530,8 @@ function showIoVariableGeneration(canvas) {
 }
 
 function renderHardwareEditor(canvas, inspector, hardware) {
-  const allModules = hardware.modules || [];
-  const baseModules = allModules.filter((module) => module.base === selectedBase);
-  const base = (hardware.bases || []).find((item) => item.base === selectedBase);
+  const base = (hardware.bases || []).find((item, index) => baseRecordIndex(item, index) === selectedBaseIndex);
+  const baseModules = installedBaseModules(base, hardware);
   const slotCount = baseSlotCount(base, baseModules, moduleSlotSpan);
   if (selectedHardwareSlot === null || selectedHardwareSlot < 0 || selectedHardwareSlot >= slotCount) {
     selectedHardwareSlot = slotCount > 0 ? 0 : null;

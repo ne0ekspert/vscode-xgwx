@@ -54,3 +54,22 @@ test('native drag routes program reorder by identity and rejects cross-document 
   await explorer.handleDrop(explorer.nodes.get('program:b'),transfer);
   assert.equal(calls.length,1);
 });
+
+test('base navigation uses record identity and scoped installed modules',()=>{
+  const scoped={hardware:{bases:[
+    {base:0,baseIndex:0,configurationIndex:0,modules:[{kind:'io',hardware:{base:0,slot:0,id:1}}]},
+    {base:0,baseIndex:1,configurationIndex:1,modules:[{kind:'network',hardware:null},{kind:'other',hardware:{base:0,slot:1,id:2}}]},
+  ],modules:[{base:0,slot:0,id:1},{base:0,slot:1,id:2}]}};
+  const state=explorerNodes(file,scoped,{view:'hardware',base:0,baseIndex:1});
+  assert.equal(state.selectedId,'base:1');
+  assert.deepEqual(state.nodes[1].children.map(row=>[row.id,row.label]),[['base:0','Base 0 · PLC 0 (1)'],['base:1','Base 0 · PLC 1 (1)']]);
+  assert.deepEqual(state.nodes[1].children[1].target,{view:'hardware',base:0,baseIndex:1});
+});
+
+test('network aliases do not become additional occupied hardware slots',()=>{
+  const module={base:0,slot:1,id:7};
+  const scoped={hardware:{bases:[{base:0,baseIndex:0,modules:[
+    {kind:'network',hardware:module},{kind:'network',hardware:{...module}},
+  ]}],modules:[module]}};
+  assert.equal(explorerNodes(file,scoped,{view:'hardware',baseIndex:0}).nodes[1].children[0].label,'Base 0 (1)');
+});

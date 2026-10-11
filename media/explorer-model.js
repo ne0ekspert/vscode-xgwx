@@ -1,3 +1,4 @@
+import { baseRecordIndex, installedBaseModules } from "./hardware-slots.js";
 // Only navigation metadata crosses into the extension host; workspace bytes stay in the editor.
 export function explorerNodes(file, summary, selection) {
   const leaf = (id, label, icon, target, contextValue) => ({ id, label, icon, target, contextValue });
@@ -5,8 +6,8 @@ export function explorerNodes(file, summary, selection) {
   const hardware = summary.hardware || {};
   const nodes = [
     leaf("overview", "Workspace", "settings-gear", { view: "overview" }),
-    group("hardware", "Hardware", "circuit-board", (hardware.bases || []).map(base =>
-      leaf(`base:${base.base}`, `Base ${base.base} (${(hardware.modules || []).filter(module => module.base === base.base).length})`, "server", { view: "hardware", base: base.base })), { view: "hardware" }),
+    group("hardware", "Hardware", "circuit-board", (hardware.bases || []).map((base, index) =>
+      leaf(`base:${baseRecordIndex(base, index)}`, `Base ${base.base}${(hardware.bases || []).some(other => other !== base && other.base === base.base) ? ` · PLC ${base.configurationIndex ?? "unassigned"}` : ""} (${installedBaseModules(base, hardware).length})`, "server", { view: "hardware", base: base.base, baseIndex: baseRecordIndex(base, index) })), { view: "hardware" }),
     group("programs", `Programs (${summary.programs?.length || 0})`, "code", (summary.programs || []).map((program, index) =>
       leaf(`program:${program.objectId || index}`, program.name || `Program ${index + 1}`, "code", { view: "programs", programIndex: index, objectId: program.objectId }, program.objectId ? "xgwxProgram" : undefined)), { view: "programs" }, summary.programLanguages?.length ? "xgwxPrograms" : undefined),
     group("networks", `Networks (${summary.networks?.length || 0})`, "git-branch", (summary.networks || []).map((network, index) =>
@@ -18,7 +19,7 @@ export function explorerNodes(file, summary, selection) {
     leaf("variables", `Variables (${summary.counts?.variables || 0})`, "symbol-variable", { view: "variables" }),
     leaf("parameters", `Parameters (${summary.parameters?.length || 0})`, "settings", { view: "parameters" }),
   ];
-  const selectedId = selection.view === "hardware" ? `base:${selection.base}`
+  const selectedId = selection.view === "hardware" ? `base:${selection.baseIndex ?? (hardware.bases || []).findIndex(base => base.base === selection.base)}`
     : selection.view === "programs" && summary.programs?.[selection.programIndex] ? `program:${summary.programs[selection.programIndex].objectId || selection.programIndex}`
     : selection.view === "networks" ? `network:${selection.networkIndex}${selection.networkModuleKey ? `:${selection.networkModuleKey}` : ""}` : selection.view;
   return { uri: file.uri, fileName: file.fileName, nodes, selectedId };
