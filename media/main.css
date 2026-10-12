@@ -1,6 +1,5 @@
 :root {
   color-scheme: light dark;
-  --status-height: 23px;
   --inspector-width: 292px;
   --row-height: 27px;
   --ladder-font-family: "JetBrains Mono", "Liberation Mono", "Noto Sans Mono CJK KR", monospace;
@@ -44,15 +43,12 @@ tr:focus-visible {
 
 .editor-shell {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) var(--status-height);
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background: var(--vscode-editor-background);
 }
 
-.status-section,
-.status-item,
-.status-ready,
 .filter-control {
   display: flex;
   align-items: center;
@@ -1532,51 +1528,6 @@ form.iec-rung-creation {
 
 .iec-instance-editor button {
   width: 100%;
-}
-
-.status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-width: 0;
-  border-top: 1px solid var(--vscode-statusBar-border, transparent);
-  color: var(--vscode-statusBar-foreground);
-  background: var(--vscode-statusBar-background);
-  font-size: 11px;
-}
-
-.status-section {
-  min-width: 0;
-  height: 100%;
-}
-
-.status-item,
-.status-ready {
-  height: 100%;
-  gap: 5px;
-  padding: 0 10px;
-  white-space: nowrap;
-}
-
-.status-item:hover,
-.status-ready:hover {
-  background: var(--vscode-statusBarItem-hoverBackground);
-}
-
-.status-item .icon {
-  width: 13px;
-  height: 13px;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--vscode-testing-iconPassed);
-}
-
-.status-dot.warning {
-  background: var(--vscode-editorWarning-foreground);
 }
 
 .empty-state {

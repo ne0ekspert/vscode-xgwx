@@ -59,7 +59,7 @@ test("uses editor workbench structure without decorative gradients", () => {
   const script = fs.readFileSync(path.join(root, "media/main.js"), "utf8");
   const styles = fs.readFileSync(path.join(root, "media/main.css"), "utf8");
 
-  for (const className of ["editor-shell", "editor-pane", "inspector-pane", "status-bar"]) {
+  for (const className of ["editor-shell", "editor-pane", "inspector-pane"]) {
     assert.match(script, new RegExp(className));
   }
   assert.doesNotMatch(script, /editor-tabs|editor-tab active/);

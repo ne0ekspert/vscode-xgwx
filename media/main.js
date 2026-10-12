@@ -291,10 +291,6 @@ window.addEventListener("message", async ({ data }) => {
     dirty = Boolean(data.dirty);
     if (current && data.type === "reverted") {
       renderWorkspace();
-    } else if (current) {
-      // A save acknowledgment changes status, not the diagram. Rebuilding it
-      // would discard keyboard focus and unfinished inspector input.
-      app.querySelector(".status-bar")?.replaceWith(renderStatusBar(current.summary));
     }
   }
   if (data?.type === "openFind") findController.open();
@@ -371,10 +367,7 @@ function renderWorkspace() {
   const shell = element("div", "editor-shell");
   shell.dataset.view = activeView;
   shell.dataset.programIndex = String(selectedProgramIndex);
-  shell.append(
-    renderWorkbench(file, summary),
-    renderStatusBar(summary),
-  );
+  shell.append(renderWorkbench(file, summary));
   app.append(shell);
   const layout = scroll && shell.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
   if (layout) {
@@ -6927,26 +6920,6 @@ function property(host, label, value, readonly, multiline = false) {
   group.append(control);
   host.append(group);
   return control;
-}
-
-function renderStatusBar(summary) {
-  const bar = element("footer", "status-bar");
-  const left = element("div", "status-section");
-  left.append(statusItem(dirty ? "edit" : "save", dirty ? "Modified" : "Saved"), statusItem("file", "XGWX"), statusItem("program", `${summary.counts?.programs || 0} programs`));
-  const right = element("div", "status-section");
-  const ready = element("span", "status-ready");
-  const hasWarnings = (summary.warnings || []).length > 0;
-  const dot = element("span", `status-dot${hasWarnings ? " warning" : ""}`);
-  ready.append(dot, element("span", "", hasWarnings ? "Parser warnings" : "Parser ready"));
-  right.append(ready);
-  bar.append(left, right);
-  return bar;
-}
-
-function statusItem(iconName, label) {
-  const item = element("span", "status-item");
-  item.append(icon(iconName), element("span", "", label));
-  return item;
 }
 
 function createTable(headers) {
