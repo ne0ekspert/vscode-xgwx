@@ -2,7 +2,7 @@
 export const ilOperators = ['LD','LDN','ST','STN','S','R','AND','ANDN','AND(','ANDN(','OR','ORN','OR(','ORN(','XOR','XORN','XOR(','XORN(','NOT','ADD','ADD(','SUB','SUB(','MUL','MUL(','DIV','DIV(','MOD','MOD(','GT','GE','EQ','NE','LE','LT','JMP','JMPC','JMPCN','CAL','CALC','CALCN','SCAL','RET','RETC','RETCN',')'];
 
 // Preserve source offsets and newlines while excluding comments and literals.
-function ilCode(source) {
+export function ilCode(source) {
   let result='',depth=0,quote=null,line=false;
   for(let i=0;i<source.length;i++) {
     const c=source[i],next=source[i+1];

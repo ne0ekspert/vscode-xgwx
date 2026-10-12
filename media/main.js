@@ -1,4 +1,4 @@
-import { createFindController } from "./find.js";
+import { createFindController, createProgramFindRanges } from "./find.js";
 import { baseRecordIndex, installedBaseModules } from "./hardware-slots.js";
 import { explorerNodes } from "./explorer-model.js";
 import { renderStTextEditor } from "./st-editor.js";
@@ -484,7 +484,10 @@ function renderEditor(editor, summary, inspector) {
 
   editor.append(canvas);
   findController.bind(["programs", "variables"].includes(activeView) ? canvas : null,
-    `${current.file.uri}:${activeView}:${selectedProgramIndex}`, canvas.findOptions);
+    `${current.file.uri}:${activeView}:${selectedProgramIndex}`, {
+      ...canvas.findOptions,
+      ...(activeView === "programs" ? {findRanges: createProgramFindRanges(summary, selectedProgramIndex)} : {}),
+    });
 }
 
 function showIoVariableGeneration(canvas) {
@@ -1209,10 +1212,6 @@ function renderProgramsEditor(canvas, inspector, programs) {
       renderProgramInspector(inspector, selected, ladder, null, null, null, null,
         position.rowIndex, selectedIecBlank);
     }));
-    const records = document.createElement("details");
-    records.className = "iec-records-details";
-    records.append(element("summary", "", "Stored IEC records"), renderIecProgramSource(ladder));
-    canvas.append(records);
     renderProgramInspector(inspector, selected, ladder, selectedElement, null, null,
       selectedInsertion, selectedRow, selectedBlank);
     return;
@@ -1668,26 +1667,6 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       && selectedIecInsertion.wireOffset === site.wireOffset);
     board.append(control);
   }
-  const focusText = (item) => {
-    const records = section.parentElement?.querySelector(".iec-records-details");
-    if (records) records.open = true;
-    const offset = item.offset;
-    const target = section.parentElement?.querySelector(`[data-iec-offset="${offset}"]`);
-    if (!target) return;
-    if (target.hidden) {
-      const filter = section.parentElement.querySelector(".iec-program-source .filter-control input");
-      if (filter) {
-        filter.value = "";
-        filter.dispatchEvent(new Event("input"));
-      }
-    }
-    target.scrollIntoView({ block: "center" });
-    if (item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction) {
-      target.querySelector("button")?.click();
-    } else {
-      target.focus({ preventScroll: true });
-    }
-  };
   const blockByNameOffset = new Map((body.iecFunctions || []).map((block) => [block.nameOffset, block]));
   const blockByOffset = new Map((body.iecFunctions || []).map((block) => [block.recordOffset, block]));
   const linkByRecord = new Map((body.iecFunctionOperandLinks || []).map((link) => [link.recordOffset, link]));
@@ -1712,7 +1691,6 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       board.querySelectorAll(".iec-layout-marker.selected").forEach(node => node.classList.remove("selected"));
       if (["contact","coil","function","operand"].includes(kind)) marker.classList.add("selected");
       if (["contact","coil","comment","function"].includes(kind)) selectElement(item, marker);
-      if (kind === "unknown") focusText(item);
     });
     if (["contact","coil","function"].includes(kind)) {
       deleteTargets.set(marker,{offset:item.iecRecordOffset,position:{rowIndex:item.iecRowIndex,rawX:item.iecPosition?.[0] ?? 1},remove:(bytes,updated) => deleteIecElementBytes(bytes,item,updated)});
@@ -1758,6 +1736,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     marker.title = `${description} · L${item.iecRowIndex} · byte ${item.offset}`
       + (isOperand ? " · Double-click or Enter to edit value" + (link?.isOutput && linkedPin?.name === "OUT" ? " · Delete or Backspace removes assignment" : "")
         : ["contact", "coil", "function"].includes(kind) ? " · Double-click or Enter to edit instruction" : "");
+    marker.dataset.findText = item.value;
     marker.dataset.iecOffset = String(item.offset);
     marker.dataset.rowIndex = String(item.iecRowIndex);
     marker.dataset.rawX = String(item.iecPosition?.[0] ?? 1);
@@ -2470,299 +2449,6 @@ function functionPins(block) {
 function functionPinType(pin) {
   if (!pin) return "unknown type";
   return pin.typeExpression || pin.dataType || `type mask 0x${pin.dataTypeMask.toString(16)}`;
-}
-
-function renderIecProgramSource(body) {
-  const section = element("section", "iec-program-source");
-  const strings = body.sourceStrings || [];
-  const functionByOffset = new Map((body.iecFunctions || []).map((block) => [block.recordOffset, block]));
-  const terminalFunctionDeletionByOffset = new Map(
-    (body.iecTerminalFunctionDeletionSites || []).map((site) => [site.blockOffset, site]),
-  );
-  const standaloneFunctionDeletionByOffset = new Map(
-    (body.iecStandaloneFunctionDeletionSites || []).map((site) => [site.blockOffset, site]),
-  );
-  const functionCellDeletionByOffset = new Map(
-    (body.iecFunctionCellDeletionSites || []).map((site) => [site.blockOffset, site]),
-  );
-  const connectedArithmeticDeletionByOffset = new Map(
-    (body.iecConnectedArithmeticDeletionSites || []).map((site) => [site.blockOffset, site]),
-  );
-  const pinByRecord = new Map((body.iecFunctionOperandLinks || []).map((link) => [link.recordOffset, link]));
-  const toolbar = element("div", "editor-toolbar");
-  const searchWrap = element("label", "filter-control");
-  searchWrap.append(icon("search"));
-  const search = document.createElement("input");
-  search.type = "search";
-  search.placeholder = "Filter stored text…";
-  search.setAttribute("aria-label", "Filter program text");
-  searchWrap.append(search);
-  const count = element("span", "toolbar-summary", `${strings.length} fragments`);
-  toolbar.append(searchWrap, count);
-  section.append(toolbar);
-
-  const table = createTable(["Byte offset", "Type", "Stored text", "IEC position", "Stored row", "Edit", "Element kind", "Block pin"]);
-  const rows = strings.map((item) => {
-    const row = table.tBodies[0].insertRow();
-    row.dataset.iecOffset = String(item.offset);
-    row.tabIndex = -1;
-    const kind = item.isIecComment ? "Comment" : item.iecElementKind || (item.isIecFunctionOperand ? "Function operand expression" : item.isIecArithmeticFunction ? "Arithmetic function block" : item.isIecComparisonFunction ? "Comparison function block" : item.isIecFunctionName ? "IEC function block" : item.isIecFunctionInstance ? "Function instance" : item.iecRecordKind === "Function block" ? "Function block field" : "Unclassified");
-    const position = item.iecPosition ? `x ${item.iecPosition[0]}, y ${item.iecPosition[1]}` : "—";
-    const storedRow = item.iecRowIndex == null ? "—" : `L${item.iecRowIndex} · group ${item.iecGroupIndex + 1}`;
-    appendCells(row, [item.offset, kind, item.value, position, storedRow]);
-    const action = row.insertCell();
-    const typeAction = row.insertCell();
-    const pin = pinByRecord.get(item.iecRecordOffset);
-    const block = pin && functionByOffset.get(pin.targetRecordOffset);
-    const decodedPin = block && functionPins(block).find((candidate) => candidate.referenceOrdinal === pin.ordinal);
-    const pinLabel = block ? `${block.name}.${decodedPin?.name || `pin ${pin.ordinal}`} · ${functionPinType(decodedPin)}` : "—";
-    row.insertCell().textContent = pinLabel;
-    if (item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction) {
-      const editButton = () => {
-        const control = button("Edit", "secondary-button", openEditor);
-        control.textContent = "Edit";
-        return control;
-      };
-      const openEditor = () => {
-        const textCell = row.cells[2];
-        const editor = element("div", "iec-comment-editor");
-        const input = document.createElement("textarea");
-        input.value = item.value;
-        input.rows = Math.min(5, Math.max(2, Math.ceil(item.value.length / 65)));
-        input.setAttribute("aria-label", `Edit IEC ${kind.toLowerCase()} at byte ${item.offset}`);
-        const length = element("span", "muted");
-        const save = button(`Save ${kind.toLowerCase()}`, "primary-button", async () => {
-          await applyEdit(
-            () => (item.isIecComment ? update_xgwx_iec_ld_comment
-              : item.iecElementKind ? update_xgwx_iec_ld_element_operand
-                : item.isIecFunctionOperand ? update_xgwx_iec_ld_function_operand
-                  : item.isIecArithmeticFunction ? update_xgwx_iec_ld_arithmetic_function
-                    : update_xgwx_iec_ld_comparison_function)(current.file.bytes, selectedProgramIndex,
-              item.offset, item.value, input.value),
-            `Edit IEC ${kind.toLowerCase()}`,
-          );
-        });
-        const cancel = button("Cancel", "secondary-button", () => {
-          textCell.textContent = item.value;
-          action.replaceChildren(editButton());
-        });
-        save.textContent = "Save";
-        cancel.textContent = "Cancel";
-        const validate = () => {
-          const actual = input.value.length;
-          length.textContent = item.isIecArithmeticFunction ? "Choose ADD, SUB, MUL, or DIV"
-            : item.isIecComparisonFunction ? "Choose EQ, GT, GE, LT, or LE"
-              : `${actual}/255 UTF-16 units`;
-          save.disabled = item.isIecArithmeticFunction
-            ? !["ADD", "SUB", "MUL", "DIV"].includes(input.value)
-            : item.isIecComparisonFunction
-              ? !["EQ", "GT", "GE", "LT", "LE"].includes(input.value)
-              : actual > 255 || !input.value.trim() || /[\p{Cc}]/u.test(input.value);
-        };
-        input.addEventListener("input", validate);
-        validate();
-        editor.append(input, length, save, cancel);
-        textCell.replaceChildren(editor);
-        action.replaceChildren();
-        input.focus();
-        input.select();
-      };
-      action.append(editButton());
-      const expectedContactKind = IEC_CONTACT_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
-      const expectedCoilKind = IEC_COIL_KIND_BY_SOURCE_LABEL.get(item.iecElementKind);
-      const expectedKind = expectedContactKind || expectedCoilKind;
-      if (expectedKind) {
-        const isContact = Boolean(expectedContactKind);
-        const kindSelect = document.createElement("select");
-        kindSelect.setAttribute("aria-label", `${isContact ? "Contact" : "Coil"} kind for ${item.value}`);
-        const choices = isContact ? IEC_ADDRESSED_CONTACT_CHOICES : IEC_COIL_KIND_CHOICES;
-        for (const [value, label] of choices) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = label;
-          option.selected = value === expectedKind;
-          kindSelect.append(option);
-        }
-        const kindButton = button("Apply kind", "secondary-button", async () => {
-          const replacement = kindSelect.value;
-          await applyEdit(
-            () => (isContact
-              ? update_xgwx_iec_ld_contact_kind
-              : update_xgwx_iec_ld_coil_kind)(current.file.bytes, selectedProgramIndex,
-              item.offset, expectedKind, replacement),
-            `Change IEC ${isContact ? "contact" : "coil"} to ${replacement}`,
-          );
-        });
-        const validateKind = () => { kindButton.disabled = kindSelect.value === expectedKind; };
-        kindSelect.addEventListener("change", validateKind);
-        validateKind();
-        typeAction.append(kindSelect, kindButton);
-      }
-    }
-    if (item.isIecFunctionInstance && functionByOffset.has(item.iecRecordOffset)) {
-      const block = functionByOffset.get(item.iecRecordOffset);
-      const existingNames = new Set((current.summary.localVariables?.[selectedProgramIndex] || [])
-        .map((symbol) => symbol.name.toLocaleLowerCase()));
-      const startEdit = () => {
-        const editor = element("div", "iec-instance-editor");
-        const input = document.createElement("input");
-        input.type = "text";
-        input.setAttribute("aria-label", `New instance for ${block.name} at L${block.rowIndex}`);
-        let suffix = 2;
-        do {
-          input.value = `${item.value}_${suffix++}`;
-        } while (existingNames.has(input.value.toLocaleLowerCase()));
-        const apply = button("Create instance", "primary-button", async () => {
-          await applyEdit(
-            () => duplicate_xgwx_iec_ld_function_instance(
-              current.file.bytes, selectedProgramIndex, item.iecRecordOffset, item.value, input.value,
-            ),
-            `Create IEC ${block.name} instance ${input.value} at L${block.rowIndex}`,
-          );
-        });
-        const cancel = button("Cancel", "secondary-button", () => action.replaceChildren(openButton()));
-        apply.textContent = "Create";
-        cancel.textContent = "Cancel";
-        const validate = () => {
-          apply.disabled = input.value.length > 255
-            || !/^[\p{L}_][\p{L}\p{N}_]*$/u.test(input.value)
-            || existingNames.has(input.value.toLocaleLowerCase());
-        };
-        input.addEventListener("input", validate);
-        validate();
-        editor.append(input, apply, cancel);
-        action.replaceChildren(editor);
-        input.focus();
-        input.select();
-      };
-      const openButton = () => {
-        const control = button("Separate instance", "secondary-button", startEdit);
-        control.textContent = "Separate instance";
-        return control;
-      };
-      action.append(openButton());
-    }
-    const terminalFunctionDeletion = item.isIecFunctionName
-      ? terminalFunctionDeletionByOffset.get(item.iecRecordOffset)
-      : null;
-    const standaloneFunctionDeletion = item.isIecFunctionName
-      ? standaloneFunctionDeletionByOffset.get(item.iecRecordOffset)
-      : null;
-    const functionCellDeletion = item.isIecFunctionName
-      ? functionCellDeletionByOffset.get(item.iecRecordOffset)
-      : null;
-    const connectedArithmeticDeletion = item.isIecFunctionName
-      ? connectedArithmeticDeletionByOffset.get(item.iecRecordOffset)
-      : null;
-    const eqChainHeadDeletion = selectedProgramIndex === 0
-      && item.isIecFunctionName && item.iecGroupIndex === 33
-      && item.iecRowIndex === 67 && item.value === "EQ"
-      ? { blockOffset: item.iecRecordOffset, rowIndex: 67 }
-      : null;
-    const heatingDeletionKind = item.isIecFunctionName && item.value === "EQ"
-      && item.iecPosition?.[0] === 19
-      ? [
-        ["head", delete_xgwx_iec_ld_heating_chain_head],
-        ["middle", delete_xgwx_iec_ld_heating_chain_middle],
-        ["x3", delete_xgwx_iec_ld_heating_chain_x3_eq_repaired],
-        ["contact", delete_xgwx_iec_ld_heating_chain_contact_eq],
-        ["x15", delete_xgwx_iec_ld_heating_chain_x15_eq],
-      ].find(([, deleteFunction]) => {
-        try {
-          deleteFunction(current.file.bytes, selectedProgramIndex, item.iecRecordOffset, item.value);
-          return true;
-        } catch { return false; }
-      })?.[0]
-      : null;
-    const heatingDeletion = heatingDeletionKind
-      ? { blockOffset: item.iecRecordOffset, rowIndex: item.iecRowIndex }
-      : null;
-    const heatingChainHeadDeletion = heatingDeletionKind === "head" && heatingDeletion;
-    const heatingChainMiddleDeletion = heatingDeletionKind === "middle" && heatingDeletion;
-    const heatingChainX3Deletion = heatingDeletionKind === "x3" && heatingDeletion;
-    const heatingChainContactDeletion = heatingDeletionKind === "contact" && heatingDeletion;
-    const heatingChainX15Deletion = heatingDeletionKind === "x15" && heatingDeletion;
-    const branchedArithmeticDeletion = item.isIecFunctionName && ["ADD", "SUB", "MUL", "DIV"].includes(item.value)
-      ? (() => {
-        try {
-          delete_xgwx_iec_ld_branched_arithmetic(current.file.bytes, selectedProgramIndex, item.iecRecordOffset, item.value);
-          return { blockOffset: item.iecRecordOffset, rowIndex: item.iecRowIndex };
-        } catch { return null; }
-      })() : null;
-    const functionDeletion = branchedArithmeticDeletion || terminalFunctionDeletion || standaloneFunctionDeletion || functionCellDeletion || connectedArithmeticDeletion || eqChainHeadDeletion || heatingChainHeadDeletion || heatingChainMiddleDeletion || heatingChainX3Deletion || heatingChainContactDeletion || heatingChainX15Deletion;
-    if (functionDeletion) {
-      const functionBlock = functionByOffset.get(functionDeletion.blockOffset);
-      if (functionBlock?.name === item.value) {
-        const deleteButton = button("Delete block", "secondary-button", async () => {
-          await applyEdit(
-            () => (branchedArithmeticDeletion
-              ? delete_xgwx_iec_ld_branched_arithmetic
-              : terminalFunctionDeletion
-              ? delete_xgwx_iec_ld_terminal_function
-              : standaloneFunctionDeletion
-                ? delete_xgwx_iec_ld_standalone_function
-                : functionCellDeletion
-                  ? delete_xgwx_iec_ld_function_cell
-                  : connectedArithmeticDeletion
-                    ? delete_xgwx_iec_ld_connected_arithmetic
-                    : eqChainHeadDeletion
-                      ? delete_xgwx_iec_ld_eq_chain_head
-                    : heatingChainHeadDeletion
-                        ? delete_xgwx_iec_ld_heating_chain_head
-                        : heatingChainMiddleDeletion
-                          ? delete_xgwx_iec_ld_heating_chain_middle
-                          : heatingChainX3Deletion
-                            ? delete_xgwx_iec_ld_heating_chain_x3_eq_repaired
-                            : heatingChainContactDeletion
-                              ? delete_xgwx_iec_ld_heating_chain_contact_eq
-                              : delete_xgwx_iec_ld_heating_chain_x15_eq)(
-              current.file.bytes,
-              selectedProgramIndex,
-              functionDeletion.blockOffset,
-              functionBlock.name,
-            ),
-            `Delete ${terminalFunctionDeletion ? "terminal" : standaloneFunctionDeletion ? "standalone" : "connected"} IEC function ${functionBlock.name} at L${functionDeletion.rowIndex}`,
-          );
-        });
-        deleteButton.textContent = "Delete block";
-        deleteButton.title = branchedArithmeticDeletion
-          ? `Remove ${functionBlock.name} and its pin records, close one row, and retain the external branch spine`
-          : terminalFunctionDeletion
-          ? `Remove ${functionBlock.name}, its preceding wire, and ${functionDeletion.pinCount} pin rows`
-          : standaloneFunctionDeletion
-            ? `Remove the standalone ${functionBlock.name} group and its ${functionDeletion.pinCount + 1} stored rows`
-            : functionCellDeletion
-              ? `Remove ${functionBlock.name} and its ${functionDeletion.pinCount} link record while retaining surrounding row records`
-              : connectedArithmeticDeletion
-                ? `Remove the connected ${functionBlock.name} and its pin records, retaining R_TRIG and MOVE as separate groups`
-                : heatingChainX3Deletion
-                  ? `Remove this EQ and its pin records, then clear the dangling x15 feed`
-                  : heatingChainContactDeletion
-                    ? `Remove this EQ and its x6/x12 contact branches, retaining the x15 feed`
-                    : heatingChainX15Deletion
-                      ? `Remove this EQ and its pin records, retaining the x15 feed`
-                  : `Remove this EQ and its pin records, close one row, and preserve the shared vertical feed`;
-        action.append(deleteButton);
-      }
-    }
-    if (item.isIecFunctionName && (body.iecScalarChainDeletionSites || []).some(site => site.blockOffset === item.iecRecordOffset)) {
-      action.append(button("Delete block", "secondary-button", () => deleteIecFunction(item, body)));
-    }
-    return { row, item };
-  });
-  search.addEventListener("input", () => {
-    const query = search.value.trim().toLocaleLowerCase();
-    let matches = 0;
-    for (const { row, item } of rows) {
-      const pin = pinByRecord.get(item.iecRecordOffset);
-      const block = pin && functionByOffset.get(pin.targetRecordOffset);
-      row.hidden = Boolean(query) && !`${item.offset} ${item.value} L${item.iecRowIndex ?? ""} ${block?.name || ""}`.toLocaleLowerCase().includes(query);
-      if (!row.hidden) matches += 1;
-    }
-    count.textContent = query ? `${matches} of ${strings.length} fragments` : `${strings.length} fragments`;
-  });
-  section.append(tableContainer(table, strings.length));
-  return section;
 }
 
 function renderIecNetworkDeletion(body) {
@@ -4986,6 +4672,7 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     if (rowIndex === undefined) return;
     const position = { rawY: cell.rawY, rowIndex: rungNumbers.get(cell.rawY), column: ldCellColumn(cell.rawX) };
     const node = button(ldCellAriaLabel(cell, rungNumbers.get(cell.rawY)), `ld-cell ${ldCellClass(cell)}`, () => {});
+    node.dataset.findText = [cell.value || ldMarkerLabel(cell), ...(cell.operands || [])].filter(Boolean).join(" ");
     node.dataset.cellOffset = String(cell.offset);
     bindSelection(node, position);
     node.addEventListener("click", (event) => {

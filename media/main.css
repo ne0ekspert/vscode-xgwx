@@ -1227,17 +1227,6 @@ button.tree-row:hover,
   pointer-events: none;
 }
 
-.iec-records-details {
-  margin-top: 24px;
-  border-top: 1px solid var(--vscode-panel-border);
-}
-
-.iec-records-details > summary {
-  padding: 12px 0;
-  color: var(--vscode-descriptionForeground);
-  cursor: pointer;
-}
-
 .iec-actions-dialog {
   width: min(760px, calc(100vw - 48px));
   max-height: min(80vh, 900px);
@@ -1429,105 +1418,8 @@ form.iec-rung-creation {
   min-height: 28px;
 }
 
-.iec-program-source .filter-control {
-  display: flex;
-  align-items: center;
-}
-
-.iec-program-source .data-table td:first-child {
-  width: 110px;
-  color: var(--vscode-descriptionForeground);
-  font-variant-numeric: tabular-nums;
-}
-
-.iec-program-source .data-table td:nth-child(3) {
-  min-width: 140px;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  font-family: var(--ladder-font-family);
-}
-
-.iec-program-source .data-table td:nth-child(5) {
-  width: 115px;
-  min-width: 115px;
-}
-
-.iec-program-source .data-table td:nth-child(6) {
-  width: 82px;
-  min-width: 82px;
-}
-
-.iec-program-source .data-table td:nth-child(7) {
-  width: 110px;
-  min-width: 110px;
-}
-
-.iec-program-source .data-table td:last-child {
-  min-width: 125px;
-}
-
-.iec-program-source .secondary-button {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: 4px 8px;
-  border: 1px solid var(--vscode-panel-border);
-  color: var(--vscode-foreground);
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-}
-
-.iec-program-source .iec-branch-editor .secondary-button {
-  width: auto;
-  min-height: 28px;
-  margin: 0;
-  padding: 3px 10px;
-  border-color: var(--vscode-button-border, transparent);
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  text-align: center;
-}
-
 .iec-branch-editor > .muted {
   margin: 6px 0 10px;
-}
-
-.iec-comment-editor {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.iec-comment-editor textarea {
-  width: 100%;
-  min-width: 120px;
-  min-height: 55px;
-  resize: vertical;
-  box-sizing: border-box;
-  font-family: var(--ladder-font-family);
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-}
-
-.iec-instance-editor {
-  display: grid;
-  gap: 5px;
-}
-
-.iec-instance-editor input {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  color: var(--vscode-input-foreground);
-  background: var(--vscode-input-background);
-  border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
-}
-
-.iec-instance-editor button {
-  width: 100%;
 }
 
 .empty-state {

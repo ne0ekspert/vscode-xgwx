@@ -1,3 +1,5 @@
+import {ilCode} from "./il-editor.js";
+
 // Literal search: never interpret PLC addresses or source as regular expressions.
 export function findRanges(text, query, matchCase = false) {
   if (!query) return [];
@@ -7,9 +9,67 @@ export function findRanges(text, query, matchCase = false) {
     .map(match => ({start: match.index, end: match.index + match[0].length}));
 }
 
+function iecAddressKey(value, matchCase = false) {
+  const match = /^%([a-z]+)(\d+(?:\.\d+)*)$/i.exec(value);
+  if (!match) return null;
+  const area = matchCase ? match[1] : match[1].toUpperCase();
+  return `%${area}${match[2].split('.').map(part => part.replace(/^0+(?=\d)/, '')).join('.')}`;
+}
+
+function addressMatches(address, queryKey, matchCase) {
+  const key = iecAddressKey(address, matchCase);
+  return key === queryKey || key?.startsWith(`${queryKey}.`);
+}
+
+// Resolve references using this program's declarations before global/system names.
+// Alias matches retain the displayed/source offsets so navigation highlights the reference.
+export function createProgramFindRanges(summary, programIndex) {
+  const variables = [
+    ...(summary.localVariables?.[programIndex] || []),
+    ...(summary.textPrograms?.find(program => program.programIndex === programIndex)?.variables || []),
+    ...(summary.sfc?.find(program => program.programIndex === programIndex)?.variables || []),
+    ...(summary.variables || []),
+    ...(summary.iecSystemVariables || []),
+  ];
+  const names = new Map(), addresses = new Map();
+  for (const variable of variables) {
+    if (!variable.name) continue;
+    const key = variable.name.toUpperCase();
+    if (!names.has(key)) names.set(key, variable);
+  }
+  for (const variable of names.values()) {
+    if (!variable.address) continue;
+    const key = iecAddressKey(variable.address) || variable.address.toUpperCase();
+    if (!addresses.has(key)) addresses.set(key, []);
+    addresses.get(key).push(variable);
+  }
+  return (text, query, matchCase = false, {references = text} = {}) => {
+    let ranges = findRanges(text, query, matchCase);
+    if (!query) return ranges;
+    const queryAddress = iecAddressKey(query, matchCase);
+    for (const token of references.matchAll(/[%_\p{L}][\p{L}\p{N}_]*(?:\.[\p{L}\p{N}_]+)*/gu)) {
+      const start = token.index, end = start + token[0].length;
+      const tokenAddress = iecAddressKey(token[0]);
+      if (queryAddress && tokenAddress) {
+        // Address queries compare numeric components, retaining original source offsets.
+        ranges = ranges.filter(range => range.start >= end || range.end <= start);
+        if (addressMatches(token[0], queryAddress, matchCase)) ranges.push({start, end});
+      }
+      const key = token[0].toUpperCase();
+      const named = names.get(key);
+      const aliases = named ? [named.address] : (addresses.get(tokenAddress || key) || []).map(variable => variable.name);
+      if (aliases.some(alias => alias && (queryAddress && iecAddressKey(alias)
+        ? addressMatches(alias, queryAddress, matchCase) : findRanges(alias, query, matchCase).length))) {
+        if (!ranges.some(range => range.start < end && start < range.end)) ranges.push({start, end});
+      }
+    }
+    return ranges.sort((a, b) => a.start - b.start);
+  };
+}
+
 export function createFindController(doc = document) {
   let root, bar, input, count, caseButton, context, opened = false, query = '', matchCase = false;
-  let matches = [], index = -1, previousFocus, onQuery, onClose;
+  let matches = [], index = -1, previousFocus, onQuery, onClose, searchRanges = findRanges;
   const mirrors = new WeakMap();
   const clear = () => {
     root?.querySelectorAll('.find-match, .find-current').forEach(node => node.classList.remove('find-match', 'find-current'));
@@ -38,7 +98,21 @@ export function createFindController(doc = document) {
     // Search meaningful program elements, not toolbar labels or diagnostics.
     for (const node of root.querySelectorAll('[data-find-text], .st-source-input, .text-program-readonly, .ld-cell, .ld-rung-comment, .ld-output-comment, .iec-layout-marker:not(.horizontal-wire):not(.vertical-wire), .iec-layout-pin-label, .sfc-entity, .sfc-st-preview')) {
       const text = node.dataset.findText ?? (node.tagName === 'TEXTAREA' ? node.value : node.textContent);
-      const ranges = findRanges(text || '', query, matchCase);
+      let references = text || '';
+      if (node.matches('.ld-rung-comment, .ld-output-comment, .iec-layout-marker.comment')) {
+        references = '';
+      } else if (node.matches('.st-source-input, .text-program-readonly, .sfc-st-preview')) {
+        // Keep comments and quoted text searchable literally, but never resolve aliases in them.
+        references = ilCode(references).code.replace(/^\s*Comment:[^\r\n]*/gmi, value => ' '.repeat(value.length));
+      } else if (node.matches('.sfc-entity')) {
+        const walker = doc.createTreeWalker(node, 4); // Text nodes, in textContent order.
+        references = '';
+        while (walker.nextNode()) {
+          const part = walker.currentNode;
+          references += part.parentElement.closest('.sfc-comment') ? ' '.repeat(part.textContent.length) : part.textContent;
+        }
+      }
+      const ranges = searchRanges(text || '', query, matchCase, {references});
       // Diagram cells and variable rows are navigated once per element.
       for (const range of node.tagName === 'TEXTAREA' || node.matches('.text-program-readonly') ? ranges : ranges.slice(0, 1)) matches.push({node, ...range});
       if (ranges.length && node.tagName === 'TEXTAREA') {
@@ -92,7 +166,7 @@ export function createFindController(doc = document) {
     bind(nextRoot, nextContext, options = {}) {
       clear();
       if (context !== nextContext) opened = false;
-      context = nextContext; root = nextRoot; onQuery = options.onQuery; onClose = options.onClose;
+      context = nextContext; root = nextRoot; onQuery = options.onQuery; onClose = options.onClose; searchRanges = options.findRanges || findRanges;
       if (!root) return;
       bar = doc.createElement('div'); bar.className = 'find-bar'; bar.hidden = !opened;
       bar.setAttribute('role', 'search'); bar.setAttribute('aria-label', 'Find in current view');
