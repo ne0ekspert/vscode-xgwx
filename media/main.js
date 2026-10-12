@@ -551,13 +551,13 @@ function renderHardwareEditor(canvas, inspector, hardware) {
   const scope = element("span", "toolbar-summary", `Base ${selectedBase} · ${usedSlots}/${slotCount} slots · ${baseModules.length} modules`);
   const generate = button("Generate I/O variables", "secondary-button", () => showIoVariableGeneration(canvas));
   generate.textContent = "Generate I/O variables";
-  generate.disabled = !supportsXgkHardware();
+  generate.disabled = current?.summary.cpu?.family !== "XGK" || !supportsRackHardware();
   if (generate.disabled) generate.title = "Generation currently supports XGK global digital I/O variables.";
   toolbar.append(searchWrap, scope, generate);
   const baseError = element("p", "muted");
   baseError.setAttribute("role", "status");
   baseError.hidden = true;
-  if (base && supportsXgkHardware()) {
+  if (base && supportsRackHardware()) {
     const targetBase = selectedBase;
     const countField = element("label", "filter-control base-slot-control");
     countField.append(element("span", "", "Slot count"));
@@ -662,7 +662,7 @@ function renderModuleTable(slotRows, inspector) {
       }
       if (event.key === "Delete" && !event.repeat) {
         event.preventDefault();
-        if (!module || !supportsXgkHardware()) return;
+        if (!module || !supportsRackHardware()) return;
         const selectedSlotKey = `${slotRow.base}:${slot}`;
         const previousSelection = selectedModule;
         selectedModule = null;
@@ -685,7 +685,7 @@ function renderModuleTable(slotRows, inspector) {
 let modulePromptOpen = false;
 
 async function pickHardwareModule({ base, slot, module }) {
-  if (modulePromptOpen || !supportsXgkHardware()) return;
+  if (modulePromptOpen || !supportsRackHardware()) return;
   modulePromptOpen = true;
   const source = current.file.bytes, uri = current.file.uri;
   const targetSlot = module?.slot ?? slot;
@@ -736,7 +736,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
 
   const targetBase = module?.base ?? selectedBase;
   const targetSlot = module?.slot ?? physicalSlot;
-  const editableHardware = supportsXgkHardware();
+  const editableHardware = supportsRackHardware();
   const profile = current.summary.hardware?.cpuProfile;
   const builtin = module && profile && module.base === profile.builtinIoBase && module.slot === profile.builtinIoSlot;
   const currentEntry = module && editableHardware
@@ -812,7 +812,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
   );
   const apply = button("Apply module selection", "primary-button", async () => {
     const entry = moduleCatalog.find((item) => item.model === select.value);
-    if (!entry || !supportsXgkHardware()) return;
+    if (!entry || !supportsRackHardware()) return;
     await applyEdit(
       () => module
         ? select_xgwx_module(current.file.bytes, targetBase, targetSlot, entry.model)
@@ -849,7 +849,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
 function renderModuleOptions(module, entry) {
   const section = element("section", "module-options");
   section.append(element("h3", "", "Module options"));
-  if (!supportsXgkHardware()) {
+  if (!supportsRackHardware()) {
     section.append(element("p", "module-selection-note", "Settings for this CPU are not yet supported."));
     return section;
   }
@@ -5767,7 +5767,7 @@ function appendNetworkConfigurationFields(form, module, summary) {
   const hardwareModule = (summary.hardware?.modules || []).find((item) => (
     item.base === module.base && item.slot === module.slot
   ));
-  const catalogEntry = supportsXgkHardware() && hardwareModule && moduleCatalog.find((entry) => (
+  const catalogEntry = supportsRackHardware() && hardwareModule && moduleCatalog.find((entry) => (
     entry.id === module.id && entry.subType === hardwareModule.subType
   ));
 
@@ -6543,7 +6543,7 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
   const cpuNote = element("p", "module-selection-note", currentCpu?.family === "XGK"
     ? "Available CPU changes preserve hardware within the target CPU limits. Check program compatibility in XG5000 after changing CPU."
     : currentCpu?.family === "XGI" && !cpuSelect.disabled
-    ? "Supported XGI models update captured default parameters and preserve SFC, ST and IL programs. CPUUN includes local Ethernet defaults. Custom settings and configured modules require migration. Check program compatibility in XG5000 after changing CPU."
+    ? "Supported XGI models update captured default parameters and preserve IEC LD, SFC, ST and IL programs and compatible rack modules. CPUUN includes local Ethernet defaults. Custom parameters require migration. Check program compatibility in XG5000 after changing CPU."
     : "CPU conversion is not supported for this workspace. Existing hardware is preserved.");
   const applyCpu = button("Apply CPU selection", "primary-button", async () => {
     const entry = cpuCatalog.find((item) => item.model === cpuSelect.value);
@@ -6718,12 +6718,13 @@ function shortModuleName(name) {
   return match?.[0] || value;
 }
 
-function supportsXgkHardware() {
-  return current?.summary.cpu?.family === "XGK" && current.summary.counts?.configurations === 1;
+function supportsRackHardware() {
+  return ["XGK", "XGI"].includes(current?.summary.cpu?.family)
+    && current?.summary.cpu?.typeCode !== 110 && current.summary.counts?.configurations === 1;
 }
 
 function catalogEntryMatchesModule(entry, module) {
-  return supportsXgkHardware() && entry.id === module.id
+  return supportsRackHardware() && entry.id === module.id
     && entry.subType === module.subType;
 }
 

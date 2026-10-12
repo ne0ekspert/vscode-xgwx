@@ -21,10 +21,6 @@ for (const family of ['xgk','xgi']) {
   test(`blank ${family} handles XGL-EFMT(B) at Base 0 Slot 0`,()=>{
     const source=create_xgwx_project(family==='xgk'?'XGK-CPUSN':'XGI-CPUE','LD');
     const before=parse_xgwx(source);
-    if(family==='xgi') {
-      assert.throws(()=>insert_xgwx_module(source,0,0,'XGL-EFMT(B)'), /CPU|hardware/i);
-      return;
-    }
     const inserted=insert_xgwx_module(source,0,0,'XGL-EFMT(B)');
     const after=parse_xgwx(inserted);
     assert.deepEqual(after.ladder,before.ladder);

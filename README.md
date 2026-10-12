@@ -45,7 +45,8 @@ powered by the sibling `libxgwx` project during development.
   the viewed program and unapplied SFC ST drafts are preserved. Reordering supports Undo.
 - Shows project counts and metadata.
 - Enables CPU choices only when the bundled writer accepts the retained hardware.
-  Supported SFC, ST and IEC IL projects with captured default parameters and empty I/O tables
+  Supported IEC LD, SFC, ST and IEC IL projects with captured default parameters
+  and compatible configured rack modules
   can switch among XGI-CPUE, CPUS, CPUH, CPUU, CPUU/D and CPUUN. Changes preserve
   all program source and declarations and update default memory ranges. CPUUN adds/removes
   its default local Ethernet and empty motion sections. Custom settings and other
@@ -58,13 +59,13 @@ powered by the sibling `libxgwx` project during development.
   module selection, deletion, and settings. Module comments remain editable.
 - Edits module comments through the normal Save and Undo/Redo document flow.
 - Uses an editor-style explorer, dense module table, and contextual inspector.
-- Supports Up/Down row navigation and undoable Delete for supported XGK hardware.
+- Supports Up/Down row navigation and undoable Delete for supported XGK and XGI rack hardware.
 - Inserts a catalog module into an empty physical slot from the module inspector.
 - Keeps captured FDEnet, Dnet, and Rnet network records synchronized when those
   modules are inserted, replaced, or deleted.
 - Keeps one hardware-table row per physical base slot, including empty slots
   and continuation rows for multi-slot modules.
-- Selects XGK modules from the embedded latest-stable catalog. Selection
+- Selects XGK and standard XGI rack modules from the shared latest-stable catalog. Selection
   preserves base, slot, and comment while restoring the chosen model's ID,
   subtype, name, and default `Details`.
 - Decodes known XGI-D24A/B input-filter values from module `Details`.
