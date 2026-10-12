@@ -873,3 +873,16 @@ test('palette program-view commands target only the active ready XGWX editor', a
   await provider.setActiveProgramView('vendorIl');
   assert.equal(messages.length,2);
 });
+
+test('Find command targets only the active ready editor', async () => {
+  const provider = new XgwxEditorProvider({});
+  const messages = [];
+  provider.editors.add({ready:true,panel:{active:false,webview:{postMessage:async () => assert.fail('inactive editor')}}});
+  const active = {ready:true,panel:{active:true,webview:{postMessage:async message => messages.push(message)}}};
+  provider.editors.add(active);
+  await provider.findActive();
+  assert.deepEqual(messages, [{type:'openFind'}]);
+  active.ready = false;
+  await provider.findActive();
+  assert.equal(messages.length, 1);
+});

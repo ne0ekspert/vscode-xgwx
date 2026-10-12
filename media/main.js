@@ -1,3 +1,4 @@
+import { createFindController } from "./find.js";
 import { baseRecordIndex, installedBaseModules } from "./hardware-slots.js";
 import { explorerNodes } from "./explorer-model.js";
 import { renderStTextEditor } from "./st-editor.js";
@@ -185,6 +186,7 @@ const IEC_COIL_KIND_BY_SOURCE_LABEL = new Map([
   "Output", "Inverse output", "Set", "Reset", "Rising-edge", "Falling-edge",
 ].map((label, index) => [`${label} coil variable`, IEC_COIL_KIND_CHOICES[index][0]]));
 
+const findController = createFindController();
 let current = null;
 let moduleCatalog = [];
 let cpuCatalog = [];
@@ -295,6 +297,7 @@ window.addEventListener("message", async ({ data }) => {
       app.querySelector(".status-bar")?.replaceWith(renderStatusBar(current.summary));
     }
   }
+  if (data?.type === "openFind") findController.open();
   if (data?.type === "requestRefresh") vscode.postMessage({ type: "refresh" });
 });
 
@@ -487,6 +490,8 @@ function renderEditor(editor, summary, inspector) {
   if (activeView === "overview") renderOverviewEditor(canvas, inspector, summary, current.file);
 
   editor.append(canvas);
+  findController.bind(["programs", "variables"].includes(activeView) ? canvas : null,
+    `${current.file.uri}:${activeView}:${selectedProgramIndex}`, canvas.findOptions);
 }
 
 function showIoVariableGeneration(canvas) {
@@ -6378,16 +6383,21 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
   const search = document.createElement("input");
   search.type = "search";
   search.placeholder = "Filter variables…";
+  search.setAttribute("aria-label", "Filter variables");
   searchWrap.append(search);
   const scope = element("span", "toolbar-summary");
   toolbar.append(searchWrap, scope);
   const host = element("div", "editor-table-host");
+  let findQuery = null, findMatchCase = false;
   const renderRows = () => {
-    const query = search.value.trim().toLocaleLowerCase();
+    const query = findQuery ?? search.value.trim();
     const matches = variables
       .map((variable, index) => ({ variable, index }))
-      .filter(({ variable }) => Object.values(variable).join(" ").toLocaleLowerCase().includes(query));
-    const shown = matches.slice(0, 750);
+      .filter(({ variable }) => {
+        const text = [variable.location, variable.name, variable.address, variable.dataType, variable.description].join(" ");
+        return findMatchCase ? text.includes(query) : text.toLocaleLowerCase().includes(query.toLocaleLowerCase());
+      });
+    const shown = findQuery ? matches : matches.slice(0, 750);
     scope.textContent = shown.length === matches.length ? `${matches.length} variables` : `${shown.length} of ${matches.length} matches`;
     const table = createTable(["Program", "Name", "Address", "Type", "Comment"]);
     shown.forEach(({ variable, index }) => {
@@ -6396,6 +6406,7 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
       row.tabIndex = 0;
       appendCells(row, [variable.location, variable.name, variable.address, variable.dataType, variable.description]);
       row.dataset.variableIndex = String(index);
+      row.dataset.findText = [variable.location, variable.name, variable.address, variable.dataType, variable.description].join(" ");
       for (const [column, field] of [[1, "name"], [2, "address"], [4, "description"]]) {
         const cell = row.cells[column];
         cell.dataset.variableField = field;
@@ -6415,6 +6426,10 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
     host.replaceChildren(tableContainer(table, shown.length));
   };
   search.addEventListener("input", renderRows);
+  canvas.findOptions = {
+    onQuery(query, matchCase) { findQuery = query; findMatchCase = matchCase; renderRows(); },
+    onClose() { findQuery = null; findMatchCase = false; renderRows(); },
+  };
   const iecPrograms = programs.map((item, index) => ({ item, index }))
     .filter(({ index }) => (current.summary.ladder || []).some((body) => body.programIndex === index && body.projectType === 2));
   const add = element("section", "iec-add-local-symbol");

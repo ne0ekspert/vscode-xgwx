@@ -328,6 +328,11 @@ class XgwxEditorProvider {
     }
   }
 
+  async findActive() {
+    const active = [...this.editors].find(editor => editor.panel.active && editor.ready);
+    if (active) await active.panel.webview.postMessage({ type: "openFind" });
+  }
+
   async setActiveProgramView(view) {
     const active = [...this.editors].find(editor => editor.panel.active && editor.ready);
     if (!active) return;
@@ -654,6 +659,7 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("xgwx.editXgkIl", () => provider.setActiveProgramView("vendorIl")),
     vscode.commands.registerCommand("xgwx.showXgkLadder", () => provider.setActiveProgramView("ladder")),
+    vscode.commands.registerCommand("xgwx.find", () => provider.findActive()),
     vscode.commands.registerCommand("xgwx.refreshViewer", () => provider.refreshActive()),
     vscode.commands.registerCommand("xgwx.newFile", () => createNewWorkspace(context)),
   );

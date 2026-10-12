@@ -1933,3 +1933,32 @@ form.iec-rung-creation {
 @media (hover: none) { .sfc-row-affordance { opacity: 1; pointer-events: auto; } }
 
 .text-program-readonly { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; }
+
+.find-bar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  margin-bottom: 8px;
+  background: var(--vscode-editorWidget-background, #252526);
+  color: var(--vscode-editorWidget-foreground, #ddd);
+  border: 1px solid var(--vscode-editorWidget-border, #454545);
+  box-shadow: 0 2px 6px #0004;
+  width: fit-content;
+  max-width: 100%;
+}
+.find-bar[hidden] { display: none; }
+.find-bar input { width: 180px; min-width: 60px; }
+.find-bar button { padding: 3px 7px; }
+.find-bar button[aria-pressed="true"] { outline: 1px solid var(--vscode-focusBorder, #007acc); }
+.find-count { white-space: nowrap; font-size: 12px; }
+.find-match { outline: 1px solid var(--vscode-editor-findMatchHighlightBorder, #c99031); outline-offset: -1px; }
+.find-current { outline: 2px solid var(--vscode-editor-findMatchBorder, #f9ae3c); outline-offset: -2px; }
+
+.find-source-overlay { position: absolute; left: 42px; top: 0; pointer-events: none; overflow: hidden; width: calc(100% - 42px); height: 100%; }
+.find-source-overlay pre { margin: 0; padding: 8px 6px; font: 14px/22px var(--vscode-editor-font-family, monospace); tab-size: 2; white-space: pre; color: transparent; width: max-content; }
+.find-source-overlay mark { color: transparent; background: var(--vscode-editor-findMatchHighlightBackground, #e2a13055); }
+.find-source-overlay mark.find-current { background: var(--vscode-editor-findMatchBackground, #ea8c0066); }

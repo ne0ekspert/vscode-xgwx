@@ -2,6 +2,8 @@
 
 With an XGWX editor active, open **Ctrl+Shift+P → XGWX: Edit XGK IL** to view the selected XGK program as an instruction list. **XGWX: Show XGK Ladder** returns to the ladder view. The file identity and Save controls use VS Code's native tab and **Ctrl+S**; **XGWX: Refresh Workspace Viewer** remains available in the Command Palette and editor title.
 
+Press **Ctrl+F** (**Cmd+F** on macOS) in Programs or Variables to find literal text in the current view. Use **Enter/F3** for the next match, **Shift+Enter/Shift+F3** for the previous match, **Aa** for case-sensitive search, and **Escape** to close. Program search covers ladder/SFC elements and ST/IL source. Variable search includes global and local names, addresses, types, comments, and program names, including entries beyond the default table limit.
+
 ## Native editor tab
 
 XGWX uses VS Code's native `.xgwx` file tabs. The webview has no internal tab strip; the editor canvas begins directly below VS Code's breadcrumbs. Sidebar selections reuse the file tab, and separate `.xgwx` files retain their own native tabs. Save, Undo/Redo, splitting, and closing continue through the custom document lifecycle.
