@@ -88,3 +88,40 @@ test('IEC addresses ignore decimal leading zeros in references and variable mapp
   assert.deepEqual(search('%MX007', '%MX7', false, {references:''}), []);
   assert.deepEqual(search('%MX007', '%MX007', false, {references:''}), [{start:0,end:6}]);
 });
+
+test('address references replace partial literal hits while masked text stays literal', () => {
+  const search = createProgramFindRanges({variables:[{name:'Start',address:'%MX0'}]},0);
+  const source = "'%MX0.0' %MX0.0 %MX01 %MX000 Start";
+  const references = ' '.repeat(9) + source.slice(9);
+  assert.deepEqual(search(source, '%MX0', false, {references}), [
+    {start:1,end:5}, {start:9,end:15}, {start:22,end:28}, {start:29,end:34},
+  ]);
+});
+
+test('literal hits keep precedence over aliases and remain ordered at UTF-16 boundaries', () => {
+  const search = createProgramFindRanges({variables:[
+    {name:'AlphaAlpha',address:'Alpha'}, {name:'Other',address:'Alpha'},
+  ]},0);
+  assert.deepEqual(search('😀 AlphaAlpha Other Alpha', 'Alpha'), [
+    {start:3,end:8}, {start:8,end:13}, {start:14,end:19}, {start:20,end:25},
+  ]);
+});
+
+test('crossing literals are retained until later reference normalization resolves them', () => {
+  const search = createProgramFindRanges({variables:[{name:'Start',address:'%MX0'}]},0);
+  assert.deepEqual(search('abc %MX0 xyz', '%MX0', false, {references:'Start%MX0   '}), [{start:5,end:9}]);
+});
+
+test('large address searches retain canonical and alias hits without neighboring-address matches', () => {
+  const search = createProgramFindRanges({variables:[{name:'Start',address:'%MX0'}]},0);
+  const row = '%MX0 %MX01 %MX000.02 Start\n';
+  const source = row.repeat(4000);
+  const ranges = search(source, '%MX0');
+  assert.equal(ranges.length, 12000);
+  for (let rowIndex = 0; rowIndex < 4000; rowIndex++) {
+    const offset = rowIndex * row.length;
+    assert.deepEqual(ranges.slice(rowIndex * 3, rowIndex * 3 + 3), [
+      {start:offset,end:offset+4}, {start:offset+11,end:offset+20}, {start:offset+21,end:offset+26},
+    ]);
+  }
+});

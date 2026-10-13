@@ -44,26 +44,36 @@ export function createProgramFindRanges(summary, programIndex) {
     addresses.get(key).push(variable);
   }
   return (text, query, matchCase = false, {references = text} = {}) => {
-    let ranges = findRanges(text, query, matchCase);
-    if (!query) return ranges;
+    const literalRanges = findRanges(text, query, matchCase);
+    if (!query) return literalRanges;
+    const ranges = [];
+    let literalIndex = 0;
     const queryAddress = iecAddressKey(query, matchCase);
     for (const token of references.matchAll(/[%_\p{L}][\p{L}\p{N}_]*(?:\.[\p{L}\p{N}_]+)*/gu)) {
       const start = token.index, end = start + token[0].length;
+      // Both streams are ordered and non-overlapping. Keep a crossing literal
+      // pending until it ends or an address token replaces it.
+      while (literalIndex < literalRanges.length && literalRanges[literalIndex].end <= start) {
+        ranges.push(literalRanges[literalIndex++]);
+      }
       const tokenAddress = iecAddressKey(token[0]);
+      let addressMatch = false;
       if (queryAddress && tokenAddress) {
         // Address queries compare numeric components, retaining original source offsets.
-        ranges = ranges.filter(range => range.start >= end || range.end <= start);
-        if (addressMatches(token[0], queryAddress, matchCase)) ranges.push({start, end});
+        while (literalIndex < literalRanges.length && literalRanges[literalIndex].start < end) literalIndex++;
+        addressMatch = addressMatches(token[0], queryAddress, matchCase);
+        if (addressMatch) ranges.push({start, end});
       }
       const key = token[0].toUpperCase();
       const named = names.get(key);
       const aliases = named ? [named.address] : (addresses.get(tokenAddress || key) || []).map(variable => variable.name);
       if (aliases.some(alias => alias && (queryAddress && iecAddressKey(alias)
         ? addressMatches(alias, queryAddress, matchCase) : findRanges(alias, query, matchCase).length))) {
-        if (!ranges.some(range => range.start < end && start < range.end)) ranges.push({start, end});
+        if (!addressMatch && (literalIndex === literalRanges.length || literalRanges[literalIndex].start >= end)) ranges.push({start, end});
       }
     }
-    return ranges.sort((a, b) => a.start - b.start);
+    while (literalIndex < literalRanges.length) ranges.push(literalRanges[literalIndex++]);
+    return ranges;
   };
 }
 

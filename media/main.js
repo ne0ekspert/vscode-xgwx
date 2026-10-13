@@ -5295,9 +5295,14 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     const source = property(cellSection, "Source text", cell.sourceText, false, true);
     const requiredUnits = utf16Length(cell.sourceText);
     const counter = element("div", "length-counter");
+    const cachedBuild = validatedEditCache((bytes, _command, operands) =>
+      update_xgwx_ladder_cell(bytes, ...operands));
+    const buildCell = () => cachedBuild(current.file.bytes, "source", [
+      selectedProgramIndex, cell.offset, cell.sourceText, source.value,
+    ]);
     const applyCell = button("Apply ladder cell", "primary-button", async () => {
       await applyEdit(
-        () => update_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, cell.offset, cell.sourceText, source.value),
+        buildCell,
         `Edit ladder cell at ${cell.rawX}:${cell.rawY}`,
       );
     });
@@ -5307,7 +5312,7 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
       if (cell.instructionTextEditing) {
         let error = "";
         try {
-          update_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, cell.offset, cell.sourceText, source.value);
+          buildCell();
         } catch (failure) {
           error = String(failure);
         }
@@ -5370,6 +5375,11 @@ function renderIecLadderCell(section, body, item) {
   const operand = property(section, "Variable", item.value, false);
   operand.setAttribute("aria-label", `${isContact ? "Contact" : "Coil"} variable at L${item.iecRowIndex}`);
   const status = element("div", "length-counter");
+  const cachedBuild = validatedEditCache((bytes, _command, operands) =>
+    update_xgwx_iec_ld_element_operand(bytes, ...operands));
+  const buildOperand = () => cachedBuild(current.file.bytes, "operand", [
+    selectedProgramIndex, item.offset, item.value, operand.value.trim(),
+  ]);
   const applyKind = button("Apply element kind", "primary-button", async () => {
     if (applyKind.disabled) return;
     await applyEdit(() => (isContact ? update_xgwx_iec_ld_contact_kind
@@ -5380,8 +5390,7 @@ function renderIecLadderCell(section, body, item) {
   applyKind.textContent = "Apply kind";
   const applyOperand = button("Apply element variable", "primary-button", async () => {
     if (applyOperand.disabled) return;
-    await applyEdit(() => update_xgwx_iec_ld_element_operand(current.file.bytes,
-      selectedProgramIndex, item.offset, item.value, operand.value.trim()),
+    await applyEdit(buildOperand,
     `Edit IEC ${isContact ? "contact" : "coil"} at L${item.iecRowIndex}`);
   });
   applyOperand.textContent = "Apply variable";
@@ -5390,8 +5399,7 @@ function renderIecLadderCell(section, body, item) {
     let error = "";
     if (value !== item.value) {
       try {
-        update_xgwx_iec_ld_element_operand(current.file.bytes, selectedProgramIndex,
-          item.offset, item.value, value);
+        buildOperand();
       } catch (failure) { error = String(failure); }
     }
     status.textContent = error || `${utf16Length(value)}/255 UTF-16 units`;
