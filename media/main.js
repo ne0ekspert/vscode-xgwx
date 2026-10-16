@@ -1,3 +1,5 @@
+import { renderOpcUaTags } from "./opcua-tags.js";
+import { renderOpcUaOptions } from "./opcua-options.js";
 import { createFindController, createProgramFindRanges } from "./find.js";
 import { baseRecordIndex, installedBaseModules } from "./hardware-slots.js";
 import { explorerNodes } from "./explorer-model.js";
@@ -116,6 +118,8 @@ import init, {
   update_xgwx_network,
   update_xgwx_network_module,
   edit_xgwx_fenet_field,
+  edit_xgwx_opcua_settings,
+  edit_xgwx_opcua_tag,
   edit_xgwx_cnet_settings,
   update_xgwx_program,
   create_xgwx_program,
@@ -850,6 +854,11 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
 function renderModuleOptions(module, entry) {
   const section = element("section", "module-options");
   section.append(element("h3", "", "Module options"));
+  if (module.id === 23045 && (current.summary.opcua || []).some(config => config.base === module.base && config.slot === module.slot)) {
+    appendNetworkConfigurationFields(section, module, current.summary);
+    return section;
+  }
+
   if (!supportsRackHardware()) {
     section.append(element("p", "module-selection-note", "Settings for this CPU are not yet supported."));
     return section;
@@ -5854,6 +5863,34 @@ function appendNetworkConfigurationFields(form, module, summary) {
   // using the stable NetworkModule Id / XGPD Type relationship.
   const fenet = findNetworkConfiguration(summary.fenet, module);
   const cnet = findNetworkConfiguration(summary.cnet, module);
+  const opcuaRecords = (summary.opcua || []).filter(config => config.base === module.base && config.slot === module.slot);
+  if (opcuaRecords.length === 1 && module.id === 23045) {
+    const source = current.file.bytes, uri = current.file.uri;
+    const build = changes => {
+      if (current.file.uri !== uri || current.file.bytes !== source) throw new Error("Networks changed. Reload the settings.");
+      return edit_xgwx_opcua_settings(source, module.base, module.slot, changes);
+    };
+    renderOpcUaOptions({host: form, config: opcuaRecords[0], element, property, button,
+      validateChanges: build,
+      commit: changes => applyEdit(() => build(changes), `Edit OPC UA settings at Base ${module.base}, Slot ${module.slot}`),
+    });
+    if (summary.cpu?.family === "XGK" && summary.opcuaTags?.length === 1) {
+      const buildTag = patch => {
+        if (current.file.uri !== uri || current.file.bytes !== source) throw new Error("Nodes changed. Reload the settings.");
+        return edit_xgwx_opcua_tag(source, patch);
+      };
+      renderOpcUaTags({host: form, table: summary.opcuaTags[0], element, property, button,
+        validatePatch: buildTag,
+        commit: patch => applyEdit(() => buildTag(patch), "Edit exported OPC UA nodes"),
+      });
+    } else {
+      form.append(element("p", "module-selection-note", summary.cpu?.family === "XGK"
+        ? "Node editing requires a workspace with one PLC configuration."
+        : "For IEC CPUs, OPC UA nodes come from variable export flags. Editing those flags is not yet supported."));
+    }
+
+  }
+
   const hardwareModule = (summary.hardware?.modules || []).find((item) => (
     item.base === module.base && item.slot === module.slot
   ));
@@ -5917,7 +5954,7 @@ function appendNetworkConfigurationFields(form, module, summary) {
     addNumber("Receive wait", "rcvWaitTime", 2, 255, fenet.rcvWaitTimeUnit ?? 0);
     addNumber("Client wait", "clientWaitTime", 2, 255, fenet.clientWaitTimeUnit ?? 0);
     addNumber("Glofa sockets", "glofaSocketCount", 1, 16);
-    for (const interfaceNumber of [1, 2]) {
+    for (const interfaceNumber of (module.id === 23045 ? [1] : [1, 2])) {
       form.append(element("div", "network-config-heading", `Interface ${interfaceNumber}`));
       const suffix = interfaceNumber === 1 ? "" : "2";
       for (const [label, name] of [["IP address", "ipAddress"], ["Subnet mask", "subnet"],
