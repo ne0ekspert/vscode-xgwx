@@ -5,6 +5,7 @@ import { renderStTextEditor } from "./st-editor.js";
 import { actionGroup } from "./sfc-actions.js";
 import { renderSfcDiagram, renderSfcProperties, renderSfcVariables, sfcRowsAfterEdit, sfcRowIndex, sfcTextField } from "./sfc.js";
 import { moveIecCursor, iecCursorRecord } from "./iec-navigation.js";
+import { nearbyInsertionPosition, nearbyInsertionEdit, iecFunctionEnableIsCompatible } from "./ladder-insertion.js";
 import { validatedEditCache } from "./validated-edit-cache.js";
 import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
 import { isLadderDeleteKey } from "./ladder-delete.js";
@@ -2036,7 +2037,7 @@ function instructionSuggestions(iec) {
     .filter(symbol => symbol.value);
 }
 
-async function requestLadderInstruction({ choices, value = "", title, mode, iec, focusSelector, build, afterInsert, singleValue = false, allowEmpty = false }) {
+async function requestLadderInstruction({ choices, value = "", title, mode, iec, focusSelector, build, afterInsert, onValidated, singleValue = false, allowEmpty = false }) {
   if (instructionPromptOpen) return;
   const fileUri = current.file.uri;
   const programIndex = selectedProgramIndex;
@@ -2055,7 +2056,9 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
         || result.operands.some(operand => !instructionOperandText(operand, iec))) {
         throw new Error("Unknown command or incorrect operands");
       }
-      return cachedBuild(source, result.command, result.operands);
+      const bytes = cachedBuild(source, result.command, result.operands);
+      if (onValidated) focusSelector = onValidated(bytes) || focusSelector;
+      return bytes;
     };
     const result = await new Promise(resolve => {
       pendingContactPrompts.set(requestId, { resolve, focusSelector, fileUri, programIndex, validate, restoreFocus: false });
@@ -2074,6 +2077,29 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
 }
 
 function showXgkBlankInput(ladder, position) {
+  if (instructionPromptOpen) return;
+  const original = position;
+  position = nearbyInsertionPosition(position, { test: candidate => {
+    if (!ladder.structuralEditing || ladderCellAtPosition(ladder, candidate)) return false;
+    try {
+      edit_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, {
+        ...candidate, expected: null, replacement: {
+          kind: candidate.column === 9 ? "Output" : "NormallyOpen", operand: "P0000",
+        },
+      });
+      return true;
+    } catch { return false; }
+  } });
+  if (!position) {
+    vscode.postMessage({ type: "showError", message: "No supported insertion position within two cells of the cursor." });
+    return;
+  }
+  if (ladderPositionKey(original) !== ladderPositionKey(position)) {
+    selectedLadderComment = null;
+    selectedLadderAnchor = selectedLadderFocus = position;
+    renderWorkspace();
+    document.querySelector(`[data-ladder-key="${ladderPositionKey(position)}"]`)?.focus({ preventScroll: true });
+  }
   const choices = xgkBlankCommands(ladder, position);
   return requestLadderInstruction({ choices, title: `Insert · L${position.rawY} column ${position.column + 1}`, mode: "insert", iec: false,
     focusSelector: `[data-ladder-key="${ladderPositionKey(position)}"]`,
@@ -2124,6 +2150,36 @@ function showXgkElementInput(cell, ladder) {
 }
 
 function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-cell") {
+  if (instructionPromptOpen) return;
+  const original = position;
+  position = nearbyInsertionPosition(position, { iec: true, test: candidate => {
+    if (iecOccupiedCell(body, candidate.rowIndex, candidate.rawX)) return false;
+    // Decoded function insertion sites already carry the writer's geometry guards.
+    if ([body.iecTerminalFunctionInsertionSites, body.iecTerminalTimerInsertionSites,
+      body.iecStandaloneFunctionInsertionSites, body.iecFunctionCellInsertionSites,
+      body.iecWiredComparisonInsertionSites].some(sites => (sites || []).some(site =>
+        site.rowIndex === candidate.rowIndex && site.rawX === candidate.rawX))) return true;
+    try {
+      const site = iecContactInsertionSiteAt(body, candidate.rowIndex, candidate.rawX);
+      if (site) insertIecContactAtSite(site, candidate.rawX, "NO", "%MX0");
+      else insert_xgwx_iec_ld_single_element(current.file.bytes, selectedProgramIndex,
+        candidate.rowIndex, candidate.rawX, candidate.rawX === 94 ? "coil" : "contact",
+        candidate.rawX === 94 ? "OUTPUT" : "NO", "%MX0");
+      return true;
+    } catch { return false; }
+  } });
+  if (!position) {
+    vscode.postMessage({ type: "showError", message: "No supported insertion position within two cells of the cursor." });
+    return;
+  }
+  if (original.rowIndex !== position.rowIndex || original.rawX !== position.rawX) {
+    selectedIecRow = { programIndex: selectedProgramIndex, rowIndex: position.rowIndex };
+    selectedIecInsertion = selectedIecElement = null;
+    selectedIecBlank = { programIndex: selectedProgramIndex, ...position };
+    focusSelector = ".iec-layout-blank-cell";
+    renderWorkspace();
+    document.querySelector(focusSelector)?.focus({ preventScroll: true });
+  }
   const site = iecContactInsertionSiteAt(body, position.rowIndex, position.rawX);
   const newRow = !(body.iecRows || []).some(row => row.rowIndex === position.rowIndex);
   const wiredComparison = (body.iecWiredComparisonInsertionSites || []).some(site =>
@@ -2178,12 +2234,25 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
         .filter(symbol => symbol.isInstance && symbol.typeReference === name)
         .map(symbol => ({value:symbol.name,dataType:name,description:`${name} instance`})) });
   }
+  const insertionPositions = new WeakMap();
+  let insertionPosition = position;
   return requestLadderInstruction({ choices, mode: "insert", iec: true, title: `Insert · L${position.rowIndex}`, focusSelector,
+    onValidated: bytes => {
+      const target = insertionPositions.get(bytes) || position;
+      if (target.rowIndex === insertionPosition.rowIndex && target.rawX === insertionPosition.rawX) return;
+      insertionPosition = target;
+      selectedIecRow = { programIndex: selectedProgramIndex, rowIndex: target.rowIndex };
+      selectedIecInsertion = selectedIecElement = null;
+      selectedIecBlank = { programIndex: selectedProgramIndex, ...target };
+      renderWorkspace();
+      return ".iec-layout-blank-cell";
+    },
     afterInsert: choice => {
       if (["terminalTimer", "function"].includes(choice.category)) {
         const updated = current.summary.ladder.find(body => body.programIndex === selectedProgramIndex);
         const element = (updated.sourceStrings || []).find(item => item.isIecFunctionName
-          && item.iecRowIndex === position.rowIndex && item.iecPosition?.[0] === position.rawX);
+          && item.iecRowIndex === insertionPosition.rowIndex && item.iecPosition?.[0] === insertionPosition.rawX);
+        selectedIecRow = { programIndex: selectedProgramIndex, rowIndex: insertionPosition.rowIndex };
         selectedIecBlank = null;
         selectedIecElement = element ? { programIndex: selectedProgramIndex, offset: element.offset } : null;
         return element ? `.iec-layout-marker[data-iec-offset="${element.offset}"]` : focusSelector;
@@ -2209,7 +2278,18 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
       if (choice.category === "terminal") return insert_xgwx_iec_ld_terminal_move(bytes, program, terminal.contactOffset, operands[0], operands[1]);
       if (choice.category === "standalone") return insert_xgwx_iec_ld_standalone_function(bytes, program, standalone.insertionOffset, choice.mnemonic, operands[0], operands[1]);
       if (choice.category === "instance") return insert_xgwx_iec_ld_function_cell(bytes, program, instanceSite.insertionOffset, choice.mnemonic, operands[0]);
-      if (choice.category === "function") return insert_xgwx_iec_ld_function(bytes, program, position.rowIndex, position.rawX, choice.mnemonic, JSON.stringify(operands));
+      if (choice.category === "function") {
+        const symbols = [...(current.summary.localVariables?.[program] || []),
+          ...(current.summary.variables || []), ...(current.summary.iecSystemVariables || [])];
+        const candidate = nearbyInsertionEdit(position, { iec: true, build: target => {
+          if (!iecFunctionEnableIsCompatible(body, target, symbols)) {
+            throw new Error("IEC function EN would overlap a non-BOOL output or an occupied block row");
+          }
+          return insert_xgwx_iec_ld_function(bytes, program, target.rowIndex, target.rawX, choice.mnemonic, JSON.stringify(operands));
+        } });
+        insertionPositions.set(candidate.bytes, candidate.position);
+        return candidate.bytes;
+      }
       if (newRow || !site) return insert_xgwx_iec_ld_single_element(bytes, program, position.rowIndex,
         position.rawX, choice.category, choice.iecKind, operands[0]);
       if (site.type === "leading") return insert_xgwx_iec_ld_leading_contact(bytes, program, site.insertionOffset, choice.iecKind, operands[0]);

@@ -36,9 +36,10 @@ export function diagnoseSt(source,variables=[],{transition=false}={}) {
   const symbols=new Map(variables.filter(v=>typeof v.name==='string').map(v=>[v.name.toUpperCase(),v])),delimiters=[],blocks=[],declarationTokens=new Set();
   // Recognize simple inline declarations without guessing custom type layouts.
   let declaring=false;
+  const declarationStart=/^VAR(?:_(?:INPUT|OUTPUT|IN_OUT|TEMP|EXTERNAL|GLOBAL))?$/;
   for(let n=0;n<tokens.length;n++) {
     const value=tokens[n].value.toUpperCase();
-    if(/^VAR(?:_(?:INPUT|OUTPUT|IN_OUT|TEMP|EXTERNAL|GLOBAL))?$/.test(value))declaring=true;
+    if(declarationStart.test(value))declaring=true;
     if(value==='END_VAR')declaring=false;
     if(!declaring || tokens[n].kind!=='id')continue;
     let j=n,names=[tokens[n]];while(tokens[j+1]?.value===','&&tokens[j+2]?.kind==='id'){j+=2;names.push(tokens[j]);}
@@ -47,6 +48,14 @@ export function diagnoseSt(source,variables=[],{transition=false}={}) {
       for(const name of names){symbols.set(name.value.toUpperCase(),{name:name.value,dataType});declarationTokens.add(name);}
       declarationTokens.add(tokens[j+2]);
     }
+    // Preserve block-state changes even in malformed comma lists.
+    for(let k=n+2;k<=j;k+=2) {
+      const value=tokens[k].value.toUpperCase();
+      if(declarationStart.test(value))declaring=true;
+      if(value==='END_VAR')declaring=false;
+    }
+    // Failed probes must also consume the list, otherwise every suffix is rescanned.
+    n=j;
   }
   const open={IF:['END_IF','THEN'],FOR:['END_FOR','DO'],WHILE:['END_WHILE','DO'],CASE:['END_CASE','OF'],REPEAT:['END_REPEAT','UNTIL'],VAR:['END_VAR',null],VAR_INPUT:['END_VAR',null],VAR_OUTPUT:['END_VAR',null],VAR_IN_OUT:['END_VAR',null],VAR_TEMP:['END_VAR',null],VAR_EXTERNAL:['END_VAR',null],VAR_GLOBAL:['END_VAR',null]};
   const closers=new Set(Object.values(open).map(v=>v[0]));let transAssignment=false;

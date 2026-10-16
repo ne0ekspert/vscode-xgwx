@@ -30,3 +30,41 @@ test('native validated SFC ST fixtures have no local diagnostics',()=>{
   for(const b of sfc.blocks)for(const r of b.editableRows || [])for(const key of ['actionCode','transitionCode'])if(r[key]!=null)assert.deepEqual(diagnoseSt(r[key],sfc.variables,{transition:key==='transitionCode'}),[],`${name} ${r.title} ${key}`);
  }
 });
+test('inline declaration recognition consumes valid and malformed comma lists in linear work',async()=>{
+ // Instrument numeric token reads in a separate module, avoiding timing thresholds
+ // and changes to the production diagnostics API.
+ const source=fs.readFileSync(new URL('../media/st-diagnostics.js',import.meta.url),'utf8');
+ assert.equal(source.split('tokens=[]').length,2);
+ const instrumented="export const reads={count:0};\n"+source.replace('tokens=[]',
+  "tokens=new Proxy([],{get(target,key,receiver){if(typeof key==='string'&&/^[0-9]+$/.test(key))reads.count++;return Reflect.get(target,key,receiver);}})");
+ const measured=await import('data:text/javascript;base64,'+Buffer.from(instrumented).toString('base64'));
+ for(const ending of [' : BOOL;',';',' : ;']){
+  let previous;
+  for(const count of [512,1024,2048,8192]){
+   const names=Array.from({length:count},(_,i)=>'v'+i);
+   const text='VAR_INPUT '+names.join(', (* gap *)\n')+ending+' END_VAR\nv0 := TRUE; v'+(count-1)+' := FALSE;';
+   measured.reads.count=0;const issues=measured.diagnoseSt(text);const reads=measured.reads.count;
+   assert.ok(reads<80*count,ending+' '+count+' uses '+reads+' token reads');
+   if(previous)assert.ok(reads/previous.reads<1.1*count/previous.count,'work grows linearly');
+   previous={reads,count};
+   assert.deepEqual(issues,diagnoseSt(text));
+   if(ending===' : BOOL;')assert.deepEqual(issues,[]);
+   else assert.ok(issues.some(d=>d.code==='symbol'&&d.message.includes('v0')));
+  }
+ }
+});
+test('inline declarations preserve types, blocks, comments, duplicates and transition checks',()=>{
+ for(const block of ['VAR','VAR_INPUT','VAR_OUTPUT','VAR_IN_OUT','VAR_TEMP','VAR_EXTERNAL','VAR_GLOBAL']){
+  const source=block+' first, (* separator *) second, FIRST : BOOL;\nTimer : TON; END_VAR\nfirst := 1; second := TRUE; Timer(IN := second, PT := T#1s, Q => first); TRANS := second;';
+  const issues=diagnoseSt(source,[{name:'TRANS',dataType:'BOOL'}],{transition:true});
+  assert.deepEqual(issues.map(d=>d.code),['type']);
+  assert.equal(source.slice(issues[0].start,issues[0].end),'1');
+ }
+ for(const list of ['a, END_VAR, b : BOOL;','a, END_VAR, b;','a, END_VAR, VAR_OUTPUT, b : BOOL;']){
+  const source='VAR '+list+' outside : BOOL;';
+  const issues=diagnoseSt(source);
+  assert.equal(issues.some(d=>d.code==='symbol'&&d.message.includes('outside')),!list.includes('VAR_OUTPUT'));
+ }
+ assert.ok(diagnoseSt('VAR a, b : BOOL; END_VAR\nTRANS := a;',[],{transition:true}).some(d=>d.code==='symbol'&&d.message.includes('TRANS')));
+ assert.ok(diagnoseSt('VAR a, b : BOOL; END_VAR\na := TRUE;',[],{transition:true}).some(d=>d.code==='transition'));
+});
