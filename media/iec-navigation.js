@@ -6,6 +6,10 @@ export function moveIecCursor(position, key) {
     rawX:Math.max(1,Math.min(97,position.rawX+step[1]))};
 }
 export function iecCursorRecord(body, position) {
+  const label = body.labels?.find(label => label.rawY / 4 === position.rowIndex);
+  if (label) return label.offset;
+  const comment = body.sourceStrings?.find(item => item.isIecComment && item.iecRowIndex === position.rowIndex);
+  if (comment) return comment.iecRecordOffset;
   return body.iecCircuitGraph?.occupiedAreas?.find(area=>area.kind!=='horizontalWire'
     && position.rowIndex>=area.startRowIndex && position.rowIndex<=area.endRowIndex
     && position.rawX>=area.startX && position.rawX<=area.endX)?.recordOffset ?? null;

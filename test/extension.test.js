@@ -793,6 +793,50 @@ test('SFC text prompt uses native validated input and returns cancellation or th
   assert.deepEqual([...document.bytes],[1,2,3]);
 });
 
+test('IEC comment prompt uses native validation and returns cancellation or accepted text', async () => {
+  let receive, options, finish;
+  const messages=[];
+  mockVscode.window={showInputBox:value=>{options=value;return new Promise(resolve=>{finish=resolve;});}};
+  const document=new XgwxDocument(uri('/workspace/iec-comment.xgwx'),[1,2,3]);
+  const provider=new XgwxEditorProvider({});
+  const panel={visible:true,webview:{cspSource:'test',asWebviewUri:value=>value,
+    onDidReceiveMessage(callback){receive=callback;return{dispose(){}};},
+    async postMessage(message){messages.push(message);}},reveal(){},onDidDispose(){}};
+  await provider.resolveCustomEditor(document,panel);
+  let pending=receive({type:'promptIecComment',requestId:51,title:'Insert IEC comment at L5',value:'',prompt:'Enter a rung comment.'});
+  assert.equal(options.title,'Insert IEC comment at L5');assert.equal(options.value,'');assert.equal(options.ignoreFocusOut,true);
+  const validation=options.validateInput('');
+  const request=messages.at(-1);assert.equal(request.type,'validateLadderInstruction');assert.equal(request.requestId,51);
+  await receive({type:'ladderInstructionValidationResult',validationId:request.validationId,error:'Enter a comment.'});
+  assert.equal(await validation,'Enter a comment.');
+  finish(undefined);await pending;assert.equal(messages.at(-1).type,'iecContactInputResult');assert.equal(messages.at(-1).value,null);
+  pending=receive({type:'promptIecComment',requestId:52,title:'Insert IEC comment at L5',value:'',prompt:'Enter a rung comment.'});
+  finish('설명 comment');await pending;assert.equal(messages.at(-1).value,'설명 comment');
+  assert.deepEqual([...document.bytes],[1,2,3]);
+});
+
+test('LD label prompt uses native validation and returns cancellation or accepted text', async () => {
+  let receive, options, finish;
+  const messages=[];
+  mockVscode.window={showInputBox:value=>{options=value;return new Promise(resolve=>{finish=resolve;});}};
+  const document=new XgwxDocument(uri('/workspace/iec-comment.xgwx'),[1,2,3]);
+  const provider=new XgwxEditorProvider({});
+  const panel={visible:true,webview:{cspSource:'test',asWebviewUri:value=>value,
+    onDidReceiveMessage(callback){receive=callback;return{dispose(){}};},
+    async postMessage(message){messages.push(message);}},reveal(){},onDidDispose(){}};
+  await provider.resolveCustomEditor(document,panel);
+  let pending=receive({type:'promptLdLabel',requestId:51,title:'Insert label at L5',value:'',prompt:'Enter a label name.'});
+  assert.equal(options.title,'Insert label at L5');assert.equal(options.value,'');assert.equal(options.ignoreFocusOut,true);
+  const validation=options.validateInput('');
+  const request=messages.at(-1);assert.equal(request.type,'validateLadderInstruction');assert.equal(request.requestId,51);
+  await receive({type:'ladderInstructionValidationResult',validationId:request.validationId,error:'Label name is required.'});
+  assert.equal(await validation,'Label name is required.');
+  finish(undefined);await pending;assert.equal(messages.at(-1).type,'iecContactInputResult');assert.equal(messages.at(-1).value,null);
+  pending=receive({type:'promptLdLabel',requestId:52,title:'Insert label at L5',value:'',prompt:'Enter a label name.'});
+  finish('LabelTarget');await pending;assert.equal(messages.at(-1).value,'LabelTarget');
+  assert.deepEqual([...document.bytes],[1,2,3]);
+});
+
 test('SFC action picker validates structured qualifiers and times and cancels each stage', async () => {
   let receive, options, finish, choice, time;
   const messages=[], picks=[];

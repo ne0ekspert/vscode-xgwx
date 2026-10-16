@@ -20,3 +20,13 @@ test('all rows of a function body resolve to its marker, while wires remain trav
  assert.equal(iecCursorRecord(body,{rowIndex:0,rawX:4}),3);
  assert.equal(iecCursorRecord(body,{rowIndex:0,rawX:94}),4);
 });
+
+test('label rows remain keyboard destinations from every IEC column', () => {
+  const body = {labels:[{rawY:20,offset:600,name:'Target'}]};
+  for(const rawX of [1,4,16,94])assert.equal(iecCursorRecord(body,{rowIndex:5,rawX}),600);
+});
+
+test('rung comments remain keyboard destinations from every IEC column',()=>{
+ const body={sourceStrings:[{isIecComment:true,iecRowIndex:25,iecRecordOffset:1000}]};
+ for(const rawX of [1,4,16,94])assert.equal(iecCursorRecord(body,{rowIndex:25,rawX}),1000);
+});

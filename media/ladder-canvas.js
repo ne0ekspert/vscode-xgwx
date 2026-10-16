@@ -1,7 +1,7 @@
 // Canvas rows are view state. Scrolling never changes the project bytes.
 export function xgkCanvasRowValues(ladder, count) {
   if (count === undefined) return ladder.canvasRowValues || ladder.rungs.map(row => row.rawY);
-  const comments = new Set((ladder.rungComments || []).map(row => row.rawY));
+  const comments = new Set([...(ladder.rungComments || []), ...(ladder.labels || [])].map(row => row.rawY));
   return Array.from({ length: Math.min(65535, count) }, (_, index) => index * 4)
     .filter(rawY => !comments.has(rawY));
 }

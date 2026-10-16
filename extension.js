@@ -186,7 +186,7 @@ class XgwxEditorProvider {
         await new Promise(resolve => setImmediate(resolve));
         if (this.editors.has(editor) && panel.visible) panel.reveal(undefined,false);
         await panel.webview.postMessage({type:"iecContactInputResult",requestId:message.requestId,value});
-      } else if (message?.type === "promptVariableField" || message?.type === "promptSfcField") {
+      } else if (message?.type === "promptVariableField" || message?.type === "promptSfcField" || message?.type === "promptIecComment" || message?.type === "promptLdLabel") {
         const value = await vscode.window.showInputBox({
           title: message.title, value: message.value || "", prompt: message.prompt,
           ignoreFocusOut: true,

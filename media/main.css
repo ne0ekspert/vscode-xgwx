@@ -1881,3 +1881,17 @@ form.iec-rung-creation {
   width: 30%;
 }
 .editor-shell[data-view="networks"] .data-table th:first-child { width: 30%; }
+
+.ld-rung-label-target, .ld-label-target {
+  position: absolute;
+  color: var(--vscode-symbolIcon-classForeground, #d680d6);
+  background: var(--vscode-editor-background);
+  border: 1px solid transparent;
+  font: inherit;
+  text-align: left;
+  padding: 5px 10px;
+  min-width: 100px;
+}
+.ld-rung-label-target:focus, .ld-label-target:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}

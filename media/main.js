@@ -73,6 +73,7 @@ import init, {
   delete_xgwx_iec_ld_function_output_operand,
   assign_xgwx_iec_ld_function_output_operand,
   edit_xgwx_ladder_comment,
+  edit_xgwx_ld_label,
   insert_xgwx_iec_ld_contact,
   insert_xgwx_iec_ld_comment,
   insert_xgwx_iec_ld_short_wire_contact,
@@ -1265,14 +1266,14 @@ function renderProgramsEditor(canvas, inspector, programs) {
   if (ladder) {
     canvas.classList.add("ladder-editor-canvas");
     if (ladder.structuralEditing) {
-      const storedLast = Math.max(-4, ...ladder.rungs.map(row => row.rawY), ...(ladder.rungComments || []).map(row => row.rawY));
+      const storedLast = Math.max(-4, ...ladder.rungs.map(row => row.rawY), ...(ladder.rungComments || []).map(row => row.rawY), ...(ladder.labels || []).map(label => label.rawY));
       ladder.canvasRowValues = xgkCanvasRowValues(ladder, Math.min(65535, Math.max(
         storedLast / 4 + 17, ladderCanvasExtents.get(canvasExtentKey()) || 0,
         (selectedLadderFocus?.rawY || 0) / 4 + 2)));
     }
-    if (selectedLadderComment && !(ladder.rungComments || []).some((comment) => (
-      selectedLadderComment.kind === "Rung" && comment.rawY === selectedLadderComment.rawY
-    ))) {
+    if (selectedLadderComment && ![...(ladder.rungComments || []).map(comment => ({...comment,kind:"Rung"})),
+      ...(ladder.labels || []).map(label => ({...label,kind:"Label"}))].some(comment =>
+      comment.kind === selectedLadderComment.kind && comment.rawY === selectedLadderComment.rawY)) {
       selectedLadderComment = null;
     }
     const rowValues = xgkCanvasRowValues(ladder);
@@ -1367,6 +1368,7 @@ function iecOccupiedCell(body, rowIndex, rawX) {
     || rawX < 1 || rawX > 97 || (rawX - 1) % 3 !== 0) return true;
   if ((body.sourceStrings || []).some((item) => item.isIecComment
     && item.iecRowIndex === rowIndex)) return true;
+  if ((body.labels || []).some(label => label.rawY === rowIndex * 4)) return true;
   const areas = body.iecCircuitGraph?.occupiedAreas;
   if (areas) return areas.some((area) => area.kind !== "horizontalWire"
     && rowIndex >= area.startRowIndex && rowIndex <= area.endRowIndex
@@ -1394,7 +1396,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   const section = element("section", "iec-layout");
   section.append(element("h3", "", "IEC ladder layout"));
   section.append(element("p", "muted",
-    "Single-click selects cells. Double-click or Enter opens the instruction editor. Select a BOOL output pin and press F5 or Enter to draw a horizontal wire; F5 extends it from a blank cell. F6 draws a vertical connection beside the selected cell. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
+    "Single-click selects cells. Right-click an empty row to insert a comment or label. Double-click or Enter opens the instruction editor. Select a BOOL output pin and press F5 or Enter to draw a horizontal wire; F5 extends it from a blank cell. F6 draws a vertical connection beside the selected cell. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
   const rows = body.iecRows || [];
   if (!rows.length && !body.iecCircuitGraph) {
     section.append(emptyState("No decoded IEC rows."));
@@ -1418,6 +1420,17 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   let keyboardTarget = null;
   board.style.width = `${x(100) + 32}px`;
   board.style.height = `${y(lastEditableRow) + pitch}px`;
+  board.addEventListener("contextmenu", (event) => {
+    if (event.target.closest("input, textarea, select, [contenteditable]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const targetRow = event.target.closest("[data-row-index]");
+    const rowIndex = targetRow ? Number(targetRow.dataset.rowIndex)
+      : Math.round((event.clientY - board.getBoundingClientRect().top - top) / pitch);
+    if (rowIndex < 0 || rowIndex > lastEditableRow) return;
+    selectRow(rowIndex);
+    showIecCommentContextMenu(event.clientX, event.clientY, rowIndex, body);
+  });
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.classList.add("iec-layout-wires");
   svg.setAttribute("viewBox", `0 0 ${x(100) + 32} ${y(lastEditableRow) + pitch}`);
@@ -1574,7 +1587,9 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
   board.addEventListener("keydown", async event => {
     if (!isLadderDeleteKey(event) || event.target.closest("input, textarea, [contenteditable=true]")) return;
     const selected = [...deleteTargets.keys()].filter(node => node.classList.contains("selected"));
-    const focused = event.target.closest(".iec-layout-marker");
+    const rowLabel = event.target.closest(".iec-layout-row");
+    const focused = event.target.closest(".iec-layout-marker") || (rowLabel
+      ? board.querySelector(`.iec-layout-marker.comment[data-row-index="${rowLabel.dataset.rowIndex}"]`) : null);
     const nodes = selected.length ? selected : deleteTargets.has(focused) ? [focused] : [];
     if (!nodes.length) return;
     event.preventDefault(); event.stopPropagation();
@@ -1602,6 +1617,17 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     line(x(wire.x), y(wire.startRowIndex), x(wire.x), y(wire.endRowIndex), "branch");
   }
   board.append(svg);
+  for (const label of body.labels || []) {
+    const rowIndex = label.rawY / 4;
+    const node = ladderLabelButton(label, body, "iec-layout-marker ld-label-target", () => selectRow(rowIndex));
+    node.dataset.rowIndex = String(rowIndex);
+    node.dataset.rawX = "1";
+    node.style.left = `${x(0)}px`;
+    node.style.top = `${y(rowIndex) - 12}px`;
+    navigationMarkers.set(label.offset, node);
+    board.append(node);
+  }
+
   for (const wire of body.iecGeometry?.horizontal || []) {
     const longWire = wireKinds.get(wire.offset) === "Long wire" || wire.startX === wire.endX;
     const left = visualX(wire.rowIndex,wire.startX);
@@ -1734,9 +1760,14 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
       }
       selectRow(item.iecRowIndex);
       board.querySelectorAll(".iec-layout-marker.selected").forEach(node => node.classList.remove("selected"));
-      if (["contact","coil","function","operand"].includes(kind)) marker.classList.add("selected");
+      if (["contact","coil","comment","function","operand"].includes(kind)) marker.classList.add("selected");
       if (["contact","coil","comment","function"].includes(kind)) selectElement(item, marker);
     });
+    if (isComment) {
+      deleteTargets.set(marker, {offset:item.iecRecordOffset,
+        position:{rowIndex:item.iecRowIndex,rawX:1},
+        remove:bytes => deleteIecCommentBytes(bytes,item)});
+    }
     if (["contact","coil","function"].includes(kind)) {
       deleteTargets.set(marker,{offset:item.iecRecordOffset,position:{rowIndex:item.iecRowIndex,rawX:item.iecPosition?.[0] ?? 1},remove:(bytes,updated) => deleteIecElementBytes(bytes,item,updated)});
     }
@@ -2391,6 +2422,20 @@ function showIecEmptyOutputInput(block, pin) {
   });
 }
 
+function deleteIecCommentBytes(bytes, expected) {
+  const body = parse_xgwx(bytes).ladder.find(program => program.programIndex === selectedProgramIndex);
+  if (!body) throw new Error("Program changed since selection.");
+  const actual = (body.sourceStrings || []).find(item => item.isIecComment && item.iecRowIndex === expected.iecRowIndex);
+  if (!actual || actual.value !== expected.value) throw new Error("Comment changed since selection.");
+  const rows = (body.iecRows || []).filter(row => row.groupIndex === actual.iecGroupIndex);
+  const records = (body.iecRecords || []).filter(record => record.groupIndex === actual.iecGroupIndex);
+  if (rows.length !== 1 || records.length !== 1 || records[0].kind !== "Comment"
+    || records[0].offset !== actual.iecRecordOffset) {
+    throw new Error("Only a standalone rung-comment row can be deleted.");
+  }
+  return delete_xgwx_iec_ld_group(bytes,selectedProgramIndex,actual.iecGroupIndex,actual.iecRowIndex);
+}
+
 function deleteIecElementBytes(bytes, item, body) {
   if (item.iecElementKind && IEC_CONTACT_KIND_BY_SOURCE_LABEL.has(item.iecElementKind)) {
     const gap = iecAddressedContactSites(body,"iecNoContactDeletionSites").find(site => site.contactOffset === item.iecRecordOffset);
@@ -2621,74 +2666,140 @@ function renderIecNetworkDeletion(body) {
   return section;
 }
 
-function renderIecCommentInsertion(body) {
-  const rows = body.iecRows || [];
-  const records = body.iecRecords || [];
-  const graph = body.iecCircuitGraph;
-  if (!rows.length || !graph) return null;
-  const template = rows.some((row) => row.recordCount === 1
-    && rows.filter((other) => other.groupIndex === row.groupIndex).length === 1
-    && records.some((record) => record.groupIndex === row.groupIndex
-      && record.rowIndex === row.rowIndex && record.kind === "Comment"));
-  if (!template) return null;
-  const lastRow = Math.max(...rows.map((row) => row.rowIndex));
-  const destinations = [];
-  for (let index = 0; index <= lastRow + 1; index += 1) {
-    if (rows.some((row) => row.rowIndex === index)) continue;
-    if (graph.occupiedAreas.some((area) => area.startRowIndex <= index && area.endRowIndex >= index)) continue;
-    if (graph.edges.some((edge) => Math.min(edge.start.rowIndex, edge.end.rowIndex) <= index
-      && Math.max(edge.start.rowIndex, edge.end.rowIndex) >= index)) continue;
-    destinations.push(index);
-  }
-  if (!destinations.length) return null;
-  const section = element("section", "iec-insert-contact");
-  section.append(element("h3", "", "Insert IEC comment"));
-  const form = document.createElement("form");
-  const rowLabel = element("label", "", "Empty row");
-  const rowSelect = document.createElement("select");
-  rowSelect.setAttribute("aria-label", "IEC comment destination row");
-  for (const row of destinations) {
-    const option = document.createElement("option");
-    option.value = String(row);
-    option.textContent = `L${row}`;
-    rowSelect.append(option);
-  }
-  rowLabel.append(rowSelect);
-  const textLabel = element("label", "", "Comment");
-  const comment = document.createElement("input");
-  comment.type = "text";
-  comment.maxLength = 255;
-  comment.setAttribute("aria-label", "New IEC comment text");
-  textLabel.append(comment);
-  const submit = button("Insert comment", "secondary-button", () => {});
-  submit.type = "submit";
-  submit.textContent = "Insert comment";
-  const status = element("p", "muted");
-  const validate = () => {
-    try {
-      insert_xgwx_iec_ld_comment(current.file.bytes, selectedProgramIndex,
-        Number(rowSelect.value), comment.value);
-      submit.disabled = false;
-      status.textContent = `Ready to insert a comment at L${rowSelect.value}.`;
-    } catch (error) {
-      submit.disabled = true;
-      status.textContent = String(error);
-    }
-  };
-  rowSelect.addEventListener("change", validate);
-  comment.addEventListener("input", validate);
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    if (submit.disabled) return;
-    const row = Number(rowSelect.value);
-    await applyEdit(() => insert_xgwx_iec_ld_comment(
-      current.file.bytes, selectedProgramIndex, row, comment.value,
-    ), `Insert IEC comment at L${row}`);
+function showIecCommentContextMenu(clientX, clientY, rowIndex, body) {
+  closeLadderOverlay();
+  const menu = element("div", "ladder-context-menu");
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "IEC ladder actions");
+  const close = installLadderOverlayDismissal(menu);
+  const insert = button("Insert IEC comment", "ladder-context-item", () => {
+    close();
+    void showIecCommentInput(rowIndex);
   });
-  form.append(rowLabel, textLabel, submit);
-  validate();
-  section.append(form, status);
-  return section;
+  insert.setAttribute("role", "menuitem");
+  insert.textContent = "Insert IEC comment";
+  try {
+    insert_xgwx_iec_ld_comment(current.file.bytes, selectedProgramIndex, rowIndex, "Comment");
+  } catch (error) {
+    insert.disabled = true;
+    insert.title = `Cannot insert a comment at L${rowIndex}: ${String(error)}`;
+  }
+  menu.append(insert);
+  appendLdLabelActions(menu, close, body, rowIndex * 4);
+  positionLadderOverlay(menu, clientX, clientY);
+  insert.focus();
+}
+
+function appendLdLabelActions(menu, close, body, rawY) {
+  const existing = (body.labels || []).find(label => label.rawY === rawY);
+  const add = (title, action, edit) => {
+    const item = button(title, "ladder-context-item", () => { close(); void action(); });
+    item.textContent = title;
+    item.setAttribute("role", "menuitem");
+    try { edit_xgwx_ld_label(current.file.bytes, selectedProgramIndex, edit); }
+    catch (error) { item.disabled = true; item.title = String(error); }
+    menu.append(item);
+  };
+  let probe = "Label";
+  for (let index = 1; (body.labels || []).some(label => label.name === probe); index += 1) probe = `Label${index}`;
+  add(existing ? "Edit label" : "Insert label", () => showLdLabelInput(rawY, existing?.name ?? null),
+    { rawY, expected: existing?.name ?? null, replacement: probe });
+  if (existing) add("Delete label", () => applyEdit(() => edit_xgwx_ld_label(current.file.bytes,
+    selectedProgramIndex, {rawY, expected:existing.name, replacement:null}), `Delete label ${existing.name}`),
+    {rawY, expected:existing.name, replacement:null});
+}
+
+function showLdLabelMenu(clientX, clientY, body, rawY) {
+  closeLadderOverlay();
+  const menu = element("div", "ladder-context-menu");
+  menu.setAttribute("role", "menu");
+  menu.setAttribute("aria-label", "Ladder label actions");
+  const close = installLadderOverlayDismissal(menu);
+  appendLdLabelActions(menu, close, body, rawY);
+  positionLadderOverlay(menu, clientX, clientY);
+  menu.querySelector(":not(:disabled)")?.focus();
+}
+
+async function showLdLabelInput(rawY, expected = null) {
+  if (instructionPromptOpen) return;
+  instructionPromptOpen = true;
+  const source = current.file.bytes, fileUri = current.file.uri, programIndex = selectedProgramIndex;
+  const validate = replacement => {
+    if (current?.file.uri !== fileUri || current.file.bytes !== source || selectedProgramIndex !== programIndex) {
+      throw new Error("Program changed. Reopen the label prompt.");
+    }
+    return edit_xgwx_ld_label(source, programIndex, {rawY, expected, replacement});
+  };
+  try {
+    const value = await new Promise(resolve => {
+      const requestId = ++nextContactPromptId;
+      pendingContactPrompts.set(requestId, {resolve, validate, restoreFocus:false});
+      vscode.postMessage({type:"promptLdLabel", requestId,
+        title:`${expected === null ? "Insert" : "Edit"} label at L${rawY / 4}`,
+        value:expected || "", prompt:"Case-sensitive label: start with a letter; up to 16 English or 8 Korean characters.",
+      });
+    });
+    if (value == null || value === expected) return;
+    await applyEdit(() => validate(value), `${expected === null ? "Insert" : "Rename"} label ${value}`);
+  } finally {
+    instructionPromptOpen = false;
+    if (current?.file.uri === fileUri && selectedProgramIndex === programIndex) requestAnimationFrame(() => {
+      document.querySelector(`[data-ld-label-row="${rawY}"]`)?.focus({preventScroll:true});
+    });
+  }
+}
+
+function ladderLabelButton(label, body, className, select = () => {}) {
+  const node = button(`Label: ${label.name}`, className, () => select());
+  node.textContent = `${label.name}:`;
+  node.dataset.ldLabelRow = String(label.rawY);
+  node.dataset.findText = label.name;
+  node.addEventListener("dblclick", event => { event.preventDefault(); void showLdLabelInput(label.rawY, label.name); });
+  node.addEventListener("contextmenu", event => {
+    event.preventDefault(); event.stopPropagation(); select();
+    showLdLabelMenu(event.clientX, event.clientY, body, label.rawY);
+  });
+  node.addEventListener("keydown", event => {
+    if (event.key === "Enter" && !event.repeat) { event.preventDefault(); event.stopPropagation(); void showLdLabelInput(label.rawY, label.name); }
+    if (isLadderDeleteKey(event)) {
+      event.preventDefault(); event.stopPropagation();
+      void applyEdit(() => edit_xgwx_ld_label(current.file.bytes, selectedProgramIndex,
+        {rawY:label.rawY, expected:label.name, replacement:null}), `Delete label ${label.name}`);
+    }
+  });
+  return node;
+}
+
+async function showIecCommentInput(rowIndex) {
+  if (instructionPromptOpen) return;
+  instructionPromptOpen = true;
+  const source = current.file.bytes, fileUri = current.file.uri, programIndex = selectedProgramIndex;
+  const validate = value => {
+    if (current?.file.uri !== fileUri || current.file.bytes !== source || selectedProgramIndex !== programIndex) {
+      throw new Error("Program changed. Reopen the comment prompt.");
+    }
+    if (!value.trim()) throw new Error("Enter a comment.");
+    return insert_xgwx_iec_ld_comment(source, programIndex, rowIndex, value);
+  };
+  try {
+    const value = await new Promise(resolve => {
+      const requestId = ++nextContactPromptId;
+      pendingContactPrompts.set(requestId, { resolve, validate, restoreFocus: false });
+      vscode.postMessage({ type: "promptIecComment", requestId,
+        title: `Insert IEC comment at L${rowIndex}`, value: "",
+        prompt: "Enter a rung comment (up to 255 UTF-16 units).",
+      });
+    });
+    if (value == null) return;
+    await applyEdit(() => validate(value), `Insert IEC comment at L${rowIndex}`);
+  } finally {
+    instructionPromptOpen = false;
+    if (current?.file.uri === fileUri && selectedProgramIndex === programIndex) {
+      requestAnimationFrame(() => document.querySelector(
+        `.iec-layout-row[data-row-index="${rowIndex}"]`,
+      )?.focus({ preventScroll: true }));
+    }
+  }
 }
 
 function renderIecNetworkReplacement(body) {
@@ -4469,7 +4580,8 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
   const rowValues = xgkCanvasRowValues(ladder);
   let selectedKeys = ladderSelectionKeys(rowValues, selectedLadderAnchor, selectedLadderFocus);
   const rungNumbers = new Map(rowValues.map((rawY, index) => [rawY, index]));
-  const layoutRows = buildLdLayoutRows(rowValues, ladder.rungComments || []);
+  const annotations = [...(ladder.rungComments || []), ...(ladder.labels || []).map(label => ({...label, text:label.name, isLabel:true}))].sort((a,b) => a.rawY-b.rawY);
+  const layoutRows = buildLdLayoutRows(rowValues, annotations);
   const rowIndexes = new Map(layoutRows
     .map((row, index) => row.type === "rung" ? [row.rawY, index] : null)
     .filter(Boolean));
@@ -4483,10 +4595,11 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
   const focusCursor = (cursor, extend = false) => {
     if (!cursor) return;
     if (cursor.type === "comment") {
-      const target = (ladder.rungComments || []).find((comment) => comment.rawY === cursor.rawY);
+      const target = annotations.find((comment) => comment.rawY === cursor.rawY);
       if (!target) return;
-      selectComment({ kind: "Rung", ...target, expected: target.text }, cursor.column);
-      board.querySelector(`[data-ladder-comment-key="Rung:${cursor.rawY}"]`)?.focus();
+      const kind = target.isLabel ? "Label" : "Rung";
+      selectComment({ kind, ...target, expected: target.text }, cursor.column);
+      board.querySelector(`[data-ladder-comment-key="${kind}:${cursor.rawY}"]`)?.focus();
       return;
     }
     const position = { rawY: cursor.rawY, column: cursor.column };
@@ -4713,6 +4826,22 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
 
   layoutRows.forEach((row, layoutIndex) => {
     if (row.type !== "comment") return;
+    if (row.comment.isLabel) {
+      const label = row.comment;
+      const node = ladderLabelButton(label, ladder, "ld-rung-label-target", () => selectComment({kind:"Label",rawY:label.rawY}));
+      node.dataset.ladderCommentKey = `Label:${label.rawY}`;
+      node.style.left = `${LD_LEFT_RAIL + 1}px`;
+      node.style.top = `${ldRowY(layoutIndex)}px`;
+      node.addEventListener("focus", () => selectComment({kind:"Label",rawY:label.rawY}));
+      node.addEventListener("keydown", event => {
+        if (["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(event.key)) {
+          event.preventDefault();
+          focusCursor(moveLadderCursor(layoutRows,{type:"comment",rawY:label.rawY,column:selectedLadderComment?.column || 0},event.key));
+        }
+      });
+      board.append(node);
+      return;
+    }
     const commentLabel = element("span", "ld-comment-label", "설명문");
     commentLabel.style.top = `${ldRowY(layoutIndex)}px`;
     board.append(commentLabel);
@@ -5005,6 +5134,7 @@ function showLadderContextMenu(clientX, clientY, ladder, position, deleteSelecti
   const separator = element("div", "ladder-context-separator");
   separator.setAttribute("role", "separator");
   menu.append(copy, cut, paste, separator, rung, output);
+  appendLdLabelActions(menu, close, ladder, position.rawY);
   positionLadderOverlay(menu, clientX, clientY);
   menu.querySelector(":not(:disabled)")?.focus();
 }
@@ -5642,7 +5772,7 @@ function renderIecActionsDialog(inspector, body) {
         renderIecNetworkRelocation, renderIecNetworkReplacement,
         renderIecCrossProgramReplacement, renderIecHorizontalWireRepair,
         renderIecHorizontalWireDeletion, renderIecBranchEditing,
-        renderIecBlankRowInsertion, renderIecCommentInsertion,
+        renderIecBlankRowInsertion,
       ].map((render) => render(body)).filter(Boolean);
       dialog.append(...actions);
       dialog.dataset.built = "true";

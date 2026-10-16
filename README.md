@@ -258,7 +258,11 @@ powered by the sibling `libxgwx` project during development.
   generated L30 insertion and L31 deletion, reported 0 errors, 1 warning
   category, and 42 messages for each, and preserved all seven ProgramData payloads during
   each Save As.
-  **Insert IEC comment** fills an empty row with a standalone comment. For a
+  Right-click an empty IEC ladder cell or row label and choose **Insert IEC comment**,
+  enter the text in the native VS Code prompt, then press **Enter**. Press **Escape** to cancel. The comment fills the clicked row, including canvas rows beyond the stored tail.
+  Programs without existing comments are supported. Select the comment text or
+  its row label and press **Delete** or **Backspace** to remove a standalone rung
+  comment. The existing circuit rows keep their coordinates. For a
   program with no gap, insert a blank IEC row first. The program 1 L6 sequence
   shifted MOVE down, then inserted a comment; the rendered webview produced
   bytes identical to the generated file. XG5000 rendered, checked, and resaved
@@ -618,6 +622,17 @@ under Apache-2.0. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) and
 XGK contact and coil operands accept individual D-register bits, for example
 `NO D0000.F` and `OUT D0001.0`. The suffix is one hex digit from `0` to `F`;
 word instructions continue to use the whole register, such as `MOV D0000 D0001`.
+
+IEC and XGK LD labels use native jump-target records. Right-click a ladder row
+and choose **Insert label**, then enter its name in the native VS Code prompt.
+For IEC, choose an empty row; insert a blank row first when needed. On XGK,
+selecting an occupied rung inserts a dedicated label row above it. Double-click
+an existing label or press Enter to rename it; right-click for **Edit label**
+and **Delete label**, or press Delete/Backspace while the label is focused.
+Names are case-sensitive, begin with a letter, and contain letters, digits or
+underscores, with a limit of 16 English or 8 Korean characters. Duplicate names
+and stale edits are rejected. Copying IEC label networks is guarded to avoid
+duplicate targets. Jump instructions are not added by this command.
 
 Verified linear and branched LD layouts support inserting, replacing and deleting normally open/closed, rising/falling-edge and negated edge contacts; INV, PUP and PDN operations; and output, inverse, set/reset and rising/falling-edge coils. Select a cell and use the Element and Device address controls; operandless operations hide the address field. Delete removes selected supported elements and leaves wiring gaps. Arrow-key navigation includes rung comments; press Delete or Backspace on a selected comment to remove it. Click a rung comment to select it, double-click it to edit it, or right-click it to edit or delete it. Double-click an output comment to edit it. Right-click a ladder cell to copy, cut, or paste supported structural elements, add a rung comment above that row, or add an output comment on the row. Drag-selected rectangles retain their selection when right-clicked; copied blank positions clear the corresponding destination cells. Ctrl+L inserts a row before the cursor and stretches crossing branch connections. The Rows and branches inspector adds or removes vertical connections after columns 1–9 to the row below. Select a function block and use Instruction to change its mnemonic, then edit its comma-separated operands in Source text. The catalog offers 859 fixed-arity application instructions; blocks resize with their operand counts and reject overlaps. Operand text can change length. Instruction availability and operand validity depend on the selected PLC; use XG5000 Check Program after editing. Legacy LD row deletion and horizontal-wire editing are not supported yet. Check edited programs in XG5000; disconnected branches can produce program errors.
 
