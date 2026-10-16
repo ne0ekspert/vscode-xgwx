@@ -13,7 +13,6 @@ artifact_dir="${CARGO_TARGET_DIR:-$library_dir/target}"
 if [[ "$artifact_dir" != /* ]]; then
   artifact_dir="$(pwd)/$artifact_dir"
 fi
-package_dir="$library_dir/web/dist/pkg"
 output_dir="$extension_dir/media"
 wasm_pack="${WASM_PACK:-$HOME/.cargo/bin/wasm-pack}"
 wasm_opt="${WASM_OPT:-$(command -v wasm-opt || true)}"
@@ -51,33 +50,33 @@ else
   export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=$HOME=/build/home"
 fi
 
-if [[ -x "$wasm_pack" ]]; then
-  build_dir="$(mktemp -d)"
-  if "$wasm_pack" build "$library_dir" \
+build_dir="$(mktemp -d)"
+trap 'rm -rf "$build_dir"' EXIT
+package_dir="$build_dir"
+if [[ -x "$wasm_pack" ]] && "$wasm_pack" build "$library_dir" \
     --target web \
     --out-dir "$build_dir" \
     --out-name libxgwx \
     --features wasm,write,il \
-    --no-default-features; then
-    package_dir="$build_dir"
-  else
-    if [[ -z "$wasm_bindgen" ]]; then
-      echo "wasm-pack failed and no wasm-bindgen fallback is available." >&2
-      exit 1
-    fi
-    cargo build \
-      --manifest-path "$library_dir/Cargo.toml" \
-      --release \
-      --target wasm32-unknown-unknown \
-      --features wasm,write,il \
-      --no-default-features
-    "$wasm_bindgen" \
-      "$artifact_dir/wasm32-unknown-unknown/release/xgwx.wasm" \
-      --target web \
-      --out-dir "$build_dir" \
-      --out-name libxgwx
-    package_dir="$build_dir"
+    --no-default-features \
+    -- --locked; then
+  :
+else
+  if [[ -z "$wasm_bindgen" ]]; then
+    echo "wasm-pack is unavailable or failed, and no wasm-bindgen fallback is available." >&2
+    exit 1
   fi
+  cargo build --locked \
+    --manifest-path "$library_dir/Cargo.toml" \
+    --release \
+    --target wasm32-unknown-unknown \
+    --features wasm,write,il \
+    --no-default-features
+  "$wasm_bindgen" \
+    "$artifact_dir/wasm32-unknown-unknown/release/xgwx.wasm" \
+    --target web \
+    --out-dir "$build_dir" \
+    --out-name libxgwx
 fi
 
 for asset in libxgwx.js libxgwx_bg.wasm; do

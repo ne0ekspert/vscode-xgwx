@@ -568,7 +568,7 @@ in the development host to inspect the ladder webview.
 Install dependencies and create a VSIX:
 
 ```bash
-npm install
+npm ci
 npm run package
 ```
 
@@ -576,6 +576,34 @@ The corresponding source for a published VSIX is available from the matching
 release or tag in the [project repository](https://github.com/ne0ekspert/vscode-xgwx).
 The exact `libxgwx` source revision used by the bundled WebAssembly artifacts is
 recorded in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
+## CI and releases
+
+CI runs on pushes to `main`/`master`, pull requests, and manual runs. It installs
+locked npm dependencies, checks JavaScript syntax, tests the committed WASM,
+then rebuilds WASM from the exact library commit in `THIRD_PARTY_NOTICES.md`.
+It tests the rebuilt bundle, packages a VSIX, and verifies its runtime files,
+licenses, and source revision. The downloadable `extension-release` artifact
+contains the VSIX, `BUILD.json` provenance, and `SHA256SUMS`. Repository fixtures,
+build checkouts, and development tools are excluded from the VSIX.
+
+To publish a GitHub Release, update `package.json` and `package-lock.json` to the
+new extension version, review the library source pin, and commit the changes.
+Push an annotated `vX.Y.Z` tag pointing to that reviewed commit, matching the
+extension version. For example, after preparing version `0.1.1`:
+
+```bash
+git tag -a v0.1.1 <reviewed-commit> -m 'vscode-xgwx 0.1.1'
+git push origin v0.1.1
+```
+
+The release workflow runs the same CI build and uploads its verified VSIX,
+provenance, and checksums to [GitHub Releases](https://github.com/ne0ekspert/vscode-xgwx/releases).
+It uses the repository token; no publishing secret is required. A manual release
+workflow run on a branch builds a candidate; selecting an existing version tag
+also publishes it. Failed uploads can be retried while the Release is a draft;
+already public Releases are preserved. Marketplace publishing is a separate step.
+Install a downloaded release using **Extensions: Install from VSIX…** in VS Code.
 
 ## License
 

@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    outputs:
+      version:
+        description: Extension version validated by the build
+        value: ${{ jobs.build.outputs.version }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.source.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Test bundled WASM and extension
+        run: npm test
+      - name: Validate version and read pinned library revision
+        id: source
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const { version } = require('./package.json');
+          if (process.env.GITHUB_REF_TYPE === 'tag' && process.env.GITHUB_REF_NAME !== `v${version}`) {
+            throw new Error(`Release tag must be v${version}`);
+          }
+          const notices = fs.readFileSync('THIRD_PARTY_NOTICES.md', 'utf8');
+          const matches = [...notices.matchAll(/https:\/\/github\.com\/ne0ekspert\/libxgwx\/tree\/([0-9a-f]{40})\b/g)];
+          if (matches.length !== 1) throw new Error('Expected one pinned libxgwx source commit');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${version}\nlibxgwx_ref=${matches[0][1]}\n`);
+          JS
+      - name: Check out pinned libxgwx source
+        uses: actions/checkout@v4
+        with:
+          repository: ne0ekspert/libxgwx
+          ref: ${{ steps.source.outputs.libxgwx_ref }}
+          path: .build/libxgwx
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned WASM builder
+        run: cargo install wasm-pack --version 0.15.0 --locked
+      - name: Rebuild bundled WASM from pinned source
+        env:
+          LIBXGWX_DIR: ${{ github.workspace }}/.build/libxgwx
+        run: npm run build:wasm
+      - name: Test rebuilt WASM and extension
+        run: npm test
+      - name: Package and verify VSIX
+        env:
+          EXTENSION_VERSION: ${{ steps.source.outputs.version }}
+        run: |
+          mkdir -p dist
+          npm run package -- --out "dist/vscode-xgwx-$EXTENSION_VERSION.vsix"
+          python scripts/verify-vsix.py "dist/vscode-xgwx-$EXTENSION_VERSION.vsix" --library-source .build/libxgwx
+          (cd dist && sha256sum *.vsix BUILD.json > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-release
+          path: dist/*
+          if-no-files-found: error
