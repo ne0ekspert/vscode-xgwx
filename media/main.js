@@ -1,3 +1,5 @@
+import { formatOperandValue, integerOperandWidth } from "./operand-values.js";
+import { formatHexOperands, nativeHexOperands } from "./hex-operands.js";
 import { createInlineProperties } from "./inline-properties.js";
 import { renderOpcUaTags } from "./opcua-tags.js";
 import { renderOpcUaOptions } from "./opcua-options.js";
@@ -215,6 +217,55 @@ let selectedNetworkModuleKey = null;
 const inlineProperties = createInlineProperties();
 let pendingInlineTarget = null;
 let dirty = false;
+let hexPrefix = "h";
+let valueDisplay = vscode.getState?.()?.valueDisplay || "source";
+function displayLadderOperand(value, bits = null, floating = false) {
+  const symbols = (current?.summary.localVariables?.[selectedProgramIndex] || []).map(symbol => symbol.name);
+  return formatOperandValue(value, {mode:valueDisplay,prefix:hexPrefix,bits,symbols,floating});
+}
+function xgkDisplayOperands(cell, ladder) {
+  const choice = [...(ladder.instructionChoices || []), ...(ladder.comparisonChoices || [])]
+    .find(choice => choice.mnemonic === cell.value);
+  return (cell.operands || []).map((value, index) => {
+    const types = choice?.operandRules?.[index]?.dataTypes;
+    if (types?.some(type => ["REAL", "LREAL", "STRING"].includes(type))) {
+      if (valueDisplay !== "float" || types.length !== 1 || types[0] === "STRING") return value;
+      return displayLadderOperand(value, types[0] === "REAL" ? 32 : 64, true);
+    }
+    return displayLadderOperand(value, integerOperandWidth(types));
+  });
+}
+function iecOperandWidth(body, item) {
+  const link = body.iecFunctionOperandLinks?.find(link => link.recordOffset === item.iecRecordOffset);
+  const block = body.iecFunctions?.find(block => block.recordOffset === link?.targetRecordOffset);
+  const pin = block && functionPins(block).find(pin => pin.referenceOrdinal === link.ordinal);
+  if (valueDisplay === "float" && ["REAL", "LREAL"].includes(pin?.dataType)) {
+    return {bits:pin.dataType === "REAL" ? 32 : 64,floating:true};
+  }
+  if (["BOOL", "REAL", "LREAL", "STRING", "TIME", "DATE", "TIME_OF_DAY", "DATE_AND_TIME"].includes(pin?.dataType)) return false;
+  const exact = integerOperandWidth([pin?.dataType]);
+  if (exact) return exact;
+  const widths = [];
+  for (const other of body.iecFunctionOperandLinks || []) {
+    if (other.targetRecordOffset !== block?.recordOffset) continue;
+    const operand = body.sourceStrings?.find(s => s.iecRecordOffset === other.recordOffset && s.isIecFunctionOperand);
+    const symbol = current.summary.localVariables?.[selectedProgramIndex]?.find(s => s.name.toLowerCase() === operand?.value.toLowerCase());
+    if (["REAL", "LREAL", "STRING"].includes(symbol?.dataType)) {
+      if (valueDisplay === "float" && ["REAL", "LREAL"].includes(symbol.dataType)) {
+        return {bits:symbol.dataType === "REAL" ? 32 : 64,floating:true};
+      }
+      return false;
+    }
+    const width = integerOperandWidth([symbol?.dataType]);
+    if (width) widths.push(width);
+  }
+  return widths.length && widths.every(width => width === widths[0]) ? widths[0] : null;
+}
+
+function ladderOperandText(value) {
+  const symbols = (current?.summary.localVariables?.[selectedProgramIndex] || []).map(symbol => symbol.name);
+  return formatHexOperands(value, hexPrefix, symbols);
+}
 let dismissLadderOverlay = null;
 let ladderClipboard = null;
 let iecClipboard = null;
@@ -226,6 +277,19 @@ let nextContactPromptId = 0;
 const pendingContactPrompts = new Map();
 
 window.addEventListener("message", async ({ data }) => {
+  if (data?.type === "setValueDisplay" && current?.file.uri === data.uri) {
+    if (!["unsigned", "signed", "hex", "float", "source"].includes(data.mode)) return;
+    valueDisplay = data.mode;
+    vscode.setState?.({...vscode.getState?.(), valueDisplay});
+    renderWorkspace();
+    return;
+  }
+
+  if (data?.type === "hexPrefix") {
+    hexPrefix = data.value === "0x" ? "0x" : "h";
+    if (current) renderWorkspace();
+    return;
+  }
   if (data?.type === "validateLadderInstruction") {
     let error;
     try {
@@ -312,6 +376,7 @@ window.addEventListener("message", async ({ data }) => {
 vscode.postMessage({ type: "ready" });
 
 async function loadWorkspace(file) {
+  if (file.hexPrefix != null) hexPrefix = file.hexPrefix === "0x" ? "0x" : "h";
   const viewport = app.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
   if (current && viewport && activeView === "programs") ladderCanvasScroll.set(canvasExtentKey(), {
     top: viewport.scrollTop, left: viewport.scrollLeft,
@@ -1334,7 +1399,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
       }
       return edited;
     };
-    canvas.append(editorHeader("Ladder diagram", `${ladder.rungs.length} rungs · ${LD_COLUMN_COUNT} columns`));
+    canvas.append(editorHeader("Ladder diagram", `${ladder.rungs.length} rungs · ${LD_COLUMN_COUNT} columns · ${valueDisplay} values`));
     canvas.append(renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelection));
   } else {
     canvas.append(emptyState("This program has no decoded ladder body."));
@@ -1394,7 +1459,7 @@ function iecContactInsertionSiteAt(body, rowIndex, rawX) {
 
 function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow, selectBlank) {
   const section = element("section", "iec-layout");
-  section.append(element("h3", "", "IEC ladder layout"));
+  section.append(element("h3", "", `IEC ladder layout · ${valueDisplay} values`));
   section.append(element("p", "muted",
     "Single-click selects cells. Right-click an empty row to insert a comment or label. Double-click or Enter opens the instruction editor. Select a BOOL output pin and press F5 or Enter to draw a horizontal wire; F5 extends it from a blank cell. F6 draws a vertical connection beside the selected cell. Select a row label and use Ctrl+C/Ctrl+V to copy and paste networks."));
   const rows = body.iecRows || [];
@@ -1752,7 +1817,9 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     const kind = isComment ? "comment" : isFunction ? "function" : isOperand ? "operand"
       : contactGlyph ? "contact" : coilGlyph ? "coil" : "unknown";
     const glyph = contactGlyph || coilGlyph || (isFunction ? "▣" : "[?]");
-    const label = isComment || isOperand || isFunction ? item.value : `${glyph} ${item.value}`;
+    const operandBits = isOperand ? iecOperandWidth(body, item) : null;
+    const displayValue = isOperand && operandBits !== false ? displayLadderOperand(item.value, operandBits?.bits ?? operandBits, operandBits?.floating) : item.value;
+    const label = isOperand ? displayValue : isComment || isFunction ? item.value : `${glyph} ${item.value}`;
     const marker = button(label, `iec-layout-marker ${kind}`, (event) => {
       if (event.detail && marker.dataset.suppressClick === "true") {
         delete marker.dataset.suppressClick;
@@ -1812,14 +1879,14 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     marker.title = `${description} · L${item.iecRowIndex} · byte ${item.offset}`
       + (isOperand ? " · Double-click or Enter to edit value" + (link?.isOutput && linkedPin?.name === "OUT" ? " · Delete or Backspace removes assignment" : "")
         : ["contact", "coil", "function"].includes(kind) ? " · Double-click or Enter to edit instruction" : "");
-    marker.dataset.findText = item.value;
+    marker.dataset.findText = isOperand ? `${item.value} ${displayValue}` : item.value;
     marker.dataset.iecOffset = String(item.offset);
     marker.dataset.rowIndex = String(item.iecRowIndex);
     marker.dataset.rawX = String(item.iecPosition?.[0] ?? 1);
     navigationMarkers.set(item.iecRecordOffset, marker);
     marker.classList.toggle("inspected", selectedIecElement?.programIndex === selectedProgramIndex
       && selectedIecElement.offset === item.offset);
-    marker.setAttribute("aria-label", `${description}: ${item.value}, L${item.iecRowIndex}`);
+    marker.setAttribute("aria-label", `${description}: ${displayValue}, L${item.iecRowIndex}`);
     const block = isFunction ? blockByNameOffset.get(item.offset) : owner;
     const ownerOffset = block ? gapOffset(block.rowIndex, block.rawX) : null;
     const storedX = item.iecPosition?.[0] ?? 1;
@@ -2121,7 +2188,7 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
   try {
     const requestId = ++nextContactPromptId;
     const cachedBuild = validatedEditCache((bytes, command, operands) =>
-      build(choices.find(choice => choice.mnemonic === command), operands, bytes, programIndex));
+      build(choices.find(choice => choice.mnemonic === command), operands.map(operand => nativeHexOperands(operand, iec)), bytes, programIndex));
     const validate = result => {
       if (current?.file.uri !== fileUri || selectedProgramIndex !== programIndex || current.file.bytes !== source) {
         throw new Error("The program changed while the editor was open. Reopen the instruction editor.");
@@ -2138,7 +2205,7 @@ async function requestLadderInstruction({ choices, value = "", title, mode, iec,
     const result = await new Promise(resolve => {
       pendingContactPrompts.set(requestId, { resolve, focusSelector, fileUri, programIndex, validate, restoreFocus: false });
       vscode.postMessage({ type: "promptLadderInstruction", requestId, title,
-        instruction: { choices, value, mode, singleValue, allowEmpty, iec: Boolean(iec), suggestions: [...instructionSuggestions(iec), ...choices.flatMap(choice => choice.suggestions || [])] } });
+        instruction: { choices, value: formatHexOperands(value, hexPrefix, [...(current.summary.localVariables?.[programIndex] || []).map(symbol => symbol.name), ...choices.map(choice => choice.mnemonic)]), mode, singleValue, allowEmpty, iec: Boolean(iec), suggestions: [...instructionSuggestions(iec), ...choices.flatMap(choice => choice.suggestions || [])] } });
     });
     if (result) await applyEdit(() => validate(result), `${mode === "edit" ? "Edit" : "Insert"} ${result.command}`, () => {
       if (afterInsert) focusSelector = afterInsert(choices.find(choice => choice.mnemonic === result.command)) || focusSelector;
@@ -4924,8 +4991,9 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     const rowIndex = rowIndexes.get(cell.rawY);
     if (rowIndex === undefined) return;
     const position = { rawY: cell.rawY, rowIndex: rungNumbers.get(cell.rawY), column: ldCellColumn(cell.rawX) };
-    const node = button(ldCellAriaLabel(cell, rungNumbers.get(cell.rawY)), `ld-cell ${ldCellClass(cell)}`, () => {});
-    node.dataset.findText = [cell.value || ldMarkerLabel(cell), ...(cell.operands || [])].filter(Boolean).join(" ");
+    const displayOperands = xgkDisplayOperands(cell, ladder);
+    const node = button(ldCellAriaLabel(cell, rungNumbers.get(cell.rawY)) + (displayOperands.length ? ` · ${displayOperands.join(" ")}` : ""), `ld-cell ${ldCellClass(cell)}`, () => {});
+    node.dataset.findText = [cell.value || ldMarkerLabel(cell), ...(cell.operands || []), ...displayOperands].filter(Boolean).join(" ");
     node.dataset.cellOffset = String(cell.offset);
     bindSelection(node, position);
     node.addEventListener("click", (event) => {
@@ -4954,8 +5022,8 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
     }
     node.style.top = `${ldRowY(rowIndex)}px`;
     node.title = cell.contact && cell.sourceText
-      ? `${cell.sourceText} · Double-click or Enter to edit operand`
-      : cell.sourceText || cell.value || cell.contact || cell.coil || cell.kind;
+      ? `${ladderOperandText(cell.sourceText)} · Double-click or Enter to edit operand`
+      : ladderOperandText(cell.sourceText || cell.value || cell.contact || cell.coil || cell.kind);
     const value = element("span", "ld-value", cell.value || ldMarkerLabel(cell));
     const contactVariant = cell.kind !== "Instruction" && !cell.instructionTextEditing && !cell.coil
       ? xgkContactVariant(cell.contact) : null;
@@ -4965,7 +5033,7 @@ function renderLadderDiagram(ladder, selectPosition, selectComment, deleteSelect
       : ldCellGlyph(cell));
     if (cell.kind === "Instruction" || cell.instructionTextEditing) node.append(glyph);
     else node.append(value, glyph);
-    if (cell.operands?.length) node.append(element("span", "ld-operands", cell.operands.join(" ")));
+    if (cell.operands?.length) node.append(element("span", "ld-operands", displayOperands.join(" ")));
     board.append(node);
   });
 
@@ -5327,7 +5395,7 @@ function ldMarkerLabel(cell) {
 
 function ldCellAriaLabel(cell, rowIndex) {
   const kind = cell.contact || cell.coil || cell.kind;
-  const value = cell.sourceText || cell.value || kind;
+  const value = ladderOperandText(cell.sourceText || cell.value || kind);
   return `Rung ${rowIndex + 1}, column ${ldCellColumn(cell.rawX) + 1}, ${kind}, ${value}`;
 }
 
@@ -5546,13 +5614,13 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
       instructionSelect.value = cell.value;
       field.append(instructionSelect); cellSection.append(field);
     }
-    const source = property(cellSection, "Source text", cell.sourceText, false, true);
+    const source = property(cellSection, "Source text", ladderOperandText(cell.sourceText), false, true);
     const requiredUnits = utf16Length(cell.sourceText);
     const counter = element("div", "length-counter");
     const cachedBuild = validatedEditCache((bytes, _command, operands) =>
       update_xgwx_ladder_cell(bytes, ...operands));
     const buildCell = () => cachedBuild(current.file.bytes, "source", [
-      selectedProgramIndex, cell.offset, cell.sourceText, source.value,
+      selectedProgramIndex, cell.offset, cell.sourceText, source.value === ladderOperandText(cell.sourceText) ? cell.sourceText : nativeHexOperands(source.value),
     ]);
     const applyCell = button("Apply ladder cell", "primary-button", async () => {
       await applyEdit(
@@ -5562,7 +5630,7 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     });
     applyCell.textContent = "Apply cell";
     const validate = () => {
-      const units = utf16Length(source.value);
+      const units = utf16Length(nativeHexOperands(source.value));
       if (cell.instructionTextEditing) {
         let error = "";
         try {
@@ -5572,9 +5640,9 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
         }
         counter.textContent = error || "Instruction and operands may change. Separate operands with commas; the block resizes when applied.";
         counter.classList.toggle("invalid", Boolean(error));
-        applyCell.disabled = Boolean(error) || source.value === cell.sourceText;
+        applyCell.disabled = Boolean(error) || source.value === ladderOperandText(cell.sourceText);
       } else {
-        const valid = units === requiredUnits && source.value !== cell.sourceText;
+        const valid = units === requiredUnits && source.value !== ladderOperandText(cell.sourceText);
         counter.textContent = `${units} / ${requiredUnits} UTF-16 units`;
         counter.classList.toggle("invalid", units !== requiredUnits);
         applyCell.disabled = !valid;

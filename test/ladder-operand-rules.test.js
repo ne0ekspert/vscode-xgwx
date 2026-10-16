@@ -89,3 +89,12 @@ test('XGK string constants preserve punctuation and enforce destination permissi
   assert.ok(operandError(source,"1"));
   assert.ok(operandError({...source,dataTypes:['WORD']},"'Room A'"));
 });
+
+test('0x constants obey the same destination restrictions as h constants', () => {
+  const source={label:'Source',dataTypes:['WORD'],allowsConstant:true};
+  const destination={...source,label:'Destination',allowsConstant:false};
+  for(const value of ['h00FF','0x00FF','0X00ff']) {
+    assert.equal(operandError(source,value),undefined);
+    assert.ok(operandError(destination,value));
+  }
+});

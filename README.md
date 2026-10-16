@@ -4,6 +4,10 @@ With an XGWX editor active, open **Ctrl+Shift+P → XGWX: Edit XGK IL** to view 
 
 Press **Ctrl+F** (**Cmd+F** on macOS) in Programs or Variables to find literal text in the current view. Use **Enter/F3** for the next match, **Shift+Enter/Shift+F3** for the previous match, **Aa** for case-sensitive search, and **Escape** to close. Program search covers ladder/SFC elements and ST/IL source. Variable search includes global and local names, addresses, types, comments, and program names, including entries beyond the default table limit.
 
+In VS Code **User Settings**, search for **XGWX: Hex Prefix** (`xgwx.hexPrefix`). Choose `h` (default, `h00FF`) or `0x` (`0x00FF`) for ladder operands. Changes apply immediately to open editors without modifying the project. XGK operand editing accepts either prefix and saves native `h` syntax; IEC literal grammar is unchanged. Addresses, strings, comments, and other numeric displays keep their original formatting.
+
+Use **XGWX: View Values as Unsigned**, **Signed**, **Hexadecimal**, or **Float** in the Command Palette to change ladder constant display in the active editor. **View Values as Source** restores the stored spelling. Hexadecimal follows `xgwx.hexPrefix`. Signed/unsigned reinterpretation uses known integer operand widths (including 64-bit values); ambiguous widths remain unchanged when a conversion would require guessing. Float reinterprets known 32-bit and 64-bit integer patterns as IEEE-754 single and double precision, including negative zero, infinities, and NaN. Decimal REAL/LREAL constants keep their numeric meaning. These commands do not edit project bytes. Operand edit fields retain the source value.
+
 ## Native editor tab
 
 XGWX uses VS Code's native `.xgwx` file tabs. The webview has no internal tab strip; the editor canvas begins directly below VS Code's breadcrumbs. Sidebar selections reuse the file tab, and separate `.xgwx` files retain their own native tabs. Save, Undo/Redo, splitting, and closing continue through the custom document lifecycle.

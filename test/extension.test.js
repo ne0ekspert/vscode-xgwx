@@ -75,6 +75,7 @@ test("startup recovery respects editor choices, dirty tabs, file magic and async
   let associations = { "*.md": "default" };
   let binaryEditor;
   mockVscode.workspace.getConfiguration = (section) => ({ get: (key, fallback) => {
+    if (section === "xgwx") return fallback;
     if (section === "workbench" && key === "editorAssociations") return associations;
     if (section === "workbench.editor" && key === "defaultBinaryEditor") return binaryEditor ?? fallback;
     throw new Error(`Unexpected configuration key: ${section}.${key}`);
@@ -929,4 +930,50 @@ test('Find command targets only the active ready editor', async () => {
   active.ready = false;
   await provider.findActive();
   assert.equal(messages.length, 1);
+});
+
+test('hex user setting loads and updates open editors without editing bytes', async () => {
+  const previousGet = mockVscode.workspace.getConfiguration;
+  const previousChange = mockVscode.workspace.onDidChangeConfiguration;
+  let prefix = '0x', changed, disposed = false, receive, close;
+  mockVscode.workspace.getConfiguration = () => ({get: () => prefix});
+  mockVscode.workspace.onDidChangeConfiguration = callback => {
+    changed = callback; return {dispose() {disposed = true;}};
+  };
+  const messages = [];
+  try {
+    const provider = new XgwxEditorProvider({extensionUri:'/extension'});
+    const document = new XgwxDocument(uri('/workspace/hex.xgwx'), [1,2,3]);
+    const panel = {visible:true, webview:{cspSource:'test-source',asWebviewUri:v=>v,
+      onDidReceiveMessage(callback) {receive=callback;return {dispose(){}};},
+      async postMessage(message) {messages.push(message);}},
+      onDidDispose(callback) {close=callback;}};
+    await provider.resolveCustomEditor(document,panel);
+    await receive({type:'ready'});
+    assert.equal(messages.at(-1).hexPrefix,'0x');
+    prefix='h';changed({affectsConfiguration:key=>key==='xgwx.hexPrefix'});
+    assert.deepEqual(messages.at(-1),{type:'hexPrefix',value:'h'});
+    assert.deepEqual(Array.from(document.bytes),[1,2,3]);
+    assert.equal(document.dirty,false);
+    close();assert.equal(disposed,true);
+  } finally {
+    mockVscode.workspace.getConfiguration=previousGet;
+    mockVscode.workspace.onDidChangeConfiguration=previousChange;
+  }
+});
+
+test('value-display commands target the active ready editor and preserve bytes', async () => {
+  const provider = new XgwxEditorProvider({});
+  const messages = [];
+  const inactive = {document:new XgwxDocument(uri('/inactive.xgwx'),[]),ready:true,panel:{active:false,webview:{postMessage:async()=>assert.fail('inactive editor received command')}}};
+  const active = {document:new XgwxDocument(uri('/active.xgwx'),[1,2,3]),ready:true,panel:{active:true,webview:{postMessage:async message=>messages.push(message)}}};
+  provider.editors.add(inactive);provider.editors.add(active);
+  for(const mode of ['unsigned','signed','hex','float','source']) await provider.setActiveValueDisplay(mode);
+  assert.deepEqual(messages.map(m=>[m.type,m.mode,m.uri]),['unsigned','signed','hex','float','source'].map(mode=>['setValueDisplay',mode,'/active.xgwx']));
+  await provider.setActiveValueDisplay('invalid');
+  active.ready=false;await provider.setActiveValueDisplay('hex');
+  active.ready=true;active.panel.active=false;await provider.setActiveValueDisplay('hex');
+  assert.equal(messages.length,5);
+  assert.deepEqual(Array.from(active.document.bytes),[1,2,3]);
+  assert.equal(active.document.dirty,false);
 });

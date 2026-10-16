@@ -95,6 +95,7 @@ class XgwxEditorProvider {
         await panel.webview.postMessage({
           type: "load",
           initialProgramView,
+          hexPrefix: vscode.workspace.getConfiguration("xgwx").get("hexPrefix", "h"),
           fileName: path.basename(document.uri.fsPath || document.uri.path),
           uri: document.uri.toString(),
           byteLength: document.bytes.byteLength,
@@ -109,6 +110,13 @@ class XgwxEditorProvider {
         });
       }
     };
+
+    const configuration = vscode.workspace.onDidChangeConfiguration?.(event => {
+      if (editor.ready && event.affectsConfiguration("xgwx.hexPrefix")) {
+        void panel.webview.postMessage({ type: "hexPrefix", value:
+          vscode.workspace.getConfiguration("xgwx").get("hexPrefix", "h") });
+      }
+    });
 
     const validations = new Map();
     let nextValidationId = 0;
@@ -237,6 +245,7 @@ class XgwxEditorProvider {
     panel.onDidDispose(() => {
       this.editors.delete(editor);
       viewState?.dispose();
+      configuration?.dispose();
       if (this.explorer?.editor === editor) this.explorer.setEditor(
         [...this.editors].find(other => other.panel.active) || [...this.editors].find(other => other.panel.visible) || [...this.editors].at(-1));
       messages.dispose();
@@ -310,6 +319,7 @@ class XgwxEditorProvider {
     // Serialize once per broadcast, regardless of sibling count.
     const message = type === "load" ? {
       type: "load",
+      hexPrefix: vscode.workspace.getConfiguration("xgwx").get("hexPrefix", "h"),
       fileName: path.basename(document.uri.fsPath || document.uri.path),
       uri: document.uri.toString(),
       byteLength: document.bytes.byteLength,
@@ -331,6 +341,13 @@ class XgwxEditorProvider {
   async findActive() {
     const active = [...this.editors].find(editor => editor.panel.active && editor.ready);
     if (active) await active.panel.webview.postMessage({ type: "openFind" });
+  }
+
+  async setActiveValueDisplay(mode) {
+    if (!["unsigned", "signed", "hex", "float", "source"].includes(mode)) return;
+    const active = [...this.editors].find(editor => editor.panel.active && editor.ready);
+    if (active) await active.panel.webview.postMessage({ type: "setValueDisplay", mode,
+      uri: active.document.uri.toString() });
   }
 
   async setActiveProgramView(view) {
@@ -659,6 +676,8 @@ function activate(context) {
     }),
     vscode.commands.registerCommand("xgwx.editXgkIl", () => provider.setActiveProgramView("vendorIl")),
     vscode.commands.registerCommand("xgwx.showXgkLadder", () => provider.setActiveProgramView("ladder")),
+    ...["unsigned", "signed", "hex", "float", "source"].map(mode =>
+      vscode.commands.registerCommand(`xgwx.viewValues.${mode}`, () => provider.setActiveValueDisplay(mode))),
     vscode.commands.registerCommand("xgwx.find", () => provider.findActive()),
     vscode.commands.registerCommand("xgwx.refreshViewer", () => provider.refreshActive()),
     vscode.commands.registerCommand("xgwx.newFile", () => createNewWorkspace(context)),

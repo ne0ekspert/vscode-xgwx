@@ -83,6 +83,36 @@
         "title": "Find in Program or Variables",
         "category": "XGWX",
         "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
+      },
+      {
+        "command": "xgwx.viewValues.unsigned",
+        "title": "View Values as Unsigned",
+        "category": "XGWX",
+        "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
+      },
+      {
+        "command": "xgwx.viewValues.signed",
+        "title": "View Values as Signed",
+        "category": "XGWX",
+        "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
+      },
+      {
+        "command": "xgwx.viewValues.hex",
+        "title": "View Values as Hexadecimal",
+        "category": "XGWX",
+        "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
+      },
+      {
+        "command": "xgwx.viewValues.float",
+        "title": "View Values as Float",
+        "category": "XGWX",
+        "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
+      },
+      {
+        "command": "xgwx.viewValues.source",
+        "title": "View Values as Source",
+        "category": "XGWX",
+        "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
       }
     ],
     "menus": {
@@ -184,7 +214,26 @@
         "mac": "cmd+f",
         "when": "activeCustomEditorId == xgwx.workspaceViewer && !inputFocus"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "XGWX",
+      "properties": {
+        "xgwx.hexPrefix": {
+          "type": "string",
+          "enum": [
+            "h",
+            "0x"
+          ],
+          "enumDescriptions": [
+            "XG5000 style: h00FF",
+            "C style: 0x00FF"
+          ],
+          "default": "h",
+          "scope": "window",
+          "description": "Hexadecimal prefix for ladder operand display and editing. Project files retain native literal syntax."
+        }
+      }
+    }
   },
   "scripts": {
     "check": "node --check extension.js && node --check media/main.js && node --check media/inline-properties.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check new-workspace.cjs && node --check explorer.cjs && node --check media/explorer-model.js",

@@ -16,7 +16,7 @@ function operandError(rule, value, iec = false) {
   }
   const text = value.toUpperCase();
   const number = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:E[+-]?\d+)?$/.test(text);
-  const constant = number || (!iec && (/^H[0-9A-F]+$/.test(text) || /^B[01]+$/.test(text)));
+  const constant = number || (!iec && (/^(?:H|0X)[0-9A-F]+$/.test(text) || /^B[01]+$/.test(text)));
   if (!iec && constant && rule.dataTypes?.length === 1 && rule.dataTypes[0] === 'STRING') return `${rule.label}: string constants require single quotes`;
   if (!iec && !constant && rule.allowsConstant === true && Array.isArray(rule.deviceAreas) && !rule.deviceAreas.length) {
     return `${rule.label}: use a constant`;

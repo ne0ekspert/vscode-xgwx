@@ -32,7 +32,7 @@ test("registers a default editable XGWX custom editor", () => {
 });
 
 test("ships the parser assets used by the webview", () => {
-  for (const asset of ["media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/ladder-clipboard.js", "media/module-option-groups.js", "media/iec-layout-positions.js", "media/variable-edit.js", "media/main.js", "media/main.css", "media/sfc.js", "media/sfc-actions.js", "media/sfc-declarations.js", "media/sfc-clipboard.js", "media/st-diagnostics.js", "media/sfc-limits.js"]) {
+  for (const asset of ["media/operand-values.js", "media/hex-operands.js", "media/libxgwx.js", "media/libxgwx_bg.wasm", "media/hardware-slots.js", "media/ladder-elements.js", "media/ladder-selection.js", "media/ladder-clipboard.js", "media/module-option-groups.js", "media/iec-layout-positions.js", "media/variable-edit.js", "media/main.js", "media/main.css", "media/sfc.js", "media/sfc-actions.js", "media/sfc-declarations.js", "media/sfc-clipboard.js", "media/st-diagnostics.js", "media/sfc-limits.js"]) {
     const stat = fs.statSync(path.join(root, asset));
     assert.ok(stat.size > 0, `${asset} should not be empty`);
   }
@@ -48,7 +48,7 @@ test("optimizes the production WASM bundle when wasm-opt is available", () => {
 
 test("uses editable custom-document save support", () => {
   const commands = manifest.contributes.commands.map((command) => command.command);
-  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile", "xgwx.explorerCreateProgram", "xgwx.explorerDeleteProgram", "xgwx.editXgkIl", "xgwx.showXgkLadder", "xgwx.find"]);
+  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile", "xgwx.explorerCreateProgram", "xgwx.explorerDeleteProgram", "xgwx.editXgkIl", "xgwx.showXgkLadder", "xgwx.find", "xgwx.viewValues.unsigned", "xgwx.viewValues.signed", "xgwx.viewValues.hex", "xgwx.viewValues.float", "xgwx.viewValues.source"]);
   const extension = fs.readFileSync(path.join(root, "extension.js"), "utf8");
   for (const method of ["saveCustomDocument", "saveCustomDocumentAs", "revertCustomDocument", "backupCustomDocument"]) {
     assert.match(extension, new RegExp(`\\b${method}\\b`));
