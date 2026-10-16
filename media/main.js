@@ -355,7 +355,7 @@ function renderWorkspace() {
   vscode.postMessage({ type: "explorerState", state: explorerNodes(file, summary, {
     view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
     networkIndex: selectedNetworkIndex, networkModuleKey: selectedNetworkModuleKey,
-  }) });
+  }, cpuCatalog) });
   const oldShell = app.querySelector(".editor-shell");
   const sameProgram = activeView === "programs" && oldShell?.dataset.view === activeView
     && oldShell.dataset.programIndex === String(selectedProgramIndex);

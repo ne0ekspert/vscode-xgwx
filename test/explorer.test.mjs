@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Module from 'node:module';
+import fs from 'node:fs';
 import { explorerNodes } from '../media/explorer-model.js';
+import init, {create_xgwx_project, cpu_catalog, parse_xgwx} from '../media/libxgwx.js';
+
+await init({module_or_path: fs.readFileSync(new URL('../media/libxgwx_bg.wasm', import.meta.url))});
 
 const file = {uri:'file:///one.xgwx',fileName:'one.xgwx'};
 const summary = {hardware:{bases:[{base:0}],modules:[{base:0,slot:1}]},programs:[{name:'First',objectId:'a'},{name:'Second',objectId:'b'}],programLanguages:['LD'],networks:[{name:'Ethernet',modules:[{base:0,slot:1,id:7,name:'FENET@0x1234'}]}],counts:{variables:42},parameters:[{}]};
@@ -72,4 +76,40 @@ test('network aliases do not become additional occupied hardware slots',()=>{
     {kind:'network',hardware:module},{kind:'network',hardware:{...module}},
   ]}],modules:[module]}};
   assert.equal(explorerNodes(file,scoped,{view:'hardware',baseIndex:0}).nodes[1].children[0].label,'Base 0 (1)');
+});
+
+test('native CPU limits control sidebar bases and retain navigation targets',async()=>{
+  const catalog=cpu_catalog();
+  for (const [model,count] of [['XGK-CPUE',2],['XGK-CPUSN',4],['XGK-CPUHN',8]]) {
+    const parsed=parse_xgwx(create_xgwx_project('XGK-CPUSN','LD'));
+    parsed.cpu=catalog.find(cpu=>cpu.model===model);
+    assert.equal(parsed.hardware.bases.length,8);
+    const state=explorerNodes(file,parsed,{view:'hardware',base:count-1,baseIndex:count-1},catalog);
+    assert.deepEqual(state.nodes[1].children.map(row=>row.label),Array.from({length:count},(_,base)=>`Base ${base} (0)`));
+    const calls=[];
+    const editor={explorerState:state};
+    const explorer=new XgwxExplorer((target,message)=>calls.push([target,message]));
+    explorer.setEditor(editor);
+    const rows=explorer.getChildren(explorer.nodes.get('hardware'));
+    assert.equal(rows.length,count);
+    assert.equal(explorer.getTreeItem(rows.at(-1)).label,`Base ${count-1} (0)`);
+    await explorer.dispatch(rows.at(-1));
+    assert.equal(calls[0][0],editor);
+    assert.deepEqual(calls[0][1].target,{view:'hardware',base:count-1,baseIndex:count-1});
+  }
+});
+
+test('filtering keeps record identity, occupied out-of-range bases, and unknown PLCs',()=>{
+  const catalog=cpu_catalog();
+  const parsed=parse_xgwx(create_xgwx_project('XGK-CPUSN','LD'));
+  parsed.hardware.bases.reverse();
+  const occupied=parsed.hardware.bases.find(base=>base.base===5);
+  occupied.modules=[{kind:'io',hardware:{base:5,slot:0,id:1}}];
+  const state=explorerNodes(file,parsed,{view:'hardware',base:3,baseIndex:3},catalog);
+  assert.deepEqual(state.nodes[1].children.map(row=>row.id),['base:5','base:3','base:2','base:1','base:0']);
+  assert.equal(state.nodes[1].children[0].label,'Base 5 (1)');
+  assert.equal(state.selectedId,'base:3');
+  assert.equal(state.nodes[1].children[1].target.baseIndex,3);
+  assert.equal(explorerNodes(file,{...parsed,cpu:{typeCode:999}},{},catalog).nodes[1].children.length,8);
+  assert.equal(explorerNodes(file,{...parsed,counts:{configurations:2}},{},catalog).nodes[1].children.length,8);
 });

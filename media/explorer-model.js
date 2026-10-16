@@ -1,12 +1,20 @@
 import { baseRecordIndex, installedBaseModules } from "./hardware-slots.js";
 // Only navigation metadata crosses into the extension host; workspace bytes stay in the editor.
-export function explorerNodes(file, summary, selection) {
+export function explorerNodes(file, summary, selection, cpuCatalog = []) {
   const leaf = (id, label, icon, target, contextValue) => ({ id, label, icon, target, contextValue });
   const group = (id, label, icon, children, target, contextValue) => ({ ...leaf(id, label, icon, target, contextValue), children });
   const hardware = summary.hardware || {};
+  const cpu = cpuCatalog.find(entry => entry.typeCode === summary.cpu?.typeCode);
+  // The native file keeps unused base records beyond the CPU's physical limit.
+  // Only apply the primary CPU's local rack limit to a single-PLC project.
+  const maxBase = summary.counts?.configurations === 1
+    && ["XGK", "XGI", "XGB"].includes(cpu?.family) ? cpu.maxBase : null;
+  const bases = (hardware.bases || []).map((base, index) => ({ base, index }))
+    .filter(({ base }) => !Number.isInteger(maxBase) || !Number.isInteger(base.base)
+      || base.base < maxBase || installedBaseModules(base, hardware).length > 0);
   const nodes = [
     leaf("overview", "Workspace", "settings-gear", { view: "overview" }),
-    group("hardware", "Hardware", "circuit-board", (hardware.bases || []).map((base, index) =>
+    group("hardware", "Hardware", "circuit-board", bases.map(({ base, index }) =>
       leaf(`base:${baseRecordIndex(base, index)}`, `Base ${base.base}${(hardware.bases || []).some(other => other !== base && other.base === base.base) ? ` · PLC ${base.configurationIndex ?? "unassigned"}` : ""} (${installedBaseModules(base, hardware).length})`, "server", { view: "hardware", base: base.base, baseIndex: baseRecordIndex(base, index) })), { view: "hardware" }),
     group("programs", `Programs (${summary.programs?.length || 0})`, "code", (summary.programs || []).map((program, index) =>
       leaf(`program:${program.objectId || index}`, program.name || `Program ${index + 1}`, "code", { view: "programs", programIndex: index, objectId: program.objectId }, program.objectId ? "xgwxProgram" : undefined)), { view: "programs" }, summary.programLanguages?.length ? "xgwxPrograms" : undefined),
