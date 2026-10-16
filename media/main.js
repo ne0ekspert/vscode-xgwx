@@ -1160,6 +1160,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
   }
 
   if (ladder?.projectType === 2 && programLanguage(ladder) === "Ladder Diagram") {
+    canvas.classList.add("ladder-editor-canvas");
     const editableCount = (ladder.sourceStrings || []).filter((item) => item.isIecComment || item.iecElementKind || item.isIecFunctionOperand || item.isIecArithmeticFunction || item.isIecComparisonFunction).length;
     canvas.append(editorHeader(
       `${programLanguage(ladder)} payload`,
@@ -1220,6 +1221,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
 
   if (ladder?.structuralEditing && !ladder.rungs.length) ladder.rungs = [{ rawY: 0 }];
   if (ladder) {
+    canvas.classList.add("ladder-editor-canvas");
     if (ladder.structuralEditing) {
       const storedLast = Math.max(-4, ...ladder.rungs.map(row => row.rawY), ...(ladder.rungComments || []).map(row => row.rawY));
       ladder.canvasRowValues = xgkCanvasRowValues(ladder, Math.min(65535, Math.max(

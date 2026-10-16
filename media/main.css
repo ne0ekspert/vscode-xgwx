@@ -206,6 +206,17 @@ button.tree-row:hover,
   overflow: auto;
 }
 
+.ladder-editor-canvas {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ladder-editor-canvas > :not(.ld-viewport, .iec-layout),
+.iec-layout > :not(.iec-layout-viewport) {
+  flex-shrink: 0;
+}
+
 .editor-toolbar {
   position: sticky;
   top: 0;
@@ -518,7 +529,8 @@ button.tree-row:hover,
 
 .ld-viewport {
   min-width: 0;
-  max-height: 560px;
+  min-height: 0;
+  flex: 1;
   overflow: auto;
   border-bottom: 1px solid var(--vscode-panel-border);
   background: var(--vscode-editor-background);
@@ -992,6 +1004,10 @@ button.tree-row:hover,
 }
 
 .iec-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   padding: 10px 14px 14px;
   border-bottom: 1px solid var(--vscode-panel-border);
 }
@@ -1007,7 +1023,8 @@ button.tree-row:hover,
 }
 
 .iec-layout-viewport {
-  max-height: 560px;
+  min-height: 0;
+  flex: 1;
   overflow: auto;
   border: 1px solid var(--vscode-panel-border);
   background: var(--vscode-editor-background);
