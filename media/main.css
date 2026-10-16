@@ -935,29 +935,6 @@ button.tree-row:hover,
   color: var(--vscode-inputValidation-errorForeground, #f48771);
 }
 
-.raw-details {
-  border-top: 1px solid var(--vscode-panel-border);
-}
-
-.raw-details summary {
-  padding: 9px 11px;
-  cursor: default;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.raw-value {
-  margin: 0;
-  padding: 4px 12px 14px;
-  overflow: auto;
-  color: var(--vscode-editor-foreground);
-  background: transparent;
-  font-family: var(--ladder-font-family);
-  font-size: 11px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-}
-
 .overview-properties {
   display: grid;
   grid-template-columns: repeat(2, minmax(220px, 1fr));
@@ -1533,10 +1510,10 @@ form.iec-rung-creation {
 @media (max-width: 980px) {
   .workbench { grid-template-columns: minmax(0, 1fr); }
   .inspector-pane { display: none; }
-  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"], [data-view="networks"]) .workbench {
+  .editor-shell:is([data-view="programs"], [data-view="variables"]) .workbench {
     grid-template-rows: minmax(360px, 1fr) minmax(220px, 38vh);
   }
-  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"], [data-view="networks"]) .inspector-pane {
+  .editor-shell:is([data-view="programs"], [data-view="variables"]) .inspector-pane {
     display: block;
     grid-column: 1;
     grid-row: 2;
@@ -1547,14 +1524,14 @@ form.iec-rung-creation {
 @media (max-width: 680px) {
   .workbench { grid-template-rows: minmax(0, 1fr); grid-template-columns: 1fr; }
   .overview-properties { grid-template-columns: 1fr; }
-  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"], [data-view="networks"]) .workbench {
+  .editor-shell:is([data-view="programs"], [data-view="variables"]) .workbench {
     grid-template-rows: minmax(360px, 1fr) minmax(240px, auto);
   }
-  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"], [data-view="networks"]) .editor-pane {
+  .editor-shell:is([data-view="programs"], [data-view="variables"]) .editor-pane {
     grid-column: 1;
     grid-row: 1;
   }
-  .editor-shell:is([data-view="hardware"], [data-view="programs"], [data-view="variables"], [data-view="networks"]) .inspector-pane {
+  .editor-shell:is([data-view="programs"], [data-view="variables"]) .inspector-pane {
     grid-column: 1;
     grid-row: 2;
   }
@@ -1835,3 +1812,72 @@ form.iec-rung-creation {
 .opcua-options .property-label, .opcua-tag-editor .property-label { overflow-wrap: anywhere; }
 .opcua-options fieldset { min-width: 0; margin: 0; padding: 8px; border: 1px solid var(--vscode-panel-border); }
 .opcua-tag-editor .property-field { margin-bottom: 8px; }
+
+/* Hardware and Networks use full-width, in-table property editors. */
+.editor-shell:is([data-view="hardware"], [data-view="networks"]) .workbench {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.inline-properties-toggle {
+  width: 24px;
+  margin: -3px 5px -3px -5px;
+  padding: 3px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+.inline-properties-toggle:focus-visible,
+.data-table tr[data-inline-key]:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+.data-table > tbody > .inline-detail-row > td {
+  padding: 0;
+  white-space: normal;
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  background: var(--vscode-editor-background);
+  color: var(--vscode-foreground);
+}
+.inline-detail-row[hidden] { display: none; }
+.inline-properties {
+  min-width: 0;
+  padding: 8px 12px 18px;
+  border-left: 2px solid var(--vscode-focusBorder);
+  overflow-wrap: anywhere;
+}
+.inline-properties .inspector-heading {
+  position: static;
+  padding: 0;
+  background: transparent;
+}
+.inline-properties > .property-grid,
+.inline-properties .opcua-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px 24px;
+  align-items: start;
+}
+.inline-properties .property-grid > :is(section, .network-config-heading, .module-selection-note),
+.inline-properties .property-grid > button,
+.inline-properties .opcua-options > :is(.network-config-heading, button, .module-selection-note) {
+  grid-column: 1 / -1;
+}
+.inline-properties .property-field { min-width: 0; }
+.inline-properties > :is(.module-picker, .module-options) { padding: 10px; }
+.inline-properties > .module-picker { max-width: 700px; }
+.inline-properties .property-grid > button,
+.inline-properties .opcua-options > button { justify-self: start; min-width: 180px; }
+
+/* Keep spanning property panels inside the viewport even when table values are long. */
+.editor-shell[data-view="hardware"] .editor-table-host > .table-scroll > .data-table,
+.editor-shell[data-view="networks"] .editor-canvas > .table-scroll > .data-table,
+.editor-shell[data-view="networks"] .network-module-table > .table-scroll > .data-table {
+  table-layout: fixed;
+}
+.editor-shell[data-view="hardware"] .editor-table-host > .table-scroll > .data-table th:nth-child(3) {
+  width: 30%;
+}
+.editor-shell[data-view="networks"] .data-table th:first-child { width: 30%; }

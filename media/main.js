@@ -1,3 +1,4 @@
+import { createInlineProperties } from "./inline-properties.js";
 import { renderOpcUaTags } from "./opcua-tags.js";
 import { renderOpcUaOptions } from "./opcua-options.js";
 import { createFindController, createProgramFindRanges } from "./find.js";
@@ -210,6 +211,8 @@ let selectedLadderComment = null;
 let selectedVariableIndex = 0;
 let selectedNetworkIndex = 0;
 let selectedNetworkModuleKey = null;
+const inlineProperties = createInlineProperties();
+let pendingInlineTarget = null;
 let dirty = false;
 let dismissLadderOverlay = null;
 let ladderClipboard = null;
@@ -275,7 +278,8 @@ window.addEventListener("message", async ({ data }) => {
     if (target.view === "hardware") {
       selectedBaseIndex = target.baseIndex ?? 0;
       selectedBase = target.base ?? current.summary.hardware?.bases?.[0]?.base ?? null;
-      selectedModule = null; selectedHardwareSlot = null;
+      selectedModule = null; selectedHardwareSlot = target.slot ?? null;
+      if (target.slot != null) pendingInlineTarget = hardwarePropertiesKey(selectedBaseIndex, target.slot);
     }
     if (target.view === "programs" && target.objectId && index < 0) return;
     if (target.view === "programs" && index >= 0) {
@@ -286,6 +290,7 @@ window.addEventListener("message", async ({ data }) => {
     if (target.view === "networks") {
       selectedNetworkIndex = target.networkIndex ?? 0;
       selectedNetworkModuleKey = target.networkModuleKey ?? null;
+      pendingInlineTarget = networkPropertiesKey(selectedNetworkIndex, selectedNetworkModuleKey);
     }
     if (["overview", "hardware", "programs", "networks", "variables", "parameters"].includes(target.view)) selectView(target.view);
     return;
@@ -294,6 +299,7 @@ window.addEventListener("message", async ({ data }) => {
   if (data?.type === "error") renderError(data.message);
   if (data?.type === "saved" || data?.type === "reverted") {
     dirty = Boolean(data.dirty);
+    if (current && data.type === "reverted") inlineProperties.invalidate(current.file.uri);
     if (current && data.type === "reverted") {
       renderWorkspace();
     }
@@ -327,6 +333,7 @@ async function loadWorkspace(file) {
     const previousPrograms=current?.file.uri===file.uri ? current.summary.programs : null;
     const activeId=previousPrograms?.[selectedProgramIndex]?.objectId;
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
+    inlineProperties.invalidate(file.uri);
     if(previousPrograms && (previousPrograms.length!==summary.programs.length || previousPrograms.some((p,i)=>p.objectId!==summary.programs[i]?.objectId)))reconcileProgramOrder(previousPrograms,activeId);
     if (file.initialProgramView === "vendorIl") {
       const program=summary.vendorIlPrograms?.[0];
@@ -360,6 +367,8 @@ function renderWorkspace() {
     view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
     networkIndex: selectedNetworkIndex, networkModuleKey: selectedNetworkModuleKey,
   }, cpuCatalog) });
+  reconcileInlineProperties(summary);
+  if (pendingInlineTarget) inlineProperties.open(file.uri, pendingInlineTarget);
   const oldShell = app.querySelector(".editor-shell");
   const sameProgram = activeView === "programs" && oldShell?.dataset.view === activeView
     && oldShell.dataset.programIndex === String(selectedProgramIndex);
@@ -374,6 +383,15 @@ function renderWorkspace() {
   shell.dataset.programIndex = String(selectedProgramIndex);
   shell.append(renderWorkbench(file, summary));
   app.append(shell);
+  if (pendingInlineTarget) {
+    const key = pendingInlineTarget;
+    pendingInlineTarget = null;
+    requestAnimationFrame(() => {
+      const row = [...shell.querySelectorAll("tr[data-inline-key]")].find(row => row.dataset.inlineKey === key);
+      row?.scrollIntoView({ block: "nearest" });
+      row?.focus({ preventScroll: true });
+    });
+  }
   const layout = scroll && shell.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
   if (layout) {
     layout.scrollTop = scroll.top;
@@ -383,13 +401,31 @@ function renderWorkspace() {
   }
 }
 
+function hardwarePropertiesKey(baseIndex, slot) { return `hardware:${baseIndex}:${slot}`; }
+function networkPropertiesKey(index, moduleKey = null) { return `network:${index}${moduleKey ? `:module:${moduleKey}` : ""}`; }
+function reconcileInlineProperties(summary) {
+  const keys = new Set();
+  const hardware = summary.hardware || {};
+  (hardware.bases || []).forEach((base, index) => {
+    const modules = installedBaseModules(base, hardware);
+    const count = baseSlotCount(base, modules, moduleSlotSpan);
+    for (let slot = 0; slot < count; slot++) keys.add(hardwarePropertiesKey(baseRecordIndex(base, index), slot));
+  });
+  (summary.networks || []).forEach((network, index) => {
+    keys.add(networkPropertiesKey(index));
+    (network.modules || []).forEach(module => keys.add(networkPropertiesKey(index, networkModuleKey(module))));
+  });
+  inlineProperties.prune(current.file.uri, keys);
+}
+
 function renderWorkbench(file, summary) {
   const workbench = element("div", "workbench");
   const editor = element("main", "editor-pane");
   const inspector = element("aside", "inspector-pane");
 
   renderEditor(editor, summary, inspector);
-  workbench.append(editor, inspector);
+  workbench.append(editor);
+  if (!["hardware", "networks"].includes(activeView)) workbench.append(inspector);
   return workbench;
 }
 
@@ -535,7 +571,7 @@ function showIoVariableGeneration(canvas) {
   canvas.prepend(preview);preview.scrollIntoView({block:"start"});
 }
 
-function renderHardwareEditor(canvas, inspector, hardware) {
+function renderHardwareEditor(canvas, _inspector, hardware) {
   const base = (hardware.bases || []).find((item, index) => baseRecordIndex(item, index) === selectedBaseIndex);
   const baseModules = installedBaseModules(base, hardware);
   const slotCount = baseSlotCount(base, baseModules, moduleSlotSpan);
@@ -609,18 +645,17 @@ function renderHardwareEditor(canvas, inspector, hardware) {
     scope.textContent = query
       ? `Base ${selectedBase} · ${matchingModules.size} matches · ${slotCount} slots`
       : `Base ${selectedBase} · ${usedSlots}/${slotCount} slots · ${baseModules.length} modules`;
-    tableHost.replaceChildren(renderModuleTable(visibleRows, inspector));
+    tableHost.replaceChildren(renderModuleTable(visibleRows));
   };
   search.addEventListener("input", renderRows);
   canvas.append(toolbar, baseError, tableHost);
   renderRows();
-  renderModuleInspector(inspector, selectedModule, selectedHardwareSlot);
 }
 
-function renderModuleTable(slotRows, inspector) {
+function renderModuleTable(slotRows) {
   if (!slotRows.length) return emptyState("No slots match this filter.");
   const wrap = element("div", "table-scroll");
-  const table = createTable(["Base", "Slots", "Width", "ID", "Name", "Input filter", "Comment"]);
+  const table = createTable(["Slots", "Width", "Name", "Comment"]);
   table.setAttribute("aria-label", "Hardware modules. Double-click a row to select a module. Use Up and Down to navigate and Delete to remove a module.");
   slotRows.forEach((slotRow, index) => {
     const { module, slot } = slotRow;
@@ -636,31 +671,33 @@ function renderModuleTable(slotRows, inspector) {
     const select = () => {
       selectedModule = module;
       selectedHardwareSlot = slot;
-      table.querySelectorAll("tbody tr").forEach((item) => {
+      table.querySelectorAll("tbody > tr[data-module-key]").forEach((item) => {
         const selected = item === row;
         item.classList.toggle("selected", selected);
         item.setAttribute("aria-selected", String(selected));
       });
-      renderModuleInspector(inspector, module, slot);
     };
-    row.addEventListener("click", select);
-    row.addEventListener("dblclick", () => {
+    const baseIndex = selectedBaseIndex;
+    const panel = inlineProperties.attach({
+      uri: current.file.uri, key: hardwarePropertiesKey(baseIndex, slot), row,
+      label: `Base ${slotRow.base}, Slot ${slot}${module ? ` · ${module.name}` : " · Empty"}`,
+      render: host => renderModuleInspector(host, module, slot, slotRow.base), onSelect: select,
+    });
+    row.addEventListener("dblclick", event => {
+      if (event.target.closest("button")) return;
       select();
       void pickHardwareModule(slotRow);
     });
+    row.addEventListener("focusrow", panel.select);
     row.addEventListener("keydown", async (event) => {
-      if (event.key === "Enter" || event.key === " ") {
-        event.preventDefault();
-        select();
-        return;
-      }
+      if (event.target !== row) return;
       if (event.key === "ArrowUp" || event.key === "ArrowDown") {
         event.preventDefault();
         const offset = event.key === "ArrowUp" ? -1 : 1;
         const targetIndex = Math.max(0, Math.min(slotRows.length - 1, index + offset));
-        const targetRow = table.tBodies[0].rows[targetIndex];
+        const targetRow = table.querySelectorAll("tbody > tr[data-module-key]")[targetIndex];
         if (targetRow && targetRow !== row) {
-          targetRow.click();
+          targetRow.dispatchEvent(new Event("focusrow"));
           targetRow.focus();
         }
         return;
@@ -731,7 +768,7 @@ async function pickHardwareModule({ base, slot, module }) {
   }
 }
 
-function renderModuleInspector(inspector, module, physicalSlot = module?.slot ?? null) {
+function renderModuleInspector(inspector, module, physicalSlot = module?.slot ?? null, base = selectedBase) {
   inspector.replaceChildren();
   inspector.append(inspectorHeading("MODULE"));
   if (!module && physicalSlot === null) {
@@ -739,7 +776,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
     return;
   }
 
-  const targetBase = module?.base ?? selectedBase;
+  const targetBase = module?.base ?? base;
   const targetSlot = module?.slot ?? physicalSlot;
   const editableHardware = supportsRackHardware();
   const profile = current.summary.hardware?.cpuProfile;
@@ -844,11 +881,7 @@ function renderModuleInspector(inspector, module, physicalSlot = module?.slot ??
 
   const options = renderModuleOptions(module, currentEntry);
 
-  const raw = element("details", "raw-details");
-  raw.open = true;
-  raw.append(element("summary", "", "Raw Details"));
-  raw.append(element("pre", "raw-value", formatRawDetails(module)));
-  inspector.append(form, picker, options, raw);
+  inspector.append(form, picker, options);
 }
 
 function renderModuleOptions(module, entry) {
@@ -5702,7 +5735,7 @@ async function applyEdit(update, label, beforeRender) {
   try {
     const editorPane = app.querySelector(".editor-canvas");
     const iecViewport = app.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
-    const scroll = activeView === "programs" ? {
+    const scroll = ["programs", "hardware", "networks"].includes(activeView) ? {
       editorTop: editorPane?.scrollTop ?? 0,
       layoutTop: iecViewport?.scrollTop ?? 0,
       layoutLeft: iecViewport?.scrollLeft ?? 0,
@@ -5713,6 +5746,7 @@ async function applyEdit(update, label, beforeRender) {
     const bytes = update();
     const summary = parse_xgwx(bytes);
     current = { file: { ...current.file, byteLength: bytes.byteLength, bytes }, summary };
+    inlineProperties.invalidate(current.file.uri);
     if (selectedModuleKey) {
       selectedModule = (summary.hardware?.modules || []).find(
         (module) => module.base === selectedModuleKey.base && module.slot === selectedModuleKey.slot,
@@ -5739,14 +5773,19 @@ async function applyEdit(update, label, beforeRender) {
   }
 }
 
-function renderNetworksEditor(canvas, inspector, summary) {
+function renderNetworksEditor(canvas, _inspector, summary) {
   const networks = summary.networks || [];
+  if (!networks[selectedNetworkIndex]) selectedNetworkIndex = 0;
+  if (selectedNetworkModuleKey && !networks[selectedNetworkIndex]?.modules?.some(module => networkModuleKey(module) === selectedNetworkModuleKey)) {
+    selectedNetworkModuleKey = null;
+  }
   canvas.append(editorHeader("Networks", `${networks.length} configured networks`));
-  canvas.append(element("p", "muted", "Select a network or module to edit its properties in the sidebar."));
+  canvas.append(element("p", "muted", "Expand a network or module to edit its properties."));
   const table = createTable(["Name", "Type", "Network type", "Modules"]);
   const moduleHost = element("div", "network-module-table");
   const renderModules = () => {
-    const network = networks[selectedNetworkIndex];
+    const networkIndex = selectedNetworkIndex;
+    const network = networks[networkIndex];
     if (!network) { moduleHost.replaceChildren(); return; }
     const modules = network.modules || [];
     const moduleTable = createTable(["Module", "Base", "Slot", "Config name", "Alias", "Comment"]);
@@ -5759,12 +5798,15 @@ function renderNetworksEditor(canvas, inspector, summary) {
       row.classList.toggle("selected", selectedNetworkModuleKey === networkModuleKey(module));
       const select = () => {
         selectedNetworkModuleKey = networkModuleKey(module);
-        table.querySelectorAll("tbody tr").forEach(item => item.classList.remove("selected"));
-        moduleTable.querySelectorAll("tbody tr").forEach(item => item.classList.toggle("selected", item === row));
-        renderNetworkInspector(inspector, networks, summary);
+        table.querySelectorAll(":scope > tbody > tr[data-inline-key]").forEach(item => item.classList.remove("selected"));
+        moduleTable.querySelectorAll(":scope > tbody > tr[data-inline-key]").forEach(item => item.classList.toggle("selected", item === row));
       };
-      row.addEventListener("click", select);
-      row.addEventListener("keydown", event => { if (event.key === "Enter") select(); });
+      inlineProperties.attach({
+        uri: current.file.uri, key: networkPropertiesKey(networkIndex, networkModuleKey(module)), row,
+        label: `${module.name} · Base ${module.base}, Slot ${module.slot}`,
+        render: host => renderNetworkInspector(host, networks, summary, networkIndex, networkModuleKey(module)),
+        onSelect: select,
+      });
     });
     moduleHost.replaceChildren(element("h3", "", "Network modules"), tableContainer(moduleTable, modules.length));
   };
@@ -5776,24 +5818,24 @@ function renderNetworksEditor(canvas, inspector, summary) {
     const select = () => {
       selectedNetworkIndex = index;
       selectedNetworkModuleKey = null;
-      table.querySelectorAll("tbody tr").forEach(item => item.classList.toggle("selected", item === row));
+      table.querySelectorAll(":scope > tbody > tr[data-inline-key]").forEach(item => item.classList.toggle("selected", item === row));
       renderModules();
-      renderNetworkInspector(inspector, networks, summary);
     };
-    row.addEventListener("click", select);
-    row.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") select(); });
+    inlineProperties.attach({
+      uri: current.file.uri, key: networkPropertiesKey(index), row,
+      label: network.name || `Network ${index + 1}`,
+      render: host => renderNetworkInspector(host, networks, summary, index, null), onSelect: select,
+    });
   });
   canvas.append(tableContainer(table, networks.length), moduleHost);
   renderModules();
-  renderNetworkInspector(inspector, networks, summary);
 }
 
-function renderNetworkInspector(inspector, networks, summary) {
-  const network = networks[selectedNetworkIndex] || null;
-  const module = selectedNetworkModuleKey
-    ? network?.modules?.find((item) => networkModuleKey(item) === selectedNetworkModuleKey)
+function renderNetworkInspector(inspector, networks, summary, networkIndex, moduleKey) {
+  const network = networks[networkIndex] || null;
+  const module = moduleKey
+    ? network?.modules?.find((item) => networkModuleKey(item) === moduleKey)
     : null;
-  if (selectedNetworkModuleKey && !module) selectedNetworkModuleKey = null;
 
   inspector.replaceChildren(inspectorHeading(module ? "NETWORK MODULE" : "NETWORK"));
   if (!network) {
@@ -5839,10 +5881,10 @@ function renderNetworkInspector(inspector, networks, summary) {
     property(form, "Configured modules", network.modules?.length || 0, true);
     const apply = button("Apply network properties", "primary-button", async () => {
       await applyEdit(
-        () => update_xgwx_network(current.file.bytes, selectedNetworkIndex, {
+        () => update_xgwx_network(current.file.bytes, networkIndex, {
           name: name.value,
         }),
-        `Edit network ${display(network.name, selectedNetworkIndex + 1)}`,
+        `Edit network ${display(network.name, networkIndex + 1)}`,
       );
     });
     apply.textContent = "Apply network properties";
@@ -6831,12 +6873,12 @@ function moduleText(module) {
 }
 
 function moduleSlotCells(slotRow) {
-  const { base, slot, module, kind } = slotRow;
-  if (!module) return [base, slot, 1, "—", "Empty slot", "—", ""];
+  const { slot, module, kind } = slotRow;
+  if (!module) return [slot, 1, "Empty slot", ""];
   if (kind === "continuation") {
-    return [base, slot, `↳ ${module.slot}`, "—", `${shortModuleName(module.name)} continuation`, "—", ""];
+    return [slot, `↳ ${module.slot}`, `${shortModuleName(module.name)} continuation`, ""];
   }
-  return [base, moduleSlotRange(module), moduleSlotSpan(module), module.id, shortModuleName(module.name), module.inputFilter, module.comment];
+  return [moduleSlotRange(module), moduleSlotSpan(module), shortModuleName(module.name), module.comment];
 }
 
 function shortModuleName(name) {
@@ -6868,17 +6910,6 @@ function moduleSlotRange(module) {
 function catalogModuleDescription(entry) {
   const separator = entry.name.indexOf(":");
   return separator >= 0 ? entry.name.slice(separator + 1) : entry.name;
-}
-
-function formatRawDetails(module) {
-  return JSON.stringify({
-    base: module.base,
-    slot: module.slot,
-    id: module.id,
-    subType: module.subType,
-    details: module.details,
-    inputFilterRaw: module.inputFilterRaw,
-  }, null, 2);
 }
 
 function formatBytes(bytes) {
