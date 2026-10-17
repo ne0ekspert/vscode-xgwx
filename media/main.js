@@ -1,3 +1,4 @@
+import { renderBasicParameters } from "./basic-parameters.js";
 import {renderUserPous, userPouCallables} from "./user-pous.js";
 import { formatOperandValue, integerOperandWidth } from "./operand-values.js";
 import { formatHexOperands, nativeHexOperands } from "./hex-operands.js";
@@ -18,6 +19,7 @@ import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, iecInstanceCommands, extendedIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
+  edit_xgwx_basic_parameters,
   create_xgwx_user_pou,
   edit_xgwx_user_pou,
   edit_xgwx_vendor_il,
@@ -506,7 +508,7 @@ function renderWorkspace() {
 function hardwarePropertiesKey(baseIndex, slot) { return `hardware:${baseIndex}:${slot}`; }
 function networkPropertiesKey(index, moduleKey = null) { return `network:${index}${moduleKey ? `:module:${moduleKey}` : ""}`; }
 function reconcileInlineProperties(summary) {
-  const keys = new Set();
+  const keys = new Set((summary.parameters || []).map((parameter, index) => `parameter:${parameter.parameterIndex ?? index}`));
   const hardware = summary.hardware || {};
   (hardware.bases || []).forEach((base, index) => {
     const modules = installedBaseModules(base, hardware);
@@ -6933,10 +6935,32 @@ function renderVariableInspector(inspector, variable, index) {
 
 function renderParametersEditor(canvas, inspector, parameters) {
   canvas.append(editorHeader("Parameters", `${parameters.length} parameter sections`));
-  const table = createTable(["Type", "Name", "Attributes", "Children"]);
-  parameters.forEach((parameter) => appendCells(table.tBodies[0].insertRow(), [parameter.parameterType || parameter.typeName, parameter.name, Object.keys(parameter.attributes || {}).length, parameter.children?.length]));
+  const table = createTable(["Type", "PLC", "Sections", "State"]);
+  const fileUri = current.file.uri;
+  parameters.forEach((parameter, index) => {
+    const row = table.tBodies[0].insertRow();
+    const basic = parameter.parameterType === "BASIC PARAMETER";
+    const writable = parameter.basicOperationFields?.length > 0;
+    const parameterIndex = parameter.parameterIndex ?? index;
+    appendCells(row, [parameter.parameterType || parameter.typeName, parameter.configurationIndex == null ? "—" : parameter.configurationIndex + 1,
+      parameter.sections?.length || 0, writable ? "Operation editable" : "Read only"]);
+    if (basic) {
+      row.tabIndex = 0;
+      inlineProperties.attach({uri: fileUri, key: `parameter:${parameterIndex}`, row, label: `Basic parameters · PLC ${(parameter.configurationIndex ?? 0) + 1}`,
+        render: host => {
+          host.classList.add("basic-parameters");
+          renderBasicParameters({host, parameter, element, property, button,
+            commit: changes => {
+              if (current.file.uri !== fileUri) return false;
+              return applyEdit(() => edit_xgwx_basic_parameters(current.file.bytes, parameterIndex, changes), "Edit basic parameters");
+            },
+          });
+        },
+      });
+    }
+  });
   canvas.append(tableContainer(table, parameters.length));
-  renderCollectionInspector(inspector, "PARAMETERS", [["Sections", parameters.length], ["State", "Read only"]]);
+  renderCollectionInspector(inspector, "PARAMETERS", [["Sections", parameters.length], ["Editable", "Basic operation settings"]]);
 }
 
 function renderOverviewEditor(canvas, inspector, summary, file) {

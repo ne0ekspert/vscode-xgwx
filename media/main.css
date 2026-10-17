@@ -1914,3 +1914,11 @@ form.iec-rung-creation {
 }
 .user-pou-interface :is(input, select):disabled { opacity: .65; }
 .user-pou-interface > p, .user-pou-interface-form { padding: 0 10px; }
+
+.basic-parameters { display: grid; gap: 10px; max-width: 720px; }
+.basic-parameters .property-field { grid-template-columns: minmax(180px, 1fr) minmax(90px, 180px); }
+.basic-parameters > .primary-button { justify-self: start; }
+.basic-parameters details { min-width: 0; }
+.basic-parameters details .property-field { margin-top: 6px; }
+.basic-parameters .property-label { overflow-wrap: anywhere; }
+@media (max-width: 650px) { .basic-parameters .property-field { grid-template-columns: minmax(0, 1fr); gap: 4px; } }

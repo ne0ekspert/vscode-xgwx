@@ -1117,6 +1117,44 @@ export function duplicate_xgwx_iec_ld_function_instance(bytes, program_index, bl
 }
 
 /**
+ * Edit captured native basic-operation controls in one stale-checked batch.
+ * @param {Uint8Array} bytes
+ * @param {number} index
+ * @param {any} changes
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_basic_parameters(bytes, index, changes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_basic_parameters(ptr0, len0, index, changes);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Apply an atomic, stale-checked basic timing patch to a selected parameter.
+ * @param {Uint8Array} bytes
+ * @param {number} index
+ * @param {any} changes
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_basic_timing(bytes, index, changes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_basic_timing(ptr0, len0, index, changes);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Bounded hardware form edit with stale-field and full-container validation.
  * @param {Uint8Array} bytes
  * @param {any} patch

@@ -1873,3 +1873,12 @@ are not saved in extension state or sent in edit history; authentication is
 held in the webview WASM instance and cleared when switching files or closing
 it. A reopened protected file needs authentication again. Captured XGK LD and
 XGI LD/ST/IL/SFC layouts are supported; other layouts retain library guards.
+
+Basic parameters: expand a BASIC PARAMETER row in the Parameters view to edit
+the basic-operation settings described on pages 353–354 of the XG5000 manual.
+The form supports fixed-cycle mode and duration, watchdog, input filter,
+output behavior, event history, Reset/D.CLR blocks, XGK fixed I/O allocation
+and non-latched-memory clearing, and XGI restart mode. Apply creates one
+undoable document edit. Reset/D.CLR dependencies follow native XG5000.
+Unsupported layouts and unknown enum values remain read-only in the stored
+field inventory. Other parameter tabs and IEC watchdog slots 1–3 are preserved.
