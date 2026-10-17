@@ -41,6 +41,13 @@ export function check_xgwx_edit_support(bytes) {
 }
 
 /**
+ * Forget authentication when closing or switching files. No passwords persist.
+ */
+export function clear_xgwx_password_session() {
+    wasm.clear_xgwx_password_session();
+}
+
+/**
  * Connect adjacent IEC groups, rebuilding group envelopes and adding wiring.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -2458,6 +2465,30 @@ export function set_xgwx_module_option(bytes, base, slot, key, index, value) {
 }
 
 /**
+ * Set/change/remove protection. Null replacement removes; empty is invalid.
+ * @param {Uint8Array} bytes
+ * @param {number | null} [program_index]
+ * @param {string | null} [current]
+ * @param {string | null} [replacement]
+ * @returns {Uint8Array}
+ */
+export function set_xgwx_password(bytes, program_index, current, replacement) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    var ptr1 = isLikeNone(current) ? 0 : passStringToWasm0(current, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len1 = WASM_VECTOR_LEN;
+    var ptr2 = isLikeNone(replacement) ? 0 : passStringToWasm0(replacement, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    var len2 = WASM_VECTOR_LEN;
+    const ret = wasm.set_xgwx_password(ptr0, len0, isLikeNone(program_index) ? 0x100000001 : (program_index) >>> 0, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
  * Split disconnected IEC row ranges without changing coordinates or elements.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -2476,6 +2507,25 @@ export function split_xgwx_iec_ld_group(bytes, program_index, group_index, expec
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Authenticate a project (no index) or program without removing protection.
+ * @param {Uint8Array} bytes
+ * @param {string} password
+ * @param {number | null} [program_index]
+ * @returns {any}
+ */
+export function unlock_xgwx_password(bytes, password, program_index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(password, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.unlock_xgwx_password(ptr0, len0, ptr1, len1, isLikeNone(program_index) ? 0x100000001 : (program_index) >>> 0);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 /**

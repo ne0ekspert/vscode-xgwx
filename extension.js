@@ -7,6 +7,8 @@ const { createNewWorkspace } = require("./new-workspace.cjs");
 
 const { XgwxExplorer } = require("./explorer.cjs");
 
+const { promptPassword } = require("./password-prompts.cjs");
+
 const VIEW_TYPE = "xgwx.workspaceViewer";
 
 class XgwxDocument {
@@ -133,6 +135,9 @@ class XgwxEditorProvider {
       } else if (message?.type === "ladderInstructionValidationResult") {
         const resolve = validations.get(message.validationId);
         if (resolve) { validations.delete(message.validationId); resolve(message.error || undefined); }
+      } else if (message?.type === "promptPassword") {
+        const value = await promptPassword(vscode.window, message);
+        if (this.editors.has(editor)) await panel.webview.postMessage({ type:"iecContactInputResult",requestId:message.requestId,value });
       } else if (message?.type === "promptModuleSelection") {
         const choice = await vscode.window.showQuickPick(message.items, {
           title: message.title,
@@ -670,6 +675,12 @@ function activate(context) {
     vscode.commands.registerCommand("xgwx.explorerNavigate", item => explorer.dispatch(item)),
     vscode.commands.registerCommand("xgwx.explorerCreateProgram", item => explorer.dispatch(item, "createProgram")),
     vscode.commands.registerCommand("xgwx.explorerDeleteProgram", item => explorer.dispatch(item, "deleteProgram")),
+    ...["Set", "Change", "Remove", "Unlock"].map(action =>
+      vscode.commands.registerCommand(`xgwx.explorer${action}ProgramPassword`, item =>
+        explorer.dispatch(item, `${action.toLowerCase()}ProgramPassword`))),
+    ...["Set", "Change", "Remove"].map(action =>
+      vscode.commands.registerCommand(`xgwx.explorer${action}ProjectPassword`, item =>
+        explorer.dispatch(item, `${action.toLowerCase()}ProjectPassword`))),
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
       supportsMultipleEditorsPerDocument: true,
       webviewOptions: { retainContextWhenHidden: true },

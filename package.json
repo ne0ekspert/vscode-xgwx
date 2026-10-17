@@ -114,6 +114,41 @@
         "title": "View Values as Source",
         "category": "XGWX",
         "enablement": "activeCustomEditorId == xgwx.workspaceViewer"
+      },
+      {
+        "command": "xgwx.explorerSetProgramPassword",
+        "title": "Set password",
+        "icon": "$(key)"
+      },
+      {
+        "command": "xgwx.explorerChangeProgramPassword",
+        "title": "Change password",
+        "icon": "$(key)"
+      },
+      {
+        "command": "xgwx.explorerRemoveProgramPassword",
+        "title": "Remove password",
+        "icon": "$(key)"
+      },
+      {
+        "command": "xgwx.explorerUnlockProgramPassword",
+        "title": "Unlock program",
+        "icon": "$(key)"
+      },
+      {
+        "command": "xgwx.explorerSetProjectPassword",
+        "title": "Set password",
+        "icon": "$(key)"
+      },
+      {
+        "command": "xgwx.explorerChangeProjectPassword",
+        "title": "Change password",
+        "icon": "$(key)"
+      },
+      {
+        "command": "xgwx.explorerRemoveProjectPassword",
+        "title": "Remove password",
+        "icon": "$(key)"
       }
     ],
     "menus": {
@@ -138,8 +173,43 @@
         },
         {
           "command": "xgwx.explorerDeleteProgram",
-          "when": "view == xgwx.explorer && viewItem == xgwxProgram",
+          "when": "view == xgwx.explorer && (viewItem == xgwxProgram.passwordNone || viewItem == xgwxProgram.passwordLocked || viewItem == xgwxProgram.passwordOpen)",
           "group": "navigation"
+        },
+        {
+          "command": "xgwx.explorerSetProgramPassword",
+          "when": "view == xgwx.explorer && viewItem == xgwxProgram.passwordNone",
+          "group": "password@2"
+        },
+        {
+          "command": "xgwx.explorerChangeProgramPassword",
+          "when": "view == xgwx.explorer && (viewItem == xgwxProgram.passwordLocked || viewItem == xgwxProgram.passwordOpen)",
+          "group": "password@3"
+        },
+        {
+          "command": "xgwx.explorerRemoveProgramPassword",
+          "when": "view == xgwx.explorer && (viewItem == xgwxProgram.passwordLocked || viewItem == xgwxProgram.passwordOpen)",
+          "group": "password@4"
+        },
+        {
+          "command": "xgwx.explorerUnlockProgramPassword",
+          "when": "view == xgwx.explorer && viewItem == xgwxProgram.passwordLocked",
+          "group": "password@1"
+        },
+        {
+          "command": "xgwx.explorerSetProjectPassword",
+          "when": "view == xgwx.explorer && viewItem == xgwxProject.passwordNone",
+          "group": "password@2"
+        },
+        {
+          "command": "xgwx.explorerChangeProjectPassword",
+          "when": "view == xgwx.explorer && viewItem == xgwxProject.passwordSet",
+          "group": "password@3"
+        },
+        {
+          "command": "xgwx.explorerRemoveProjectPassword",
+          "when": "view == xgwx.explorer && viewItem == xgwxProject.passwordSet",
+          "group": "password@4"
         }
       ],
       "commandPalette": [
@@ -150,6 +220,34 @@
         {
           "command": "xgwx.showXgkLadder",
           "when": "activeCustomEditorId == xgwx.workspaceViewer"
+        },
+        {
+          "command": "xgwx.explorerSetProgramPassword",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerChangeProgramPassword",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerRemoveProgramPassword",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerUnlockProgramPassword",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerSetProjectPassword",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerChangeProjectPassword",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerRemoveProjectPassword",
+          "when": "false"
         }
       ]
     },
@@ -237,7 +335,7 @@
     }
   },
   "scripts": {
-    "check": "node --check extension.js && node --check media/main.js && node --check media/inline-properties.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check new-workspace.cjs && node --check explorer.cjs && node --check media/explorer-model.js",
+    "check": "node --check extension.js && node --check media/main.js && node --check media/inline-properties.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check password-prompts.cjs && node --check new-workspace.cjs && node --check explorer.cjs && node --check media/explorer-model.js",
     "test": "node --test test/*.test.js test/*.test.mjs",
     "build:wasm": "bash scripts/build-wasm.sh",
     "package": "vsce package --no-dependencies"

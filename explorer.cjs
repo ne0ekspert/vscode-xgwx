@@ -24,7 +24,7 @@ class XgwxExplorer {
       item.children = node.children?.map(child => wrap(child, item));
       return item;
     };
-    this.roots = state ? [wrap({ id: "root", label: state.fileName, icon: "file", children: state.nodes })] : [];
+    this.roots = state ? [wrap({ id: "root", label: state.fileName, icon: "file", contextValue: `xgwxProject.${state.projectProtected ? "passwordSet" : "passwordNone"}`, target: { view: "overview" }, children: state.nodes })] : [];
     this.emitter.fire();
     if (this.view) this.view.message = state ? undefined : "Open an .xgwx file to explore its XG5000 workspace.";
     const selected = this.nodes.get(state?.selectedId);
@@ -36,7 +36,9 @@ class XgwxExplorer {
     const result = new vscode.TreeItem(item.label, item.children?.length ? vscode.TreeItemCollapsibleState.Expanded : vscode.TreeItemCollapsibleState.None);
     result.id = `${this.state.uri}:${item.id}`;
     result.iconPath = new vscode.ThemeIcon(item.icon);
-    result.contextValue = item.contextValue;
+    result.contextValue = item.contextValue === "xgwxProgram"
+      ? `xgwxProgram.${!item.passwordProtected ? "passwordNone" : item.locked ? "passwordLocked" : "passwordOpen"}`
+      : item.contextValue;
     if (item.target) result.command = { command: "xgwx.explorerNavigate", title: "Open", arguments: [{ id: item.id, uri: this.state.uri }] };
     return result;
   }

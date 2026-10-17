@@ -48,7 +48,7 @@ test("optimizes the production WASM bundle when wasm-opt is available", () => {
 
 test("uses editable custom-document save support", () => {
   const commands = manifest.contributes.commands.map((command) => command.command);
-  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile", "xgwx.explorerCreateProgram", "xgwx.explorerDeleteProgram", "xgwx.editXgkIl", "xgwx.showXgkLadder", "xgwx.find", "xgwx.viewValues.unsigned", "xgwx.viewValues.signed", "xgwx.viewValues.hex", "xgwx.viewValues.float", "xgwx.viewValues.source"]);
+  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile", "xgwx.explorerCreateProgram", "xgwx.explorerDeleteProgram", "xgwx.editXgkIl", "xgwx.showXgkLadder", "xgwx.find", "xgwx.viewValues.unsigned", "xgwx.viewValues.signed", "xgwx.viewValues.hex", "xgwx.viewValues.float", "xgwx.viewValues.source", "xgwx.explorerSetProgramPassword", "xgwx.explorerChangeProgramPassword", "xgwx.explorerRemoveProgramPassword", "xgwx.explorerUnlockProgramPassword", "xgwx.explorerSetProjectPassword", "xgwx.explorerChangeProjectPassword", "xgwx.explorerRemoveProjectPassword"]);
   const extension = fs.readFileSync(path.join(root, "extension.js"), "utf8");
   for (const method of ["saveCustomDocument", "saveCustomDocumentAs", "revertCustomDocument", "backupCustomDocument"]) {
     assert.match(extension, new RegExp(`\\b${method}\\b`));
@@ -161,4 +161,32 @@ test("shows configured network modules in the explorer", () => {
   assert.match(script, /update_xgwx_network_module/);
   assert.match(script, /Apply network properties/);
   assert.match(styles, /\.network-module-row\b/);
+});
+
+
+test("program password commands are scoped to program context menus", () => {
+  const menus = manifest.contributes.menus;
+  const actions = {Set:["passwordNone"], Unlock:["passwordLocked"], Change:["passwordLocked","passwordOpen"], Remove:["passwordLocked","passwordOpen"]};
+  for (const [action, states] of Object.entries(actions)) {
+    const command = `xgwx.explorer${action}ProgramPassword`;
+    const menu = menus["view/item/context"].find(item => item.command === command);
+    assert.ok(menu.when.includes("view == xgwx.explorer"));
+    for (const state of ["passwordNone","passwordLocked","passwordOpen"]) {
+      assert.equal(menu.when.includes(`viewItem == xgwxProgram.${state}`), states.includes(state));
+    }
+    assert.equal(menus.commandPalette.find(item => item.command === command).when, "false");
+  }
+  const remove = menus["view/item/context"].find(item => item.command === "xgwx.explorerDeleteProgram");
+  for (const state of ["passwordNone","passwordLocked","passwordOpen"]) assert.ok(remove.when.includes(`viewItem == xgwxProgram.${state}`));
+});
+
+
+test("project password commands belong to the project root context menu", () => {
+  const menus = manifest.contributes.menus;
+  for (const action of ["Set", "Change", "Remove"]) {
+    const command = `xgwx.explorer${action}ProjectPassword`;
+    const menu = menus["view/item/context"].find(item => item.command === command);
+    assert.equal(menu.when, `view == xgwx.explorer && viewItem == xgwxProject.${action === "Set" ? "passwordNone" : "passwordSet"}`);
+    assert.equal(menus.commandPalette.find(item => item.command === command).when, "false");
+  }
 });

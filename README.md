@@ -1856,3 +1856,20 @@ Fresh insertion supports clear rows or one leading contact, while branch and
 occupied-network guards remain in place. The 17-command generated suite passed
 native XG5000 strict checking with zero errors/warnings and exact Save As
 preservation; PLC execution has not been tested.
+
+### Project and program passwords
+
+Protected projects request their password in a masked VS Code input. Select a
+program in **XG5000 Explorer**, right-click it, and choose **Unlock program**
+to inspect/edit its source. The same context menu provides **Set password**,
+**Change password**, and **Remove password** according to its protection state.
+Right-click the project file at the root of **XG5000 Explorer** for project
+password actions. Changes require the current password and new passwords
+are confirmed; cancelling leaves the document unchanged.
+
+Password changes use the normal dirty/undo/redo/save/Save As/backup flow. Stored
+bytes retain protection while authenticated source edits are made. Passwords
+are not saved in extension state or sent in edit history; authentication is
+held in the webview WASM instance and cleared when switching files or closing
+it. A reopened protected file needs authentication again. Captured XGK LD and
+XGI LD/ST/IL/SFC layouts are supported; other layouts retain library guards.

@@ -113,3 +113,39 @@ test('filtering keeps record identity, occupied out-of-range bases, and unknown 
   assert.equal(explorerNodes(file,{...parsed,cpu:{typeCode:999}},{},catalog).nodes[1].children.length,8);
   assert.equal(explorerNodes(file,{...parsed,counts:{configurations:2}},{},catalog).nodes[1].children.length,8);
 });
+
+test('program context menus expose protection state while preserving drag and stable identity routing',async()=>{
+ const states=[{index:0,protected:false,locked:false},{index:1,protected:true,locked:true}];
+ const model={...summary,passwordProtection:{programs:states}};
+ const explorer=new XgwxExplorer((_editor,message)=>calls.push(message)),calls=[];
+ const state=explorerNodes(file,model,{view:'programs',programIndex:0});explorer.setEditor({explorerState:state});
+ const first=explorer.nodes.get('program:a'),second=explorer.nodes.get('program:b');
+ assert.equal(explorer.getTreeItem(first).contextValue,'xgwxProgram.passwordNone');
+ assert.equal(explorer.getTreeItem(second).contextValue,'xgwxProgram.passwordLocked');
+ assert.equal(second.contextValue,'xgwxProgram');
+ await explorer.dispatch(second,'unlockProgramPassword');assert.equal(calls[0].target.objectId,'b');
+ model.passwordProtection.programs[1]={index:1,protected:true,locked:false};
+ explorer.update(explorerNodes(file,model,{view:'programs',programIndex:1}));
+ assert.equal(explorer.getTreeItem(explorer.nodes.get('program:b')).contextValue,'xgwxProgram.passwordOpen');
+ await explorer.dispatch(second,'changeProgramPassword');assert.equal(calls[1].target.objectId,'b');
+ const transfer=new Map();explorer.handleDrag([explorer.nodes.get('program:b')],transfer);assert.equal(transfer.size,1);
+ explorer.update(explorerNodes({...file,uri:'file:///other.xgwx'},model,{}));await explorer.dispatch(second,'removeProgramPassword');assert.equal(calls.length,2);
+});
+
+
+test('project root routes password actions with current protection state and rejects stale files',async()=>{
+ const calls=[],explorer=new XgwxExplorer((_editor,message)=>calls.push(message));
+ const model={...summary,passwordProtection:{projectProtected:false}};
+ explorer.setEditor({explorerState:explorerNodes(file,model,{view:'overview'})});
+ const root=explorer.getChildren()[0];
+ assert.equal(explorer.getTreeItem(root).contextValue,'xgwxProject.passwordNone');
+ await explorer.dispatch(root,'setProjectPassword');
+ assert.deepEqual(calls[0],{type:'explorerAction',uri:file.uri,action:'setProjectPassword',target:{view:'overview'}});
+ model.passwordProtection.projectProtected=true;
+ explorer.update(explorerNodes(file,model,{view:'overview'}));
+ assert.equal(explorer.getTreeItem(explorer.getChildren()[0]).contextValue,'xgwxProject.passwordSet');
+ await explorer.dispatch(root,'changeProjectPassword');await explorer.dispatch(root,'removeProjectPassword');
+ assert.deepEqual(calls.slice(1).map(call=>call.action),['changeProjectPassword','removeProjectPassword']);
+ explorer.update(explorerNodes({...file,uri:'file:///other.xgwx'},model,{}));
+ await explorer.dispatch(root,'removeProjectPassword');assert.equal(calls.length,3);
+});

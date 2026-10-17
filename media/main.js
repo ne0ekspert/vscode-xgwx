@@ -101,6 +101,9 @@ import init, {
   insert_xgwx_module,
   move_xgwx_iec_ld_group,
   parse_xgwx,
+  unlock_xgwx_password,
+  set_xgwx_password,
+  clear_xgwx_password_session,
   rename_xgwx_iec_local_symbol,
   repair_xgwx_iec_ld_horizontal_wire,
   replace_xgwx_iec_ld_group,
@@ -335,7 +338,18 @@ window.addEventListener("message", async ({ data }) => {
   if (data?.type === "explorerAction" && current?.file.uri === data.uri) {
     const target = data.target || {};
     if (data.action === "createProgram") { void createProgram(); return; }
+    if (["setProjectPassword", "changeProjectPassword", "removeProjectPassword"].includes(data.action)) {
+      void editPassword(null, data.action === "removeProjectPassword" ? "remove" : "set");
+      return;
+    }
     const index = current.summary.programs.findIndex(program => program.objectId === target.objectId);
+    if (["setProgramPassword", "changeProgramPassword", "removeProgramPassword", "unlockProgramPassword"].includes(data.action)) {
+      if(index < 0) return;
+      selectedProgramIndex=index;activeView="programs";renderWorkspace();
+      if(data.action === "unlockProgramPassword") void unlockProgram(index);
+      else void editPassword(index,data.action === "removeProgramPassword" ? "remove" : "set");
+      return;
+    }
     if (data.action === "deleteProgram") {
       if (index >= 0) void deleteProgram(index, current.summary.programs[index]);
       return;
@@ -381,7 +395,9 @@ window.addEventListener("message", async ({ data }) => {
 
 vscode.postMessage({ type: "ready" });
 
+let workspaceLoadGeneration = 0;
 async function loadWorkspace(file) {
+  const generation = ++workspaceLoadGeneration;
   if (file.hexPrefix != null) hexPrefix = file.hexPrefix === "0x" ? "0x" : "h";
   const viewport = app.querySelector(".iec-layout-viewport, .ld-viewport, .sfc-viewport");
   if (current && viewport && activeView === "programs") ladderCanvasScroll.set(canvasExtentKey(), {
@@ -399,9 +415,23 @@ async function loadWorkspace(file) {
       selectedSfcEntity = null;
     }
     await wasmReady;
+    if(generation !== workspaceLoadGeneration) return;
+    if (current?.file.uri !== file.uri) clear_xgwx_password_session();
     if (!moduleCatalog.length) moduleCatalog = xgk_module_catalog();
     if (!cpuCatalog.length) cpuCatalog = cpu_catalog();
-    const summary = parse_xgwx(new Uint8Array(file.bytes));
+    let summary;
+    while (!summary) {
+      try { summary = parse_xgwx(new Uint8Array(file.bytes)); }
+      catch (error) {
+        if (!String(error).includes("password required")) throw error;
+        const value = await requestPassword({title:`Open ${file.fileName}`,action:"unlock"});
+        if (generation !== workspaceLoadGeneration) return;
+        if (!value) { renderError("Project opening cancelled. Refresh to try again."); return; }
+        try { summary=unlock_xgwx_password(new Uint8Array(file.bytes),value.current,undefined); }
+        catch (failure) {vscode.postMessage({type:"showError",message:String(failure)});}
+      }
+    }
+    if(generation !== workspaceLoadGeneration) return;
     const previousPrograms=current?.file.uri===file.uri ? current.summary.programs : null;
     const activeId=previousPrograms?.[selectedProgramIndex]?.objectId;
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
@@ -1214,10 +1244,41 @@ async function showSfcTextInput(block, entity, field = sfcTextField(block, entit
   }
 }
 
+function requestPassword(details) {
+  return new Promise(resolve => {
+    const requestId=++nextContactPromptId;
+    pendingContactPrompts.set(requestId,{resolve,restoreFocus:false});
+    vscode.postMessage({type:"promptPassword",requestId,...details});
+  });
+}
+async function editPassword(programIndex, action) {
+  const source=current.file.bytes, uri=current.file.uri;
+  const program=programIndex == null ? null : current.summary.programs[programIndex];
+  const state=programIndex == null ? {protected:current.summary.passwordProtection?.projectProtected}
+    : current.summary.passwordProtection?.programs?.[programIndex];
+  const value=await requestPassword({title:`${action === "remove" ? "Remove" : state?.protected ? "Change" : "Set"} ${program ? program.name : "project"} password`, action,protected:Boolean(state?.protected)});
+  if (!value || current?.file.uri !== uri || current.file.bytes !== source) return;
+  await applyEdit(()=>set_xgwx_password(source,programIndex ?? undefined,value.current ?? undefined,value.replacement ?? undefined),`${action === "remove" ? "Remove" : "Set/change"} ${program ? "program" : "project"} password`);
+}
+async function unlockProgram(index) {
+  const source=current.file.bytes,uri=current.file.uri;
+  const value=await requestPassword({title:`Unlock ${current.summary.programs[index].name}`,action:"unlock"});
+  if(!value || current?.file.uri !== uri || current.file.bytes !== source) return;
+  try {current.summary=unlock_xgwx_password(source,value.current,index);renderWorkspace();}
+  catch(error){vscode.postMessage({type:"showError",message:String(error)});}
+}
+
 const vendorIlViews = new Set();
 function renderProgramsEditor(canvas, inspector, programs) {
   if (selectedProgramIndex >= programs.length) selectedProgramIndex = 0;
   const selected = programs[selectedProgramIndex] || null;
+  if(current.summary.passwordProtection?.programs?.[selectedProgramIndex]?.locked) {
+    canvas.append(editorHeader(selected?.name || "Program","Password protected"));
+    canvas.append(element("p","muted","Right-click this program in XG5000 Explorer and choose Unlock program."));
+    inspector.append(emptyState("Unlock this program to inspect and edit its source."));
+    return;
+  }
+
   const ladder = (current.summary.ladder || []).find((item) => item.programIndex === selectedProgramIndex) || null;
 
   const vendor = (current.summary.vendorIlPrograms || []).find(item=>item.programIndex===selectedProgramIndex);

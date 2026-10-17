@@ -977,3 +977,14 @@ test('value-display commands target the active ready editor and preserve bytes',
   assert.deepEqual(Array.from(active.document.bytes),[1,2,3]);
   assert.equal(active.document.dirty,false);
 });
+
+test('password requests use masked host prompts without adding credentials to document history',async()=>{
+ const context={extensionUri:uri('/extension')},provider=new XgwxEditorProvider(context),document=new XgwxDocument(uri('/password.xgwx'),[1,2]);
+ const messages=[],prompts=[];let receive;
+ mockVscode.window={async showInputBox(options){prompts.push(options);return ['oldpass','newpass','newpass'][prompts.length-1];}};
+ const panel={active:false,visible:true,webview:{cspSource:'test',asWebviewUri:value=>value,onDidReceiveMessage(callback){receive=callback;return{dispose(){}};},async postMessage(m){messages.push(m);}},onDidDispose(){},onDidChangeViewState(){return{dispose(){}};}};
+ await provider.resolveCustomEditor(document,panel);
+ await receive({type:'promptPassword',requestId:71,title:'Change program password',action:'set',protected:true});
+ assert.deepEqual(messages.at(-1),{type:'iecContactInputResult',requestId:71,value:{current:'oldpass',replacement:'newpass'}});
+ assert(prompts.every(p=>p.password===true));assert.deepEqual([...document.bytes],[1,2]);assert.equal(document.dirty,false);
+});
