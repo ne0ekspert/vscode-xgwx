@@ -22,17 +22,20 @@ export function stCompletionContext(source, caret) {
   const call=before.match(/([A-Za-z_]\w*)\([^()]*$/), parameter=before.match(/(?:\(|,)\s*([A-Za-z_]\w*|)$/);
   return {instance:match[1] || null,call:!match[1] && parameter ? call?.[1] : null,prefix:match[2],start:caret-match[2].length,end:caret};
 }
-export function stCompletions(source, caret, variables, explicit = false) {
+export function stCompletions(source, caret, variables, explicit = false, callables = []) {
   const context = stCompletionContext(source,caret);
   if(!context || (!explicit && !context.prefix && !context.instance)) return [];
   let items;
   const instance=variables.find(v=>v.name.toLowerCase()===(context.instance || context.call || '').toLowerCase());
-  if(context.instance || instance && context.call) {
-    items=(pins[instance?.dataType] || []).map(label=>({label,detail:`${instance.dataType} pin`,insert:context.instance ? label : `${label} ${stOutputPins.has(label) ? "=>" : ":="} `}));
+  const callable=callables.find(c=>c.name.toLowerCase()===(context.instance ? instance?.dataType || '' : instance?.dataType || context.call || '').toLowerCase());
+  if(context.instance || (instance || callable) && context.call) {
+    const entries=callable ? callable.pins : (pins[instance?.dataType] || []).map(name=>({name,scope:stOutputPins.has(name)?'output':'input'}));
+    items=entries.map(pin=>({label:pin.name,detail:`${callable?.name || instance?.dataType} pin`,insert:context.instance ? pin.name : `${pin.name} ${pin.scope==='output' ? '=>' : ':='} `}));
   } else {
     items=[...variables.map(v=>({label:v.name,detail:v.displayType || v.dataType,insert:v.name})),
       ...keywords.map(label=>({label,detail:'Keyword',insert:label})),
       ...Object.entries(functions).map(([label,insert])=>({label,detail:'Function',insert})),
+      ...callables.map(c=>({label:c.name,detail:c.kind==='function'?'User function':'User FB type',insert:c.kind==='function'?`${c.name}()`:c.name})),
       ...types.map(label=>({label,detail:'Type',insert:label}))];
   }
   const seen=new Set();
@@ -41,10 +44,10 @@ export function stCompletions(source, caret, variables, explicit = false) {
 }
 const el=(tag,cls,text='')=>{const n=document.createElement(tag);n.className=cls;n.textContent=text;return n;};
 let nextEditor=0;
-export function renderStTextEditor({name,source,draft,variables,onChange,onApply,transition=false,language="ST",sourceLabel,dialect="IEC"}) {
+export function renderStTextEditor({name,source,draft,variables,onChange,onApply,callables=[],transition=false,language="ST",sourceLabel,dialect="IEC"}) {
   const displaySource=source.replace(/\r\n?/g,"\n");
   const serialize=value=>source.includes("\r\n") ? value.replace(/\r\n?/g,"\n").replace(/\n/g,"\r\n") : value;
-  const completions=language === "IL" ? (dialect === "XGK" ? xgkIlCompletions : ilCompletions) : stCompletions;
+  const completions=language === "IL" ? (dialect === "XGK" ? xgkIlCompletions : ilCompletions) : ((source,caret,vars,explicit)=>stCompletions(source,caret,vars,explicit,callables));
   const section=el('section','st-text-editor'); section.setAttribute('aria-label',`${language} editor ${name}`);
   const header=el('div','st-editor-header'),title=el('strong','',`${name} · ${language}`);header.append(title);
   const apply=el('button','primary-button',`Apply ${language} source`);apply.type='button';apply.disabled=true;header.append(apply);section.append(header);
@@ -58,7 +61,7 @@ export function renderStTextEditor({name,source,draft,variables,onChange,onApply
   diagnostics.append(summary,list,el('small','muted','Local checks cover common mistakes. Use XG5000 Check Program for full syntax and type validation.'));section.append(diagnostics);
   let checkedSource=null,diagnosticTimer;
   const check=()=>{
-    checkedSource=input.value;list.replaceChildren();const issues=language === "IL" ? (dialect === "XGK" ? diagnoseXgkIl(input.value) : diagnoseIl(input.value)) : diagnoseSt(input.value,variables,{transition});
+    checkedSource=input.value;list.replaceChildren();const issues=language === "IL" ? (dialect === "XGK" ? diagnoseXgkIl(input.value) : diagnoseIl(input.value)) : diagnoseSt(input.value,variables,{transition,callables});
     const errors=issues.filter(d=>d.severity==='error').length,warnings=issues.length-errors;
     summary.textContent=issues.length ? `Local ${language}: ${errors} error(s), ${warnings} warning(s)${issues.length===100 ? ' (first 100)' : ''}` : `Local ${language}: no issues found in supported checks`;
     input.setAttribute('aria-invalid',String(errors>0));

@@ -20,8 +20,8 @@ test('navigation metadata retains hardware, program identity and network module 
   assert.equal(state.selectedId,'network:0:0:1:7');
   assert.equal(state.nodes[1].children[0].label,'Base 0 (1)');
   assert.deepEqual(state.nodes[2].children[1].target,{view:'programs',programIndex:1,objectId:'b'});
-  assert.equal(state.nodes[3].children[0].children[0].label,'FENET (Base 0, Slot 1)');
-  assert.equal(state.nodes[4].label,'Variables (42)');
+  assert.equal(state.nodes.find(n=>n.id==='networks').children[0].children[0].label,'FENET (Base 0, Slot 1)');
+  assert.equal(state.nodes.find(n=>n.id==='variables').label,'Variables (42)');
   assert.equal(state.bytes,undefined);
 });
 

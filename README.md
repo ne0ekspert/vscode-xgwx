@@ -1636,7 +1636,7 @@ autocomplete for the instance name and named parameters. Common functions
 such as ADD are also available through autocomplete. Blocks retain state
 between scans. N actions run each active
 scan and P actions run once on activation. LD action-program editing, arrays,
-structures, strings, and custom FB declarations remain outside this verified writer.
+structures and strings remain outside this verified writer. User-defined XGI ST functions and FBs use the separate Functions and FBs editor described below.
 
 The ST text editor has line numbers, a cursor-position display, Tab/Shift+Tab
 indentation, and Enter auto-indentation. Autocomplete matches declared variables,
@@ -1811,3 +1811,27 @@ records. Editor changes use the normal undo/save flow.
 The EOPCT records, five bit-string/Boolean types and eight integer types have
 been checked in XG5000 4.82.1, including native Save As and host re-parsing.
 Live PLC/OPC UA communication has not been tested.
+
+### User-defined ST functions and function blocks
+
+Open **Functions and FBs** in the workspace explorer. In an XGI project, create
+a Function or Function block, choose the function result type, add input/output/
+in-out parameters and private locals, and apply the interface and ST body.
+Functions use their name as the result variable. FBs keep state per instance:
+declare a variable of the new FB type under a calling ST program's **Program
+variables**, call the instance, then access its output members with `Instance.Pin`.
+
+Autocomplete includes user functions, custom FB members and named parameters;
+local diagnostics check custom pin names and input/output directions. Applied
+changes participate in Undo, Redo, Save and Save As. Interface edits and deletion
+are rejected while the definition is referenced. ST source drafts survive
+navigation; applied drafts are cleared so document undo/redo displays the stored
+source. Parameters remain accessible in the stacked layout of narrow editor panes.
+
+The initial writer covers XGI ST definitions with EN/ENO and the 19 scalar IEC
+types from BOOL through DATE_AND_TIME, excluding STRING. LD/IL/SFC definition
+bodies, other CPU families, nested FB members, arrays, structures, initialized or
+retained members, and changing an existing return declaration are outside this
+writer. Unknown definitions are listed as read only. Native XG5000 4.82.1.0
+opened, compiled and saved a function/FB caller and all supported scalar types
+with zero errors and warnings. PLC execution and download were not tested.

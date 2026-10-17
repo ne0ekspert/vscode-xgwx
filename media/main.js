@@ -1,3 +1,4 @@
+import {renderUserPous, userPouCallables} from "./user-pous.js";
 import { formatOperandValue, integerOperandWidth } from "./operand-values.js";
 import { formatHexOperands, nativeHexOperands } from "./hex-operands.js";
 import { createInlineProperties } from "./inline-properties.js";
@@ -17,6 +18,8 @@ import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
+  create_xgwx_user_pou,
+  edit_xgwx_user_pou,
   edit_xgwx_vendor_il,
   edit_xgwx_text_variable,
   edit_xgwx_text_program,
@@ -200,6 +203,8 @@ let current = null;
 let moduleCatalog = [];
 let cpuCatalog = [];
 let activeView = "overview";
+let selectedUserPouId = null;
+const userPouDrafts = new Map();
 let selectedBase = null;
 let selectedBaseIndex = null;
 let selectedModule = null;
@@ -352,12 +357,13 @@ window.addEventListener("message", async ({ data }) => {
       selectedIecRow = null; selectedIecElement = null; selectedIecInsertion = null; selectedIecBlank = null;
       selectedSfcEntity = null; resetLadderSelection();
     }
+    if (target.view === "userPous") selectedUserPouId = target.objectId || null;
     if (target.view === "networks") {
       selectedNetworkIndex = target.networkIndex ?? 0;
       selectedNetworkModuleKey = target.networkModuleKey ?? null;
       pendingInlineTarget = networkPropertiesKey(selectedNetworkIndex, selectedNetworkModuleKey);
     }
-    if (["overview", "hardware", "programs", "networks", "variables", "parameters"].includes(target.view)) selectView(target.view);
+    if (["overview", "hardware", "programs", "userPous", "networks", "variables", "parameters"].includes(target.view)) selectView(target.view);
     return;
   }
   if (data?.type === "load") await loadWorkspace(data);
@@ -430,7 +436,7 @@ function renderWorkspace() {
   closeLadderOverlay();
   const { file, summary } = current;
   vscode.postMessage({ type: "explorerState", state: explorerNodes(file, summary, {
-    view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
+    userPouId: selectedUserPouId, view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
     networkIndex: selectedNetworkIndex, networkModuleKey: selectedNetworkModuleKey,
   }, cpuCatalog) });
   reconcileInlineProperties(summary);
@@ -583,6 +589,7 @@ function selectView(view) {
 function renderEditor(editor, summary, inspector) {
   const canvas = element("section", "editor-canvas");
   if (activeView === "hardware") renderHardwareEditor(canvas, inspector, summary.hardware || {});
+  if (activeView === "userPous") renderUserPouWorkspace(canvas, inspector, summary);
   if (activeView === "programs") renderProgramsEditor(canvas, inspector, summary.programs || []);
   if (activeView === "networks") renderNetworksEditor(canvas, inspector, summary);
   if (activeView === "variables") renderVariablesEditor(canvas, inspector, summary.variables || [], summary.localVariables || [], summary.programs || []);
@@ -1239,6 +1246,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
       canvas.append(renderStTextEditor({name:selected.name, language:text.language, sourceLabel:`${text.language} program source`, source:text.source,
         draft:stored?.source === text.source ? stored.value : text.source,
         variables:[...(current.summary.variables || []),...(text.variables || [])],
+        callables:userPouCallables(current.summary.userPous),
         onChange:value=>textProgramDrafts.set(key,{source:text.source,value}),
         onApply:value=>{
           if (current.file.uri !== fileUri) return;
@@ -1262,7 +1270,7 @@ function renderProgramsEditor(canvas, inspector, programs) {
     canvas.append(renderSfcDiagram(sfc, selection, (block, entity) => {
       selectedSfcEntity = { programIndex: selectedProgramIndex, blockIndex: block.blockIndex, entityIndex: entity.entityIndex };
       renderProgramInspector(inspector, selected, null, null);
-    }, applySfcSequence, showSfcTextInput, {drafts:sfcStDrafts,fileKey:current.file.uri,clipboard:sfcClipboard,globalVariables:current.summary.variables || []}));
+    }, applySfcSequence, showSfcTextInput, {drafts:sfcStDrafts,fileKey:current.file.uri,clipboard:sfcClipboard,callables:userPouCallables(current.summary.userPous),globalVariables:current.summary.variables || []}));
     renderProgramInspector(inspector, selected, null, null);
     return;
   }
@@ -5543,7 +5551,7 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
         field, expectedValue, replacement,
       }), `Edit SFC ${field}`);
     }, applySfcSequence, showSfcTextInput));
-    inspector.append(renderSfcVariables(sfc, patch => applyEdit(() => edit_xgwx_sfc_variable(current.file.bytes, {
+    inspector.append(renderSfcVariables({...sfc,userPous:current.summary.userPous}, patch => applyEdit(() => edit_xgwx_sfc_variable(current.file.bytes, {
       programIndex:selectedProgramIndex, expectedVariables:sfc.variables, name:patch.name, dataType:patch.dataType, description:patch.description, remove:patch.remove, declaration:patch.declaration, update:patch.update || false,
     }), patch.remove ? "Remove SFC declaration" : patch.update ? "Edit SFC declaration" : "Add SFC declaration")));
     return;
@@ -5552,7 +5560,7 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   const text = (current.summary.textPrograms || []).find(item => item.programIndex === selectedProgramIndex);
   if (text) {
     inspector.append(element("p", "muted", `${text.language} source changes are drafts until Apply. Applied changes participate in Undo, Redo, Save and Save As. Declare program variables below.`));
-    if (text.editable) inspector.append(renderSfcVariables({...text,scalarOnly:current.summary.cpu?.family === "XGK",variableTypes:current.summary.cpu?.family === "XGK" ? ["BOOL","BYTE","WORD","DWORD","LWORD","SINT","INT","DINT","LINT","USINT","UINT","UDINT","ULINT","REAL","LREAL"] : undefined}, patch => applyEdit(() => edit_xgwx_text_variable(current.file.bytes, text.objectId, {
+    if (text.editable) inspector.append(renderSfcVariables({...text,userPous:current.summary.userPous,scalarOnly:current.summary.cpu?.family === "XGK",variableTypes:current.summary.cpu?.family === "XGK" ? ["BOOL","BYTE","WORD","DWORD","LWORD","SINT","INT","DINT","LINT","USINT","UINT","UDINT","ULINT","REAL","LREAL"] : undefined}, patch => applyEdit(() => edit_xgwx_text_variable(current.file.bytes, text.objectId, {
       programIndex:text.programIndex, expectedVariables:text.variables, name:patch.name, dataType:patch.dataType, description:patch.description, remove:patch.remove, declaration:patch.declaration, update:patch.update || false,
     }), patch.remove ? "Remove declaration" : patch.update ? "Edit declaration" : "Add declaration")));
     return;
@@ -7119,4 +7127,27 @@ function formatBytes(bytes) {
 
 function utf16Length(value) {
   return [...String(value)].reduce((length, character) => length + (character.codePointAt(0) > 0xffff ? 2 : 1), 0);
+}
+
+
+function renderUserPouWorkspace(canvas, inspector, summary) {
+  const pous=summary.userPous || [];
+  if(!pous.some(p=>p.objectId===selectedUserPouId)) selectedUserPouId=pous[0]?.objectId || null;
+  const key=`${current.file.uri}:${selectedUserPouId}`,fileUri=current.file.uri;
+  renderUserPous({canvas,inspector,pous,canCreate:summary.userPouCreation,selectedId:selectedUserPouId,draft:userPouDrafts.get(key) || {},
+    onDraft:patch=>userPouDrafts.set(key,{...userPouDrafts.get(key),...patch}),
+    onSelect:id=>{selectedUserPouId=id;renderWorkspace();},
+    onCreate:async request=>{
+      const objectId=crypto.randomUUID();
+      const result=await applyEdit(()=>create_xgwx_user_pou(current.file.bytes,{...request,objectId,symbolId:crypto.randomUUID()}),`Create ${request.name}`);
+      if(result!==false && current.file.uri===fileUri){selectedUserPouId=objectId;renderWorkspace();}
+      return result;
+    },
+    onEdit:(patch,label)=>{if(current.file.uri!==fileUri)return false;return applyEdit(()=>edit_xgwx_user_pou(current.file.bytes,patch),label,()=>{
+      const draft={...userPouDrafts.get(key)};
+      if(patch.operation==='source'){delete draft.source;delete draft.value;}
+      if(patch.operation==='variables'){delete draft.interfaceBase;delete draft.variables;}
+      if(patch.operation==='delete')userPouDrafts.delete(key);else userPouDrafts.set(key,draft);
+    });},
+  });
 }

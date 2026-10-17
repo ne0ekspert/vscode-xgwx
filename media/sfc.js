@@ -290,7 +290,7 @@ export function renderSfcDiagram(program, selection, onSelect, onSequence, onTex
       if (sourceKey === identity) { sourcePanel.hidden = false; workspace.classList.add("has-source"); return; }
       sourceKey = identity;
       const stored = drafts.get(identity), draft = stored?.source === row[key] ? stored.value : row[key];
-      const editor = renderStTextEditor({name,source:row[key],draft,transition:key === "transitionCode",
+      const editor = renderStTextEditor({name,source:row[key],draft,callables:editorState.callables || [],transition:key === "transitionCode",
         variables:[...(editorState.globalVariables || []),...(program.variables || [])].filter(v=>typeof v.name === "string" && v.name).map(v=>({...v,displayType:sfcDeclarationType(v),call:sfcFunctionBlocks[v.dataType]})),
         onChange:value=>drafts.set(identity,{source:row[key],value}),
         onApply:value=>onSequence(block,sfcRowsAfterEdit(block,entity,key,value),sfcRowIndex(block,entity),key === "actionCode"),
@@ -803,6 +803,7 @@ export const sfcFunctionBlocks = {
   R_TRIG: "CLK := TRUE", F_TRIG: "CLK := TRUE", RS: "S := TRUE, R_1 := FALSE", SR: "S_1 := TRUE, R := FALSE",
 };
 export function renderSfcVariables(program, onEdit) {
+  const functionBlocks={...sfcFunctionBlocks,...Object.fromEntries((program.userPous || []).filter(p=>p.editable && p.kind==='functionBlock').map(p=>[p.name,'']))};
   const section=node("section","cell-editor sfc-variables");section.append(node("h3","","Program variables"));
   if(program.variablesError){section.append(node("p","muted",program.variablesError));return section;}
   const list=node("div","sfc-variable-list"),form=node("form","sfc-variable-form");let editing=null;
@@ -811,7 +812,7 @@ export function renderSfcVariables(program, onEdit) {
   const labeled=(label,control)=>{const item=node("label","sfc-declaration-field");item.append(node("span","",label),control);return item;};
   const name=input("name","Variable or instance name");name.required=true;name.maxLength=32;
   const type=node("select","");type.setAttribute("aria-label",`${variableLabel} variable type`);
-  for(const [label,types]of [["Variables",program.variableTypes || sfcVariableTypes],["Function blocks",program.scalarOnly ? [] : Object.keys(sfcFunctionBlocks)]]){
+  for(const [label,types]of [["Variables",program.variableTypes || sfcVariableTypes],["Function blocks",program.scalarOnly ? [] : Object.keys(functionBlocks)]]){
     const group=document.createElement("optgroup");group.label=label;
     for(const value of types){const option=node("option","",value);option.value=value;group.append(option);}type.append(group);
   }
@@ -821,7 +822,7 @@ export function renderSfcVariables(program, onEdit) {
   const error=node("p","sfc-declaration-error");error.setAttribute("role","alert");error.hidden=true;
   const add=node("button","primary-button","Add declaration");add.type="submit";
   const cancel=node("button","secondary-button","Cancel editing");cancel.type="button";cancel.hidden=true;
-  const shape=()=>{const fb=Boolean(sfcFunctionBlocks[type.value]);bounds.disabled=program.scalarOnly||fb||type.value==="STRING";initial.disabled=program.scalarOnly||fb;retain.disabled=Boolean(program.scalarOnly);
+  const shape=()=>{const fb=Object.hasOwn(functionBlocks,type.value);bounds.disabled=program.scalarOnly||fb||type.value==="STRING";initial.disabled=program.scalarOnly||fb;retain.disabled=Boolean(program.scalarOnly);
     if(bounds.disabled)bounds.value="";if(initial.disabled)initial.value="";
     initial.placeholder=type.value==="STRING" ? "Quoted ASCII string, up to 32 bytes" : "Literal, for example 7 or T#2s";
   };
@@ -834,7 +835,7 @@ export function renderSfcVariables(program, onEdit) {
     if(variable.description)item.append(node("span","muted",variable.description));
     if(variable.system)item.append(node("span","muted","SFC system"));
     else {
-      if(sfcVariableTypes.includes(variable.dataType)||sfcFunctionBlocks[variable.dataType]){
+      if(sfcVariableTypes.includes(variable.dataType)||Object.hasOwn(functionBlocks,variable.dataType)){
         const edit=node("button","secondary-button","Edit");edit.type="button";edit.setAttribute("aria-label",`Edit variable ${variable.name}`);
         edit.addEventListener("click",()=>{editing=variable;name.value=variable.name;name.readOnly=true;type.value=variable.dataType;
           bounds.value=(variable.declaration?.dimensions||[]).map(d=>`${d.lower}..${d.upper}`).join(', ');

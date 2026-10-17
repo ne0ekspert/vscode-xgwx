@@ -18,6 +18,8 @@ export function explorerNodes(file, summary, selection, cpuCatalog = []) {
       leaf(`base:${baseRecordIndex(base, index)}`, `Base ${base.base}${(hardware.bases || []).some(other => other !== base && other.base === base.base) ? ` · PLC ${base.configurationIndex ?? "unassigned"}` : ""} (${installedBaseModules(base, hardware).length})`, "server", { view: "hardware", base: base.base, baseIndex: baseRecordIndex(base, index) })), { view: "hardware" }),
     group("programs", `Programs (${summary.programs?.length || 0})`, "code", (summary.programs || []).map((program, index) =>
       leaf(`program:${program.objectId || index}`, program.name || `Program ${index + 1}`, "code", { view: "programs", programIndex: index, objectId: program.objectId }, program.objectId ? "xgwxProgram" : undefined)), { view: "programs" }, summary.programLanguages?.length ? "xgwxPrograms" : undefined),
+    group("userPous", `Functions and FBs (${summary.userPous?.length || 0})`, "symbol-method", (summary.userPous || []).map(pou =>
+      leaf(`pou:${pou.objectId || pou.index}`, pou.name, pou.kind === "functionBlock" ? "symbol-class" : "symbol-method", { view: "userPous", objectId: pou.objectId })), { view: "userPous" }),
     group("networks", `Networks (${summary.networks?.length || 0})`, "git-branch", (summary.networks || []).map((network, index) =>
       group(`network:${index}`, network.name || `Network ${index + 1}`, "git-branch", (network.modules || []).map(module => {
         const key = `${module.base}:${module.slot}:${module.id}`;
@@ -29,6 +31,7 @@ export function explorerNodes(file, summary, selection, cpuCatalog = []) {
   ];
   const selectedId = selection.view === "hardware" ? `base:${selection.baseIndex ?? (hardware.bases || []).findIndex(base => base.base === selection.base)}`
     : selection.view === "programs" && summary.programs?.[selection.programIndex] ? `program:${summary.programs[selection.programIndex].objectId || selection.programIndex}`
+    : selection.view === "userPous" && selection.userPouId ? `pou:${selection.userPouId}`
     : selection.view === "networks" ? `network:${selection.networkIndex}${selection.networkModuleKey ? `:${selection.networkModuleKey}` : ""}` : selection.view;
   return { uri: file.uri, fileName: file.fileName, nodes, selectedId };
 }

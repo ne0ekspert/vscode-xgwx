@@ -5,7 +5,10 @@ export const stFunctionBlockPins={TON:['IN','PT','Q','ET'],TOF:['IN','PT','Q','E
 const pins=stFunctionBlockPins;
 export const stOutputPins=new Set(['Q','ET','CV','QU','QD']);
 const outputs=stOutputPins;
-export function diagnoseSt(source,variables=[],{transition=false}={}) {
+export function diagnoseSt(source,variables=[],{transition=false,callables=[]}={}) {
+  const custom=new Map(callables.map(c=>[c.name.toUpperCase(),c]));
+  const pins={...stFunctionBlockPins,...Object.fromEntries(callables.map(c=>[c.name,c.pins.map(p=>p.name.toUpperCase())]))};
+  const output=(ty,name)=>custom.get((ty || '').toUpperCase())?.pins.find(p=>p.name.toUpperCase()===name)?.scope==='output' || !custom.has((ty || '').toUpperCase()) && outputs.has(name);
   const issues=[],tokens=[],starts=[0];for(let i=0;i<source.length;i++)if(source[i]==='\n')starts.push(i+1);
   const report=(code,message,start,end=start+1,severity='error')=>{
     if(issues.length>=100)return;
@@ -62,7 +65,7 @@ export function diagnoseSt(source,variables=[],{transition=false}={}) {
   const semicolonBefore=t=>{const previous=tokens[t-1];if(previous && ![';',':','THEN','ELSE','DO','OF','REPEAT'].includes(previous.value.toUpperCase()))report('semicolon','Expected ; before this block boundary.',previous.end,previous.end,'warning');};
   for(let n=0;n<tokens.length;n++) {
     const t=tokens[n],v=t.value.toUpperCase(),prev=tokens[n-1],next=tokens[n+1];
-    if(['(', '['].includes(v))delimiters.push({token:t,call:v==='('&&prev?.kind==='id'?symbols.get(prev.value.toUpperCase()):null});
+    if(['(', '['].includes(v))delimiters.push({token:t,call:v==='('&&prev?.kind==='id'?symbols.get(prev.value.toUpperCase()) || (custom.has(prev.value.toUpperCase()) ? {dataType:custom.get(prev.value.toUpperCase()).name} : null):null});
     if([')',']'].includes(v)){
       const last=delimiters.at(-1);if(!last || last.token.value!==(v===')'?'(':'['))report('delimiter',`Unexpected ${v}.`,t.start,t.end);else delimiters.pop();
     }
@@ -87,7 +90,7 @@ export function diagnoseSt(source,variables=[],{transition=false}={}) {
     }
     if(call && [':=','=>'].includes(next?.value)) {
       const known=pins[call.dataType];if(known&&!known.includes(v))report('pin',`Unknown ${call.dataType} parameter ${t.value}.`,t.start,t.end);
-      else if(known && (outputs.has(v)?'=>':':=')!==next.value)report('pin-direction',`Use ${outputs.has(v)?'=>':':='} for ${t.value}.`,next.start,next.end,'warning');
+      else if(known && (output(call.dataType,v)?'=>':':=')!==next.value)report('pin-direction',`Use ${output(call.dataType,v)?'=>':':='} for ${t.value}.`,next.start,next.end,'warning');
       continue;
     }
     if(next?.value==='(' || !call&&[':=','=>'].includes(next?.value)&&delimiters.some(d=>d.token.value==='('))continue;

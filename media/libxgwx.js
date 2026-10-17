@@ -179,6 +179,24 @@ export function create_xgwx_project(cpu_model, language) {
 }
 
 /**
+ * Create a native ST user-defined function or function block.
+ * @param {Uint8Array} bytes
+ * @param {any} request
+ * @returns {Uint8Array}
+ */
+export function create_xgwx_user_pou(bytes, request) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.create_xgwx_user_pou(ptr0, len0, request);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Delete one implicit IEC LD blank row, matching XG5000 Ctrl+D coordinate
  * shifting while rejecting rows referenced by decoded records.
  * @param {Uint8Array} bytes
@@ -1414,6 +1432,24 @@ export function edit_xgwx_text_variable(bytes, expected_object_id, patch) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+}
+
+/**
+ * Apply an identity- and snapshot-checked edit to a native user-defined POU.
+ * @param {Uint8Array} bytes
+ * @param {any} request
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_user_pou(bytes, request) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_user_pou(ptr0, len0, request);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**
