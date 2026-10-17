@@ -98,6 +98,7 @@ import init, {
   update_xgwx_network,
   update_xgwx_network_module,
   update_xgwx_program,
+  create_xgwx_task,
   update_xgwx_variable,
   xgk_module_catalog,
   xgwx_module_option_values,
@@ -2488,16 +2489,17 @@ test("bundled WASM rewrites program metadata and a same-length ladder cell", asy
   const cell = before.ladder[0].cells.find((item) => item.sourceText === "M00000");
   assert.ok(cell, "fixture exposes an editable ladder cell");
 
-  const metadataBytes = update_xgwx_program(source, 0, {
+  const taskBytes = create_xgwx_task(source, 0, {name:"EditedTask",priority:2,task_number:0,trigger:{kind:"periodic",interval_ms:100}});
+  const metadataBytes = update_xgwx_program(taskBytes, 0, {
     name: "EditedProgram",
-    task: "Edited task",
+    task: "EditedTask",
     comment: "VS Code program edit",
   });
   const editedBytes = update_xgwx_ladder_cell(metadataBytes, 0, cell.offset, "M00000", "M00042");
   const after = parse_xgwx(editedBytes);
 
   assert.equal(after.programs[0].name, "EditedProgram");
-  assert.equal(after.programs[0].task, "Edited task");
+  assert.equal(after.programs[0].task, "EditedTask");
   assert.equal(after.programs[0].comment, "VS Code program edit");
   assert.ok(after.ladder[0].cells.some((item) => item.sourceText === "M00042"));
 });

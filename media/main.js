@@ -18,6 +18,7 @@ import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
 import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
 import { elementCommands, iecPinRule, scalarIecCommands, iecInstanceCommands, extendedIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
+import { taskKey, editableTask, renderTaskWorkspace } from "./tasks.js";
 import init, {
   edit_xgwx_basic_parameters,
   create_xgwx_user_pou,
@@ -135,6 +136,7 @@ import init, {
   edit_xgwx_cnet_settings,
   update_xgwx_program,
   create_xgwx_program,
+  create_xgwx_task, update_xgwx_task, delete_xgwx_task, assign_xgwx_task_program, create_xgwx_task_program,
   delete_xgwx_program,
   move_xgwx_program,
   update_xgwx_variable,
@@ -339,7 +341,15 @@ window.addEventListener("message", async ({ data }) => {
   }
   if (data?.type === "explorerAction" && current?.file.uri === data.uri) {
     const target = data.target || {};
-    if (data.action === "createProgram") { void createProgram(); return; }
+    const targetTask = (current.summary.tasks || []).find(task => taskKey(task) === target.taskKey);
+    if (data.action === "createTask") { creatingTask=true; selectedTaskKey=targetTask ? taskKey(targetTask) : null; selectView("tasks"); return; }
+    if (data.action === "createProgram") { if(target.taskKey && !targetTask)return; void createProgram(targetTask || null); return; }
+    if (data.action === "deleteTask") { if(targetTask) void deleteTask(targetTask); return; }
+    if (data.action === "assignProgram") {
+      const programIndex=current.summary.programs.findIndex(p=>p.objectId===data.sourceObjectId);
+      if(targetTask && programIndex>=0) void assignTaskProgram(targetTask,programIndex); return;
+    }
+    if(target.view === "tasks") { creatingTask=false; selectedTaskKey=targetTask ? taskKey(targetTask) : null; selectView("tasks"); return; }
     if (["setProjectPassword", "changeProjectPassword", "removeProjectPassword"].includes(data.action)) {
       void editPassword(null, data.action === "removeProjectPassword" ? "remove" : "set");
       return;
@@ -384,6 +394,12 @@ window.addEventListener("message", async ({ data }) => {
   }
   if (data?.type === "load") await loadWorkspace(data);
   if (data?.type === "error") renderError(data.message);
+  if (data?.type === "reverted" && data.bytes) {
+    creatingTask = false;
+    selectedTaskKey = null;
+    await loadWorkspace(data);
+    return;
+  }
   if (data?.type === "saved" || data?.type === "reverted") {
     dirty = Boolean(data.dirty);
     if (current && data.type === "reverted") inlineProperties.invalidate(current.file.uri);
@@ -436,6 +452,7 @@ async function loadWorkspace(file) {
     if(generation !== workspaceLoadGeneration) return;
     const previousPrograms=current?.file.uri===file.uri ? current.summary.programs : null;
     const activeId=previousPrograms?.[selectedProgramIndex]?.objectId;
+    if(current?.file.uri!==file.uri) {selectedTaskKey=null;creatingTask=false;}
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
     inlineProperties.invalidate(file.uri);
     if(previousPrograms && (previousPrograms.length!==summary.programs.length || previousPrograms.some((p,i)=>p.objectId!==summary.programs[i]?.objectId)))reconcileProgramOrder(previousPrograms,activeId);
@@ -468,7 +485,7 @@ function renderWorkspace() {
   closeLadderOverlay();
   const { file, summary } = current;
   vscode.postMessage({ type: "explorerState", state: explorerNodes(file, summary, {
-    userPouId: selectedUserPouId, view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
+    taskKey: selectedTaskKey, userPouId: selectedUserPouId, view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
     networkIndex: selectedNetworkIndex, networkModuleKey: selectedNetworkModuleKey,
   }, cpuCatalog) });
   reconcileInlineProperties(summary);
@@ -529,7 +546,7 @@ function renderWorkbench(file, summary) {
 
   renderEditor(editor, summary, inspector);
   workbench.append(editor);
-  if (!["hardware", "networks"].includes(activeView)) workbench.append(inspector);
+  if (!["hardware", "networks", "tasks"].includes(activeView)) workbench.append(inspector);
   return workbench;
 }
 
@@ -554,23 +571,52 @@ function newProgramLanguages() {
   return current?.summary.programLanguages || [];
 }
 
+let selectedTaskKey = null;
+let creatingTask = false;
 let programPromptOpen = false;
-async function createProgram() {
+async function createProgram(task = null) {
   if(programPromptOpen)return;programPromptOpen=true;
   const fileUri=current.file.uri,programs=current.summary.programs || [],languages=newProgramLanguages();
+  if(!languages.length || (task && current.summary.counts.configurations!==1)) { programPromptOpen=false;vscode.postMessage({type:"showError",message:"Program creation requires a supported CPU in a single-PLC project."});return; }
   let name="NewProgram",suffix=1;while(programs.some(p=>p.name?.toLowerCase()===name.toLowerCase()))name=`NewProgram${suffix++}`;
   try {
     const value=await new Promise(resolve=>{
       const requestId=++nextContactPromptId;
       pendingContactPrompts.set(requestId,{resolve,restoreFocus:false});
-      vscode.postMessage({type:"promptNewProgram",requestId,languages,name,existingNames:programs.map(p=>p.name || "")});
+      vscode.postMessage({type:"promptNewProgram",requestId,languages,name,taskName:task?.definition.name,existingNames:programs.map(p=>p.name || "")});
     });
     if(value == null || current.file.uri !== fileUri)return;
     const patch={...value,objectId:crypto.randomUUID(),symbolId:crypto.randomUUID()};
-    await applyEdit(()=>create_xgwx_program(current.file.bytes,patch),`Create ${value.language} program ${value.name}`,()=>{
+    await applyEdit(()=>task ? create_xgwx_task_program(current.file.bytes,task.index,task.expected,patch) : create_xgwx_program(current.file.bytes,patch),`Create ${value.language} program ${value.name}`,()=>{
       selectedProgramIndex=current.summary.programs.findIndex(program=>program.objectId===patch.objectId);if(value.language === "IL" && current.summary.cpu?.family === "XGK")vendorIlViews.add(`${fileUri}:${patch.objectId}`);selectedSfcEntity=null;selectedIecRow=null;selectedIecElement=null;selectedIecInsertion=null;selectedIecBlank=null;resetLadderSelection();activeView="programs";
     });
   } finally {programPromptOpen=false;}
+}
+
+async function assignTaskProgram(task, programIndex) {
+  const program=current.summary.programs[programIndex];
+  if(!program)return;
+  await applyEdit(()=>assign_xgwx_task_program(current.file.bytes,task.index,task.expected,programIndex,program.objectId,program.task),
+    `Assign ${program.name} to ${task.definition.name}`);
+}
+async function deleteTask(task) {
+  await applyEdit(()=>delete_xgwx_task(current.file.bytes,task.index,task.expected),`Delete task ${task.definition.name}`,()=>{selectedTaskKey=null;creatingTask=false;});
+}
+function renderTasksEditor(canvas, inspector, summary) {
+  if(!(summary.tasks || []).some(t=>taskKey(t)===selectedTaskKey))selectedTaskKey=summary.tasks?.[0] ? taskKey(summary.tasks[0]) : null;
+  renderTaskWorkspace(canvas,inspector,{summary,selectedKey:selectedTaskKey,creating:creatingTask,
+    onSelect:task=>{selectedTaskKey=taskKey(task);creatingTask=false;renderWorkspace();},
+    onNew:()=>{creatingTask=true;renderWorkspace();}, onCancel:()=>{creatingTask=false;renderWorkspace();},
+    onSave:async(owner,settings,selected)=>{
+      await applyEdit(()=>selected ? update_xgwx_task(current.file.bytes,selected.index,selected.expected,settings)
+        : create_xgwx_task(current.file.bytes,owner.configurationIndex,settings),`${selected?'Edit':'Create'} task ${settings.name}`,()=>{
+          creatingTask=false;
+          const saved=current.summary.tasks.find(task=>task.configurationIndex===owner.configurationIndex && task.definition.name===settings.name);
+          selectedTaskKey=saved ? taskKey(saved) : null;
+        });
+    }, onDelete:deleteTask, onCreateProgram:createProgram,
+    onOpenProgram:index=>{selectedProgramIndex=index;activeView="programs";renderWorkspace();},
+  });
 }
 
 function reconcileProgramOrder(previousPrograms, activeId) {
@@ -620,6 +666,7 @@ function selectView(view) {
 
 function renderEditor(editor, summary, inspector) {
   const canvas = element("section", "editor-canvas");
+  if (activeView === "tasks") renderTasksEditor(canvas, inspector, summary);
   if (activeView === "hardware") renderHardwareEditor(canvas, inspector, summary.hardware || {});
   if (activeView === "userPous") renderUserPouWorkspace(canvas, inspector, summary);
   if (activeView === "programs") renderProgramsEditor(canvas, inspector, summary.programs || []);
@@ -5590,17 +5637,25 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   const form = element("div", "property-grid");
   const sfc = (current.summary.sfc || []).find(item => item.programIndex === selectedProgramIndex);
   const name = property(form, "Name", program.name, Boolean(sfc));
-  const task = property(form, "Task", program.task, false);
+  const ownerTask=(current.summary.tasks || []).find(t=>t.programIndices.includes(selectedProgramIndex));
+  const taskChoices=ownerTask ? current.summary.tasks.filter(t=>t.configurationIndex===ownerTask.configurationIndex && t.expected && !t.membershipError && [0,1,2,3].includes(t.definition.kind)) : [];
+  const taskGroup=element("label","property-field");taskGroup.append(element("span","property-label","Task"));
+  const task=document.createElement("select");task.setAttribute("aria-label","Task");
+  for(const candidate of taskChoices) {const option=element("option","",candidate.definition.name);option.value=taskKey(candidate);task.append(option);}
+  if(!taskChoices.length) {const option=element("option","",program.task || "Unassigned");option.value="";task.append(option);task.disabled=true;}
+  else task.value=taskKey(ownerTask);
+  taskGroup.append(task);form.append(taskGroup);
   property(form, "Kind", program.kind, true);
   property(form, "Version", program.version, true);
   const comment = property(form, "Comment", program.comment, false, true);
   const applyMetadata = button("Apply program metadata", "primary-button", async () => {
     await applyEdit(
-      () => update_xgwx_program(current.file.bytes, selectedProgramIndex, {
-        name: name.value,
-        task: task.value,
-        comment: comment.value,
-      }),
+      () => {
+        const targetTask=taskChoices.find(t=>taskKey(t)===task.value);
+        const bytes=update_xgwx_program(current.file.bytes, selectedProgramIndex, {name:name.value,comment:comment.value});
+        return targetTask && targetTask.definition.name!==program.task
+          ? assign_xgwx_task_program(bytes,targetTask.index,targetTask.expected,selectedProgramIndex,program.objectId,program.task) : bytes;
+      },
       `Edit program ${display(program.name, selectedProgramIndex + 1)} metadata`,
     );
   });

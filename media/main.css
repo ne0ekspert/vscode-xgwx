@@ -1922,3 +1922,23 @@ form.iec-rung-creation {
 .basic-parameters details .property-field { margin-top: 6px; }
 .basic-parameters .property-label { overflow-wrap: anywhere; }
 @media (max-width: 650px) { .basic-parameters .property-field { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+
+/* Task scheduling uses the full editor width, including narrower split editors. */
+.task-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.task-workspace { display: grid; grid-template-columns: minmax(180px, 260px) minmax(250px, 1fr); gap: 22px; align-items: start; max-width: 1100px; }
+.task-list { display: grid; gap: 6px; }
+.task-row { display: grid; gap: 5px; width: 100%; padding: 10px; text-align: left; border: 1px solid var(--vscode-panel-border); background: transparent; color: inherit; white-space: normal; overflow-wrap: anywhere; }
+.task-row[aria-pressed="true"] { border-color: var(--vscode-focusBorder); background: var(--vscode-list-activeSelectionBackground, #264f78); }
+.task-detail { min-width: 0; padding: 0 4px 24px; }
+.task-detail h3 { margin-top: 8px; }
+.task-form { display: grid; gap: 10px; max-width: 620px; }
+.task-form .property-field { margin: 0; }
+.task-condition-fields { display: grid; gap: 10px; }
+.task-form select, .property-form select { width: 100%; min-width: 0; font: inherit; padding: 5px 7px; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); }
+.task-form input:disabled { opacity: .6; }
+.task-native-fields { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; }
+.task-native-fields dd { margin: 0; }
+.task-program-link { display: block; margin: 6px 0; }
+.editor-shell[data-view="tasks"] .editor-canvas { overflow: auto; }
+@media (max-width: 740px) { .task-workspace { grid-template-columns: minmax(0,1fr); gap: 18px; } .task-list { grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); } }
+.editor-shell[data-view="tasks"] .workbench { grid-template-columns: minmax(0,1fr); }

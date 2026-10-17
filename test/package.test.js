@@ -48,7 +48,7 @@ test("optimizes the production WASM bundle when wasm-opt is available", () => {
 
 test("uses editable custom-document save support", () => {
   const commands = manifest.contributes.commands.map((command) => command.command);
-  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile", "xgwx.explorerCreateProgram", "xgwx.explorerDeleteProgram", "xgwx.editXgkIl", "xgwx.showXgkLadder", "xgwx.find", "xgwx.viewValues.unsigned", "xgwx.viewValues.signed", "xgwx.viewValues.hex", "xgwx.viewValues.float", "xgwx.viewValues.source", "xgwx.explorerSetProgramPassword", "xgwx.explorerChangeProgramPassword", "xgwx.explorerRemoveProgramPassword", "xgwx.explorerUnlockProgramPassword", "xgwx.explorerSetProjectPassword", "xgwx.explorerChangeProjectPassword", "xgwx.explorerRemoveProjectPassword"]);
+  assert.deepEqual(commands, ["xgwx.refreshViewer", "xgwx.newFile", "xgwx.explorerCreateProgram", "xgwx.explorerDeleteProgram", "xgwx.editXgkIl", "xgwx.showXgkLadder", "xgwx.find", "xgwx.viewValues.unsigned", "xgwx.viewValues.signed", "xgwx.viewValues.hex", "xgwx.viewValues.float", "xgwx.viewValues.source", "xgwx.explorerSetProgramPassword", "xgwx.explorerChangeProgramPassword", "xgwx.explorerRemoveProgramPassword", "xgwx.explorerUnlockProgramPassword", "xgwx.explorerSetProjectPassword", "xgwx.explorerChangeProjectPassword", "xgwx.explorerRemoveProjectPassword", "xgwx.explorerCreateTask", "xgwx.explorerEditTask", "xgwx.explorerDeleteTask"]);
   const extension = fs.readFileSync(path.join(root, "extension.js"), "utf8");
   for (const method of ["saveCustomDocument", "saveCustomDocumentAs", "revertCustomDocument", "backupCustomDocument"]) {
     assert.match(extension, new RegExp(`\\b${method}\\b`));

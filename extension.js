@@ -189,7 +189,7 @@ class XgwxEditorProvider {
         await panel.webview.postMessage({type:"iecContactInputResult",requestId:message.requestId,value});
       } else if (message?.type === "promptNewProgram") {
         const allowed = ["LD", "SFC", "ST", "IL"].filter(language => message.languages?.includes(language));
-        const language = await vscode.window.showQuickPick(allowed.map(language => ({label:language, description:{LD:"Ladder Diagram",SFC:"Sequential Function Chart",ST:"Structured Text",IL:"Instruction List (IEC)"}[language]})), {title:"Create program", placeHolder:"Choose the program language",ignoreFocusOut:true});
+        const language = await vscode.window.showQuickPick(allowed.map(language => ({label:language, description:{LD:"Ladder Diagram",SFC:"Sequential Function Chart",ST:"Structured Text",IL:"Instruction List (IEC)"}[language]})), {title:message.taskName ? `Create program in ${message.taskName}` : "Create program", placeHolder:"Choose the program language",ignoreFocusOut:true});
         let value = null;
         if (language) {
           const name = await vscode.window.showInputBox({title:`Create ${language.label} program`,value:message.name || "NewProgram",prompt:"Program name",ignoreFocusOut:true,
@@ -322,8 +322,8 @@ class XgwxEditorProvider {
     ));
     if (!targets.length) return;
     // Serialize once per broadcast, regardless of sibling count.
-    const message = type === "load" ? {
-      type: "load",
+    const message = type === "load" || type === "reverted" ? {
+      type,
       hexPrefix: vscode.workspace.getConfiguration("xgwx").get("hexPrefix", "h"),
       fileName: path.basename(document.uri.fsPath || document.uri.path),
       uri: document.uri.toString(),
@@ -674,6 +674,9 @@ function activate(context) {
     explorer, explorer.view,
     vscode.commands.registerCommand("xgwx.explorerNavigate", item => explorer.dispatch(item)),
     vscode.commands.registerCommand("xgwx.explorerCreateProgram", item => explorer.dispatch(item, "createProgram")),
+    vscode.commands.registerCommand("xgwx.explorerCreateTask", item => explorer.dispatch(item, "createTask")),
+    vscode.commands.registerCommand("xgwx.explorerEditTask", item => explorer.dispatch(item)),
+    vscode.commands.registerCommand("xgwx.explorerDeleteTask", item => explorer.dispatch(item, "deleteTask")),
     vscode.commands.registerCommand("xgwx.explorerDeleteProgram", item => explorer.dispatch(item, "deleteProgram")),
     ...["Set", "Change", "Remove", "Unlock"].map(action =>
       vscode.commands.registerCommand(`xgwx.explorer${action}ProgramPassword`, item =>

@@ -287,6 +287,33 @@ test("broadcast delivers a stable revision to all siblings and keeps notificatio
   messages.length = 0;
   await provider.broadcast(document, "saved");
   assert.deepEqual(messages, Array.from({ length: 3 }, () => ({ type: "saved", dirty: false })));
+  messages.length = 0;
+  document.bytes = new Uint8Array([1, 2, 3]);
+  await provider.broadcast(document, "reverted");
+  assert.equal(messages.length, 3);
+  for (const message of messages) {
+    assert.equal(message.type, "reverted");
+    assert.deepEqual(message.bytes, [1, 2, 3]);
+    assert.equal(message.uri, document.uri.toString());
+  }
+});
+
+test("revert replaces unsaved document bytes and sends the restored revision to editors", async () => {
+  const target = uri("/workspace/revert-task.xgwx");
+  files.set(target.toString(), [1, 2, 3]);
+  const document = new XgwxDocument(target, [1, 9, 3]);
+  document.dirty = true;
+  const provider = new XgwxEditorProvider({});
+  const messages = [];
+  provider.editors.add({ document, panel: { webview: {
+    postMessage: async message => messages.push(message),
+  } } });
+  await provider.revertCustomDocument(document);
+  assert.deepEqual(Array.from(document.bytes), [1, 2, 3]);
+  assert.deepEqual(Array.from(document.savedBytes), [1, 2, 3]);
+  assert.equal(document.dirty, false);
+  assert.equal(messages[0].type, "reverted");
+  assert.deepEqual(messages[0].bytes, [1, 2, 3]);
 });
 
 test("native contact prompt accepts suggestions and free text, and cancels without a value", async () => {

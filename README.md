@@ -18,7 +18,9 @@ Open files are watched for external changes, including files outside the workspa
 
 Open an `.xgwx` file to see **XG5000 Explorer** in VS Code's Explorer sidebar. Select workspace, hardware bases, programs, network modules, variables, or parameters to navigate the custom editor. The tree follows the most recently active XGWX editor and updates after edits and Undo/Redo. Closing that editor selects another open XGWX document, or shows an empty view.
 
-Right-click **Programs** to create a program, or a program to delete it. Drag a program onto another program to move it to that program's position, preserving task assignments through the existing writer. VS Code's view controls can move XG5000 Explorer to another sidebar or view container.
+Programs are grouped beneath their tasks. Right-click **Programs → Create Task** to add an initialization, periodic, or internal-device task. Set its name and trigger, then choose **Create task**. Select a task to edit its schedule or use **Task Properties** from its context menu. Internal tasks support bit conditions and word comparisons, using XGK or IEC device syntax for the selected PLC.
+
+Right-click a task and choose **Create Program** to create a program assigned to it. Move an existing program to a task by dragging it onto that task, or change the **Task** picker in the program inspector and choose **Apply metadata**. Dragging onto another program in the same task reorders it. Tasks can be deleted once empty; programs have their own delete action. These edits support native Undo/Redo, Save, and Revert File. Unsupported CPU/task layouts remain read-only. VS Code's view controls can move XG5000 Explorer to another sidebar or view container.
 
 # XGWX Workspace Editor for VS Code
 

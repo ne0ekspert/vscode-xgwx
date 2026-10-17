@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import fs from 'node:fs';
+import init,{create_xgwx_project,parse_xgwx,create_xgwx_task,update_xgwx_task,delete_xgwx_task,create_xgwx_task_program,assign_xgwx_task_program} from '../media/libxgwx.js';
+import {explorerNodes} from '../media/explorer-model.js';
+import {taskKey,editableTask,taskProgramCreation,nextTaskNumber} from '../media/tasks.js';
+await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
+const periodic={name:'FastLoop',priority:2,task_number:0,trigger:{kind:'periodic',interval_ms:100}};
+const worker={name:'Worker',language:'LD',objectId:'11111111-1111-4111-8111-111111111111',symbolId:'22222222-2222-4222-8222-222222222222'};
+for(const model of ['XGK-CPUSN','XGI-CPUUN']) test(`${model}: explorer groups task programs with stable targets and guarded creation`,()=>{
+ let bytes=create_xgwx_project(model,'LD');let summary=parse_xgwx(bytes);
+ assert.equal(summary.tasks[0].creationSupported,true);assert.equal(summary.tasks[0].deviceSyntax,model.startsWith('XGI')?'iec':'xgk');
+ bytes=create_xgwx_task(bytes,0,periodic);summary=parse_xgwx(bytes);const task=summary.tasks[1];
+ assert.equal(editableTask(task),true);assert.equal(taskProgramCreation(summary,task),true);assert.equal(nextTaskNumber(summary.tasks,0,'periodic'),1);
+ bytes=create_xgwx_task_program(bytes,1,task.expected,worker);summary=parse_xgwx(bytes);
+ let state=explorerNodes({uri:'file:///tasks.xgwx',fileName:'tasks.xgwx'},summary,{view:'tasks',taskKey:taskKey(task)});
+ const root=state.nodes.find(n=>n.id==='programs'),row=root.children[1];
+ assert.equal(root.contextValue,'xgwxPrograms.tasks');assert.equal(row.contextValue,'xgwxTask.user.programs');assert.equal(row.children[0].target.objectId,worker.objectId);
+ assert.equal(state.selectedId,taskKey(task));assert.equal(row.target.taskKey,taskKey(task));
+ assert.throws(()=>delete_xgwx_task(bytes,1,summary.tasks[1].expected),/owns programs/);
+ bytes=update_xgwx_task(bytes,1,summary.tasks[1].expected,{...periodic,name:'Renamed',priority:7});summary=parse_xgwx(bytes);
+ assert.equal(summary.programs[1].task,'Renamed');assert.throws(()=>update_xgwx_task(bytes,1,task.expected,periodic),/changed/);
+ bytes=assign_xgwx_task_program(bytes,0,summary.tasks[0].expected,1,worker.objectId,'Renamed');summary=parse_xgwx(bytes);
+ state=explorerNodes({uri:'file:///tasks.xgwx'},summary,{view:'tasks'});assert.equal(state.nodes.find(n=>n.id==='programs').children[1].contextValue,'xgwxTask.empty.programs');
+ bytes=delete_xgwx_task(bytes,1,summary.tasks[1].expected);assert.equal(parse_xgwx(bytes).tasks.length,1);
+});
+test('unsupported task scheduling is read-only and has no create-task context',()=>{
+ const summary=parse_xgwx(create_xgwx_project('XGB-XECU','ST'));
+ assert.equal(summary.tasks[0].creationSupported,false);assert.equal(editableTask(summary.tasks[0]),false);
+ const state=explorerNodes({uri:'file:///compact.xgwx'},summary,{view:'tasks'});
+ assert.notEqual(state.nodes.find(n=>n.id==='programs').contextValue,'xgwxPrograms.tasks');
+ assert.throws(()=>create_xgwx_task(create_xgwx_project('XGB-XECU','ST'),0,periodic),/not captured/);
+});

@@ -26,6 +26,32 @@ export function assign_xgwx_iec_ld_function_output_operand(bytes, program_index,
 }
 
 /**
+ * Assign an identified program to a task in the same PLC.
+ * @param {Uint8Array} bytes
+ * @param {number} task_index
+ * @param {any} expected
+ * @param {number} program_index
+ * @param {string} expected_object_id
+ * @param {string} expected_task
+ * @returns {Uint8Array}
+ */
+export function assign_xgwx_task_program(bytes, task_index, expected, program_index, expected_object_id, expected_task) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_object_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ptr2 = passStringToWasm0(expected_task, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len2 = WASM_VECTOR_LEN;
+    const ret = wasm.assign_xgwx_task_program(ptr0, len0, task_index, expected, program_index, ptr1, len1, ptr2, len2);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v4 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v4;
+}
+
+/**
  * Probe whether this container can be rewritten without returning probe bytes.
  * @param {Uint8Array} bytes
  * @returns {boolean}
@@ -183,6 +209,45 @@ export function create_xgwx_project(cpu_model, language) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+}
+
+/**
+ * Create a task using native scheduling settings in the selected PLC.
+ * @param {Uint8Array} bytes
+ * @param {number} configuration_index
+ * @param {any} settings
+ * @returns {Uint8Array}
+ */
+export function create_xgwx_task(bytes, configuration_index, settings) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.create_xgwx_task(ptr0, len0, configuration_index, settings);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Create a native empty program directly in the selected task.
+ * @param {Uint8Array} bytes
+ * @param {number} task_index
+ * @param {any} expected
+ * @param {any} program
+ * @returns {Uint8Array}
+ */
+export function create_xgwx_task_program(bytes, task_index, expected, program) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.create_xgwx_task_program(ptr0, len0, task_index, expected, program);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**
@@ -1089,6 +1154,25 @@ export function delete_xgwx_program(bytes, program_index, expected_object_id) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+}
+
+/**
+ * Delete an empty user task, preserving its programs by rejecting populated tasks.
+ * @param {Uint8Array} bytes
+ * @param {number} task_index
+ * @param {any} expected
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_task(bytes, task_index, expected) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_task(ptr0, len0, task_index, expected);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**
@@ -2259,6 +2343,28 @@ export function rename_xgwx_iec_local_symbol(bytes, program_index, symbol_index,
 }
 
 /**
+ * Rename a user task and its program references atomically.
+ * @param {Uint8Array} bytes
+ * @param {number} task_index
+ * @param {any} expected
+ * @param {string} name
+ * @returns {Uint8Array}
+ */
+export function rename_xgwx_task(bytes, task_index, expected, name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.rename_xgwx_task(ptr0, len0, task_index, expected, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Reconnect the one-cell wire gap left by a captured IEC contact deletion.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -2945,6 +3051,26 @@ export function update_xgwx_program(bytes, program_index, patch) {
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
     const len0 = WASM_VECTOR_LEN;
     const ret = wasm.update_xgwx_program(ptr0, len0, program_index, patch);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
+ * Update a task only if its complete inspected definition is unchanged.
+ * @param {Uint8Array} bytes
+ * @param {number} task_index
+ * @param {any} expected
+ * @param {any} settings
+ * @returns {Uint8Array}
+ */
+export function update_xgwx_task(bytes, task_index, expected, settings) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.update_xgwx_task(ptr0, len0, task_index, expected, settings);
     if (ret[3]) {
         throw takeFromExternrefTable0(ret[2]);
     }

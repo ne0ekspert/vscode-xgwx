@@ -149,6 +149,21 @@
         "command": "xgwx.explorerRemoveProjectPassword",
         "title": "Remove password",
         "icon": "$(key)"
+      },
+      {
+        "command": "xgwx.explorerCreateTask",
+        "title": "Create Task",
+        "icon": "$(add)"
+      },
+      {
+        "command": "xgwx.explorerEditTask",
+        "title": "Task Properties",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "xgwx.explorerDeleteTask",
+        "title": "Delete Task",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -168,7 +183,7 @@
       "view/item/context": [
         {
           "command": "xgwx.explorerCreateProgram",
-          "when": "view == xgwx.explorer && viewItem == xgwxPrograms",
+          "when": "view == xgwx.explorer && (viewItem == xgwxPrograms || viewItem == xgwxPrograms.tasks || viewItem =~ /^xgwxTask\\.(scan|user|empty)\\.programs$/)",
           "group": "navigation"
         },
         {
@@ -210,6 +225,21 @@
           "command": "xgwx.explorerRemoveProjectPassword",
           "when": "view == xgwx.explorer && viewItem == xgwxProject.passwordSet",
           "group": "password@4"
+        },
+        {
+          "command": "xgwx.explorerCreateTask",
+          "when": "view == xgwx.explorer && viewItem == xgwxPrograms.tasks",
+          "group": "navigation@1"
+        },
+        {
+          "command": "xgwx.explorerEditTask",
+          "when": "view == xgwx.explorer && viewItem =~ /^xgwxTask\\./",
+          "group": "navigation@2"
+        },
+        {
+          "command": "xgwx.explorerDeleteTask",
+          "when": "view == xgwx.explorer && viewItem =~ /^xgwxTask\\.empty\\./",
+          "group": "navigation@3"
         }
       ],
       "commandPalette": [
@@ -247,6 +277,22 @@
         },
         {
           "command": "xgwx.explorerRemoveProjectPassword",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerCreateTask",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerEditTask",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerDeleteTask",
+          "when": "false"
+        },
+        {
+          "command": "xgwx.explorerCreateProgram",
           "when": "false"
         }
       ]
@@ -335,7 +381,7 @@
     }
   },
   "scripts": {
-    "check": "node --check extension.js && node --check media/main.js && node --check media/inline-properties.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check password-prompts.cjs && node --check new-workspace.cjs && node --check explorer.cjs && node --check media/explorer-model.js",
+    "check": "node --check extension.js && node --check media/main.js && node --check media/inline-properties.js && node --check scripts/launch-extension-host.cjs && node --check media/ladder-operand-rules.cjs && node --check media/variable-edit.js && node --check password-prompts.cjs && node --check new-workspace.cjs && node --check explorer.cjs && node --check media/explorer-model.js && node --check media/tasks.js",
     "test": "node --test test/*.test.js test/*.test.mjs",
     "build:wasm": "bash scripts/build-wasm.sh",
     "package": "vsce package --no-dependencies"

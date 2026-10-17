@@ -149,3 +149,20 @@ test('project root routes password actions with current protection state and rej
  explorer.update(explorerNodes({...file,uri:'file:///other.xgwx'},model,{}));
  await explorer.dispatch(root,'removeProjectPassword');assert.equal(calls.length,3);
 });
+
+test('program drops onto tasks assign membership while same-task drops reorder',async()=>{
+ const {create_xgwx_task,create_xgwx_task_program}=await import('../media/libxgwx.js');
+ const {taskKey}=await import('../media/tasks.js');
+ let bytes=create_xgwx_task(create_xgwx_project('XGK-CPUSN','LD'),0,{name:'Periodic',priority:2,task_number:0,trigger:{kind:'periodic',interval_ms:100}});
+ let parsed=parse_xgwx(bytes);
+ bytes=create_xgwx_task_program(bytes,1,parsed.tasks[1].expected,{name:'Worker',language:'LD',objectId:'11111111-1111-4111-8111-111111111111',symbolId:'22222222-2222-4222-8222-222222222222'});
+ parsed=parse_xgwx(bytes);const calls=[],explorer=new XgwxExplorer((_,message)=>calls.push(message));
+ explorer.setEditor({explorerState:explorerNodes(file,parsed,{view:'tasks'})});
+ const from=explorer.nodes.get(`program:${parsed.programs[0].objectId}`),task=explorer.nodes.get(taskKey(parsed.tasks[1]));
+ const transfer=new Map();explorer.handleDrag([from],transfer);await explorer.handleDrop(task,transfer);
+ assert.equal(calls.at(-1).action,'assignProgram');assert.equal(calls.at(-1).target.taskKey,task.id);
+ await explorer.handleDrop(task.children[0],transfer);assert.equal(calls.at(-1).action,'assignProgram');
+ await explorer.handleDrop(from,transfer);assert.equal(calls.at(-1).action,'moveProgram');
+ const old=task;explorer.setEditor({explorerState:explorerNodes({...file,uri:'file:///elsewhere.xgwx'},parsed,{view:'tasks'})});
+ const count=calls.length;await explorer.handleDrop(old,transfer);assert.equal(calls.length,count);
+});

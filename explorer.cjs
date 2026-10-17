@@ -57,9 +57,17 @@ class XgwxExplorer {
   }
   async handleDrop(target, transfer) {
     const source = transfer.get(PROGRAM_MIME)?.value;
-    if (!source || source.uri !== this.state?.uri || target?.contextValue !== "xgwxProgram") return;
-    const from = [...this.nodes.values()].find(item => item.target?.objectId === source.objectId);
-    if (from) await this.dispatch(target, "moveProgram", { sourceObjectId: source.objectId });
+    if (!source || source.uri !== this.state?.uri || target?.uri !== this.state?.uri) return;
+    const current=this.nodes.get(target.id);
+    const from=[...this.nodes.values()].find(item=>item.contextValue === "xgwxProgram" && item.target?.objectId === source.objectId);
+    if(!current || !from)return;
+    if(current.target?.view === "tasks" && current.contextValue !== "xgwxTask.readonly") {
+      await this.dispatch(current,"assignProgram",{sourceObjectId:source.objectId});return;
+    }
+    if(current.contextValue!=="xgwxProgram")return;
+    if(current.parent?.target?.view === "tasks" && from.parent?.id!==current.parent.id)
+      await this.dispatch(current.parent,"assignProgram",{sourceObjectId:source.objectId});
+    else await this.dispatch(current,"moveProgram",{sourceObjectId:source.objectId});
   }
   dispose() { this.emitter.dispose(); }
 }
