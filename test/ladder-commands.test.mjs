@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {elementCommands,iecPinRule,scalarIecCommands,xgkInputCommands,nativeInstructionParts,instructionOperandText,xgkBlankCommands,xgkInsertionColumn} from '../media/ladder-commands.js';
+import {elementCommands,iecPinRule,scalarIecCommands,iecInstanceCommands,xgkInputCommands,nativeInstructionParts,instructionOperandText,xgkBlankCommands,xgkInsertionColumn} from '../media/ladder-commands.js';
 
 test('indexed-bit prompt commands preserve the normally-closed B alias',()=>{
   const choices=xgkInputCommands([{mnemonic:'B',operandCount:2},{mnemonic:'BN',operandCount:2},{mnemonic:'=',operandCount:2}]);
@@ -81,4 +81,22 @@ test('blank XGK branch cells offer right-anchored outputs and preserve contact a
   if(column<9)assert.equal(xgkInsertionColumn(choices.find(c=>c.mnemonic==='NO'),position),column);
   assert.equal(choices.some(c=>c.mnemonic==='='),column<=6);
  }
+});
+
+test('IEC FF command takes one matching local instance, separate from scalar commands',()=>{
+  const [ff]=iecInstanceCommands([{name:'Toggle',isInstance:true,typeReference:'FF'},{name:'Delay',isInstance:true,typeReference:'TON'},{name:'Value',isInstance:false,typeReference:'FF'}]);
+  assert.equal(ff.mnemonic,'FF');assert.equal(ff.category,'function');assert.equal(ff.operandCount,1);
+  assert.deepEqual(ff.operandRules,[{label:'Instance',dataTypes:['FF'],allowsConstant:false}]);
+  assert.deepEqual(ff.suggestions,[{value:'Toggle',dataType:'FF',description:'FF instance'}]);
+  assert.equal(iecInstanceCommands()[0].suggestions.length,0);
+});
+
+test('IEC instances expose timers, latches and counters with optional data outputs',async()=>{
+ const {iecInstanceCommands,extendedIecCommands}=await import('../media/ladder-commands.js');
+ const choices=iecInstanceCommands([{name:'Down',isInstance:true,typeReference:'CTD_DINT'},{name:'Rise',isInstance:true,typeReference:'R_TRIG'}]);
+ for(const name of ['FF','R_TRIG','F_TRIG','TON','TOF','TP','RS','SR','CTU_DINT','CTD_DINT','CTUD_DINT']) assert.ok(choices.some(c=>c.mnemonic===name),name);
+ const c=choices.find(c=>c.mnemonic==='CTUD_DINT');assert.equal(c.minOperandCount,5);assert.equal(c.operandCount,6);assert.deepEqual(c.operandRules.map(r=>r.label),['Instance','CD','R','LD','PV','CV']);
+ assert.deepEqual(choices.find(c=>c.mnemonic==='CTD_DINT').suggestions.map(s=>s.value),['Down']);
+ assert.equal(choices.find(c=>c.mnemonic==='R_TRIG').operandCount,1);
+ assert.deepEqual(extendedIecCommands().map(c=>c.mnemonic),['NE','MOD','AND','OR','XOR','NOT','WORD_TO_UDINT']);
 });

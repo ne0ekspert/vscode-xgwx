@@ -1577,7 +1577,7 @@ export function insert_xgwx_iec_ld_contact(bytes, program_index, wire_offset, ra
 }
 
 /**
- * Place one verified scalar IEC function with operands in reference order.
+ * Place one verified IEC function; FF takes one declared FF instance operand.
  * @param {Uint8Array} bytes
  * @param {number} program_index
  * @param {number} row_index

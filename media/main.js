@@ -16,7 +16,7 @@ import { validatedEditCache } from "./validated-edit-cache.js";
 import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
 import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
-import { elementCommands, iecPinRule, scalarIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
+import { elementCommands, iecPinRule, scalarIecCommands, iecInstanceCommands, extendedIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import init, {
   create_xgwx_user_pou,
   edit_xgwx_user_pou,
@@ -1900,7 +1900,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     const storedX = item.iecPosition?.[0] ?? 1;
     marker.style.left = `${isComment ? x(0) : x(storedX - 1 - (ownerOffset ?? gapOffset(item.iecRowIndex, storedX)))}px`;
     marker.style.top = `${(kind === "contact" || kind === "coil") ? y(item.iecRowIndex)
-      : y(item.iecRowIndex) - (isComment ? 20 : isOperand ? 18 : 22)}px`;
+      : y(item.iecRowIndex) - (isComment ? 20 : isOperand ? 18 : 28)}px`;
     if (kind === "contact" || kind === "coil" || kind === "function") {
       marker.dataset.rowIndex = String(item.iecRowIndex);
       marker.dataset.rawX = String(item.iecPosition?.[0] ?? 1);
@@ -1954,7 +1954,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
     if (isComment) marker.style.width = `${x(96) - x(0)}px`;
     if (isFunction) {
       if (block) {
-        marker.style.height = `${Math.max(44, (block.pinCount - 1) * pitch + 44)}px`;
+        marker.style.height = `${Math.max(50, (block.pinCount - 1) * pitch + 50)}px`;
         marker.title = `${block.name}${block.instance ? ` · ${block.instance}` : ""} · ${block.pinCount} row${block.pinCount === 1 ? "" : "s"}`;
       }
     }
@@ -1992,7 +1992,7 @@ function renderIecLayout(body, selectElement, selectInsertion, selectNetworkRow,
         if (!emptyOutput) pin.setAttribute("aria-label", `Wire ${block.name}.${port.name} at L${port.rowIndex}`);
         if (!emptyOutput) pin.addEventListener("click", () => {
           selectRow(port.rowIndex);
-          status.textContent = `${block.name}.${port.name} · BOOL. F5, Enter, or double-click draws a wire.${port.name === "OUT" ? " Its output assignment will be replaced by the wire." : " Numeric OUT keeps its destination."}`;
+          status.textContent = `${block.name}.${port.name} · BOOL. F5, Enter, or double-click draws a wire.${port.name === "OUT" ? " Its output assignment will be replaced by the wire." : ""}`;
         });
         if (!emptyOutput) pin.addEventListener("dblclick", event => {event.preventDefault();event.stopPropagation();void drawOutputWire(block,port);});
         pin.addEventListener("keydown", event => {
@@ -2339,7 +2339,8 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
   const choices = [
     ...elementCommands("contact", true),
     ...(!site ? elementCommands("coil", true) : []),
-    ...(position.rawX >= 4 && position.rawX <= 91 ? [...scalarChoices, ...[
+    ...(position.rawX <= 91 ? iecInstanceCommands(current.summary.localVariables?.[selectedProgramIndex] || []) : []),
+    ...(position.rawX <= 91 ? [...scalarChoices, ...extendedIecCommands(), ...[
       ["INT_TO_UDINT", "INT", "UDINT"],
       ["UDINT_TO_TIME", "UDINT", "TIME"],
       ["TIME_TO_UDINT", "TIME", "UDINT"],
@@ -2362,7 +2363,10 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
   }
   if (timer) {
     const connected = [10, 19, 22].includes(timer.rawX);
+    const genericTimer=choices.findIndex(c=>c.mnemonic==="TON");
+    if(genericTimer>=0) choices.splice(genericTimer,1);
     choices.push({ mnemonic: "TON", category: "terminalTimer", operandCount: connected ? 2 : 3,
+      ...(!connected ? {minOperandCount:2} : {}),
       operandRules: [{label:"Instance",dataTypes:["TON"],allowsConstant:false},
         {label:"Preset time",dataTypes:["TIME"]},
         ...(!connected ? [{label:"Elapsed time destination",dataTypes:["TIME"],allowsConstant:false}] : [])],
@@ -2378,6 +2382,8 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
   }
   if (instanceSite) {
     const name = instanceSite.functionName || "FF";
+    const general = choices.findIndex(choice => choice.mnemonic === name);
+    if (general >= 0) choices.splice(general, 1);
     choices.push({ mnemonic: name, category: "instance", operandCount: 1,
       operandRules: [{label:"Instance",dataTypes:[name],allowsConstant:false}],
       suggestions: (current.summary.localVariables?.[selectedProgramIndex] || [])
@@ -2423,6 +2429,7 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
     build: (choice, operands, bytes, program) => {
       if (choice.category === "terminalTimer") {
         if ([10, 22].includes(timer.rawX)) return insert_xgwx_iec_ld_function(bytes, program, position.rowIndex, position.rawX, "TON", JSON.stringify(operands));
+        if (!operands[2]) return insert_xgwx_iec_ld_function(bytes, program, position.rowIndex, position.rawX, "TON", JSON.stringify(operands));
         return insert_xgwx_iec_ld_terminal_timer(bytes, program, timer.contactOffset, operands[0], operands[1], operands[2] || "");
       }
       if (choice.category === "terminal") return insert_xgwx_iec_ld_terminal_move(bytes, program, terminal.contactOffset, operands[0], operands[1]);
@@ -2431,7 +2438,8 @@ function showIecBlankInput(body, position, focusSelector = ".iec-layout-blank-ce
       if (choice.category === "function") {
         const symbols = [...(current.summary.localVariables?.[program] || []),
           ...(current.summary.variables || []), ...(current.summary.iecSystemVariables || [])];
-        const candidate = nearbyInsertionEdit(position, { iec: true, build: target => {
+        const functionPosition = {...position,rawX:Math.max(4,position.rawX)};
+        const candidate = nearbyInsertionEdit(functionPosition, { iec: true, build: target => {
           if (!iecFunctionEnableIsCompatible(body, target, symbols)) {
             throw new Error("IEC function EN would overlap a non-BOOL output or an occupied block row");
           }

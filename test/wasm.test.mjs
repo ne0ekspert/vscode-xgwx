@@ -56,6 +56,7 @@ import init, {
   insert_xgwx_iec_ld_leading_contact,
   insert_xgwx_iec_ld_function_cell,
   insert_xgwx_iec_ld_function,
+  insert_xgwx_iec_ld_function_output_wire,
   insert_xgwx_iec_ld_single_element,
   insert_xgwx_iec_ld_terminal_move,
   insert_xgwx_iec_ld_standalone_function,
@@ -4546,4 +4547,57 @@ test("XGK output commands from interior branch cursors preserve the branch and e
     assert.ok(after.cells.some(c=>c.rawY===rawY&&(c.value===operands[0]&&c.coil||c.value===mnemonic)),mnemonic);
     assert.ok(after.horizontalLines.some(line=>line.rawY===rawY&&line.rawXEnd>=85),mnemonic);
   }
+});
+
+test('fresh IEC FF placement accepts declared instances and rejects stale geometry',async()=>{
+  await init({module_or_path:fs.readFileSync(path.join(root,'media/libxgwx_bg.wasm'))});
+  const input=fs.readFileSync(path.join(root,'test/fixtures/iec-ff-empty.bin'));
+  const inserted=insert_xgwx_iec_ld_function(input,0,0,4,'FF',JSON.stringify(['FF']));
+  const summary=parse_xgwx(inserted);
+  assert.equal(summary.ladder[0].iecFunctions[0].name,'FF');
+  assert.equal(summary.ladder[0].iecRows.length,2);
+  assert.throws(()=>insert_xgwx_iec_ld_function(inserted,0,0,4,'FF',JSON.stringify(['FF'])),/overlap/);
+  assert.throws(()=>insert_xgwx_iec_ld_function(input,0,0,4,'FF',JSON.stringify(['Missing'])),/instance/);
+});
+
+test('fresh IEC FF can complete a single contact prefix',async()=>{
+  await init({module_or_path:fs.readFileSync(path.join(root,'media/libxgwx_bg.wasm'))});
+  const input=fs.readFileSync(path.join(root,'test/fixtures/iec-ff-empty.bin'));
+  const contact=insert_xgwx_iec_ld_single_element(input,0,3,1,'contact','NO','%MX0');
+  const inserted=insert_xgwx_iec_ld_function(contact,0,3,10,'FF',JSON.stringify(['FF']));
+  const summary=parse_xgwx(inserted);
+  assert.equal(summary.ladder[0].iecFunctions[0].rawX,10);
+  assert.ok(summary.ladder[0].sourceStrings.some(s=>s.value==='%MX0'));
+});
+
+test('IEC FF.Q wires without requesting an output variable',async()=>{
+  await init({module_or_path:fs.readFileSync(path.join(root,'media/libxgwx_bg.wasm'))});
+  const input=fs.readFileSync(path.join(root,'test/fixtures/iec-ff-empty.bin'));
+  const inserted=insert_xgwx_iec_ld_function(input,0,0,4,'FF',JSON.stringify(['FF']));
+  const b=parse_xgwx(inserted).ladder[0].iecFunctions[0];
+  const wired=insert_xgwx_iec_ld_function_output_wire(inserted,0,b.recordOffset,'FF','Q',b.controlOutput.rawX);
+  const p=parse_xgwx(wired).ladder[0];
+  assert.equal(p.iecFunctionOperandLinks.length,0);
+  assert.ok(p.iecRecords.some(r=>r.kind==='Short wire'));
+});
+
+test('bundled WASM inserts broader IEC blocks and directly wires counter QD',async()=>{
+ await init({module_or_path:fs.readFileSync(path.join(root,'media/libxgwx_bg.wasm'))});
+ let bytes=fs.readFileSync(path.join(fixtureRoot,'iec-blocks-empty.bin'));
+ const cases=[['F_TRIG',['Fall']],['TON',['OnTimer','T#1s']],['TOF',['OffTimer','T#2s']],['TP',['PulseTimer','T#500ms']],['RS',['ResetLatch','FALSE']],['SR',['SetLatch','FALSE']],['CTU_DINT',['UpCounter','FALSE','DINT#10']],['CTD_DINT',['DownCounter','FALSE','DINT#10']],['CTUD_DINT',['BothCounter','FALSE','FALSE','FALSE','DINT#10']],['NE',['INT#1','INT#2']],['MOD',['INT#5','INT#2','%MW100']],['AND',['TRUE','FALSE','%MX100']],['OR',['TRUE','FALSE','%MX101']],['XOR',['TRUE','FALSE','%MX102']],['NOT',['TRUE','%MX103']],['WORD_TO_UDINT',['%MW200','%MD100']]];
+ for(const [i,[name,args]] of cases.entries()) bytes=insert_xgwx_iec_ld_function(bytes,0,i*10,4,name,JSON.stringify(args));
+ const summary=parse_xgwx(bytes),counter=summary.ladder[0].iecFunctions.find(b=>b.name==='CTUD_DINT');
+ assert.equal(counter.pins.find(p=>p.name==='QD').referenceOrdinal,null);
+ bytes=insert_xgwx_iec_ld_function_output_wire(bytes,0,counter.recordOffset,'CTUD_DINT','QD',7);
+ assert.ok(parse_xgwx(bytes).ladder[0].iecCircuitGraph);
+ assert.equal(parse_xgwx(bytes).ladder[0].iecFunctions.length,cases.length);
+ assert.throws(()=>insert_xgwx_iec_ld_function(bytes,0,180,4,'TOF',JSON.stringify(['Fall','T#1s'])),/instance/);
+});
+
+test('fresh TON after one contact leaves ET optional through bundled WASM',async()=>{
+ await init({module_or_path:fs.readFileSync(path.join(root,'media/libxgwx_bg.wasm'))});
+ let bytes=fs.readFileSync(path.join(fixtureRoot,'iec-blocks-empty.bin'));
+ bytes=insert_xgwx_iec_ld_single_element(bytes,0,0,1,'contact','NO','%MX0');
+ bytes=insert_xgwx_iec_ld_function(bytes,0,0,7,'TON',JSON.stringify(['OnTimer','T#1s']));
+ assert.equal(parse_xgwx(bytes).ladder[0].iecFunctionOperandLinks.length,1);
 });

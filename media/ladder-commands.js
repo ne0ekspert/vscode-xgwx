@@ -97,3 +97,45 @@ export function xgkBlankCommands(ladder, position) {
 export function xgkInsertionColumn(choice, position) {
   return ["coil", "function"].includes(choice.category) ? 9 : position.column;
 }
+
+// Stateful IEC blocks take declared instances rather than scalar operands.
+export function iecInstanceCommands(symbols = []) {
+  return [{ mnemonic: "FF", category: "function", operandCount: 1,
+    operandRules: [{label: "Instance", dataTypes: ["FF"], allowsConstant: false}],
+    suggestions: symbols.filter(symbol => symbol.isInstance && symbol.typeReference === "FF")
+      .map(symbol => ({value: symbol.name, dataType: "FF", description: "FF instance"})) },
+    ...INSTANCE_PINS.map(([name,inputs,outputs])=>instanceCommand(name,inputs,outputs,symbols))];
+}
+
+// Pin order follows native input-reference ordinals, then optional data outputs.
+const INSTANCE_PINS = [
+  ['R_TRIG',[],[]],['F_TRIG',[],[]],
+  ...['TON','TOF','TP'].map(name=>[name,[['PT','TIME']],[['ET','TIME']]]),
+  ['RS',[['R_1','BOOL']],[]],['SR',[['R','BOOL']],[]],
+  ['CTU_DINT',[['R','BOOL'],['PV','DINT']],[['CV','DINT']]],
+  ['CTD_DINT',[['LD','BOOL'],['PV','DINT']],[['CV','DINT']]],
+  ['CTUD_DINT',[['CD','BOOL'],['R','BOOL'],['LD','BOOL'],['PV','DINT']],[['CV','DINT']]],
+];
+export function extendedIecCommands() {
+  return [
+    ...['NE','MOD','AND','OR','XOR','NOT'].map(mnemonic=>{
+      const comparison=mnemonic==='NE', bitwise=['AND','OR','XOR','NOT'].includes(mnemonic);
+      const inputs=mnemonic==='NOT'?1:2, mask=comparison?0xfffff:bitwise?31:0x1fe0;
+      return {mnemonic,category:'function',operandCount:inputs+1,
+        ...(comparison||bitwise?{minOperandCount:inputs}:{}),
+        operandRules:[...Array.from({length:inputs},(_,i)=>iecPinRule({name:`IN${i+1}`,direction:'input',dataTypeMask:mask})),
+          iecPinRule({name:'OUT',direction:'output',dataTypeMask:comparison?1:mask})]};
+    }),
+    {mnemonic:'WORD_TO_UDINT',category:'function',operandCount:2,
+      operandRules:[{label:'IN',dataTypes:['WORD'],allowsConstant:false},{label:'OUT',dataTypes:['UDINT'],allowsConstant:false,requiresWritable:true}]},
+  ];
+}
+function instanceCommand(name, inputs, outputs, symbols) {
+  return {mnemonic:name,category:'function',operandCount:1+inputs.length+outputs.length,
+    ...(outputs.length?{minOperandCount:1+inputs.length}:{}),
+    operandRules:[{label:'Instance',dataTypes:[name],allowsConstant:false},
+      ...inputs.map(([label,type])=>({label,dataTypes:[type]})),
+      ...outputs.map(([label,type])=>({label,dataTypes:[type],allowsConstant:false,requiresWritable:true}))],
+    suggestions:symbols.filter(s=>s.isInstance&&s.typeReference===name)
+      .map(s=>({value:s.name,dataType:name,description:`${name} instance`}))};
+}

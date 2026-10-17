@@ -1,8 +1,13 @@
-const scalarNames = new Set(['MOVE','ADD','SUB','MUL','DIV','EQ','GT','GE','LT','LE',
+const instanceNames = new Set(['FF','R_TRIG','F_TRIG','TON','TOF','TP','RS','SR','CTU_DINT','CTD_DINT','CTUD_DINT']);
+const bitwiseNames = new Set(['AND','OR','XOR','NOT']);
+const scalarNames = new Set(['NE','MOD','AND','OR','XOR','NOT','WORD_TO_UDINT','MOVE','ADD','SUB','MUL','DIV','EQ','GT','GE','LT','LE',
   'INT_TO_UDINT','UDINT_TO_TIME','TIME_TO_UDINT','UDINT_TO_INT']);
 export function canWireIecOutput(block, pin) {
+  if (instanceNames.has(block.name)) return Boolean(block.instance) && ['Q','QU','QD'].includes(pin.name)
+    && pin.direction === 'output' && pin.dataTypeMask === 1 && !pin.isArray;
   return scalarNames.has(block.name) && !block.instance && pin.direction === 'output'
-    && pin.dataTypeMask === 1 && !pin.isArray && ['ENO','OUT'].includes(pin.name);
+    && (pin.dataTypeMask === 1 || bitwiseNames.has(block.name) && pin.name === 'OUT' && (pin.dataTypeMask & 1))
+    && !pin.isArray && ['ENO','OUT'].includes(pin.name);
 }
 export function iecOutputWireAt(body, position) {
   const kinds = new Map((body.iecRecords || []).map(r => [r.offset,r.kind]));

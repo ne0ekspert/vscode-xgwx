@@ -1835,3 +1835,24 @@ retained members, and changing an existing return declaration are outside this
 writer. Unknown definitions are listed as read only. Native XG5000 4.82.1.0
 opened, compiled and saved a function/FB caller and all supported scalar types
 with zero errors and warnings. PLC execution and download were not tested.
+
+IEC LD `FF <instance>` insertion supports two clear rows and a single leading
+contact, with suggestions for declared FF instances. From the first blank column,
+the block starts at the next function column. Overlap and unsupported branch
+merges remain guarded; the existing captured FF refill path remains available.
+Native XG5000 Check Program and Save As validated the generated fresh placements.
+
+FF.Q is a BOOL wire source: F5, Enter, or double-click draws a wire directly,
+without an output-variable prompt. `FF <instance>` still takes only the declared
+instance name.
+
+IEC LD also offers fresh R_TRIG/F_TRIG, TON/TOF/TP, RS/SR, CTU_DINT,
+CTD_DINT and CTUD_DINT using declared local instances. Enter the instance,
+then required data inputs; ET/CV destinations are optional. Q/QU/QD can drive
+wires directly. NE, MOD, AND, OR, XOR, NOT and fresh WORD_TO_UDINT are also
+available. Bitwise BOOL OUT can wire without a destination; numeric OUT needs
+one. WORD_TO_UDINT requires a WORD device/local source and a UDINT destination.
+Fresh insertion supports clear rows or one leading contact, while branch and
+occupied-network guards remain in place. The 17-command generated suite passed
+native XG5000 strict checking with zero errors/warnings and exact Save As
+preservation; PLC execution has not been tested.
