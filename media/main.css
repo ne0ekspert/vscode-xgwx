@@ -888,15 +888,6 @@ button.tree-row:hover,
   border-top: 1px solid var(--vscode-panel-border);
 }
 
-.ladder-selection-summary {
-  margin: 8px 0;
-  padding: 7px 8px;
-  border: 1px solid var(--vscode-panel-border);
-  color: var(--vscode-descriptionForeground);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
 .cell-editor h3 {
   margin: 0 0 10px;
   font-size: 12px;

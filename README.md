@@ -1905,3 +1905,16 @@ The Parameters view also expands legacy XGK **FENET PARAMETER** settings
 are edited in Hardware and are omitted from Parameters. Module FEnet receive/client timeout
 units can be changed in Networks between seconds and 10 ms. Existing writer
 checks, undo and save behavior apply to these controls.
+
+## Multiple PLCs in one file
+
+The Workspace overview offers a **PLC** picker for files with multiple PLCs.
+Select a PLC, choose a supported **CPU**, then **Apply CPU**. The Explorer's
+PLCs list opens that configuration directly; Hardware and Programs group records
+by PLC, retaining their document indices when names and base numbers repeat.
+XGK CPU changes check only the selected PLC's hardware and preserve sibling
+PLCs. Applied changes use the normal Undo/Redo and Save/Save As lifecycle.
+XGI migrations still require a single PLC; unsupported choices stay disabled.
+Adding/removing PLCs and ambiguous coordinate-based hardware writes remain
+unsupported. The bundled synthetic regression fixture verifies local serialization,
+not native XG5000 multi-PLC acceptance.

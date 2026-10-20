@@ -46,9 +46,29 @@ export function explorerNodes(file, summary, selection, cpuCatalog = []) {
     leaf("variables", `Variables (${summary.counts?.variables || 0})`, "symbol-variable", { view: "variables" }),
     leaf("parameters", `Parameters (${visibleParameterSections(summary.parameters).length})`, "settings", { view: "parameters" }),
   ];
+  if ((summary.configurations || []).length > 1) {
+    const configurations = summary.configurations;
+    nodes.splice(1, 0, group("configurations", `PLCs (${configurations.length})`, "server", configurations.map(plc =>
+      leaf(`configuration:${plc.configurationIndex}`, `${plc.name || "PLC"} (${plc.configurationIndex + 1}) · ${plc.cpu?.model || "Unknown CPU"}`, "settings-gear", {view:"overview",configurationIndex:plc.configurationIndex})), {view:"overview"}));
+    const hardwareNode = nodes.find(node => node.id === "hardware");
+    const baseNodes = hardwareNode.children;
+    hardwareNode.children = configurations.map(plc => group(`hardware:plc:${plc.configurationIndex}`, `${plc.name || "PLC"} (${plc.configurationIndex + 1})`, "server",
+      baseNodes.filter(node => (hardware.bases || []).find((base,index) => baseRecordIndex(base,index) === node.target.baseIndex)?.configurationIndex === plc.configurationIndex)));
+    const unownedBases = baseNodes.filter(node => (hardware.bases || []).find((base,index) => baseRecordIndex(base,index) === node.target.baseIndex)?.configurationIndex == null);
+    if (unownedBases.length) hardwareNode.children.push(group("hardware:unowned", "Unassigned", "question", unownedBases));
+    const programsNode = nodes.find(node => node.id === "programs");
+    programsNode.contextValue = (summary.tasks || []).some(task => task.creationSupported && task.expected) ? "xgwxPrograms.tasks" : undefined;
+    programsNode.children = configurations.map(plc => group(`programs:plc:${plc.configurationIndex}`, `${plc.name || "PLC"} (${plc.configurationIndex + 1})`, "code", [
+      ...taskNodes.filter((_,index) => summary.tasks[index].configurationIndex === plc.configurationIndex),
+      ...(summary.programs || []).flatMap((program,index) => program.configurationIndex === plc.configurationIndex && !assigned.has(index) ? [programNode(program,index)] : []),
+    ]));
+    const unownedPrograms = (summary.programs || []).flatMap((program,index) => program.configurationIndex == null && !assigned.has(index) ? [programNode(program,index)] : []);
+    const unownedTasks = taskNodes.filter((_,index) => summary.tasks[index].configurationIndex == null);
+    if (unownedPrograms.length || unownedTasks.length) programsNode.children.push(group("programs:unowned", "Unassigned", "question", [...unownedTasks,...unownedPrograms]));
+  }
   const selectedId = selection.view === "tasks" ? selection.taskKey || "programs" : selection.view === "hardware" ? `base:${selection.baseIndex ?? (hardware.bases || []).findIndex(base => base.base === selection.base)}`
     : selection.view === "programs" && summary.programs?.[selection.programIndex] ? `program:${summary.programs[selection.programIndex].objectId || selection.programIndex}`
     : selection.view === "userPous" && selection.userPouId ? `pou:${selection.userPouId}`
-    : selection.view === "networks" ? `network:${selection.networkIndex}${selection.networkModuleKey ? `:${selection.networkModuleKey}` : ""}` : selection.view;
+    : selection.view === "networks" ? `network:${selection.networkIndex}${selection.networkModuleKey ? `:${selection.networkModuleKey}` : ""}` : selection.view === "overview" && summary.configurations?.length > 1 ? `configuration:${selection.configurationIndex ?? 0}` : selection.view;
   return { uri: file.uri, fileName: file.fileName, projectProtected: Boolean(summary.passwordProtection?.projectProtected), nodes, selectedId };
 }

@@ -19,7 +19,7 @@ import { validatedEditCache } from "./validated-edit-cache.js";
 import { canWireIecOutput, iecOutputWireAt } from "./iec-output-wire.js";
 import { isLadderDeleteKey } from "./ladder-delete.js";
 import { attachGrowingCanvas, xgkCanvasRowValues } from "./ladder-canvas.js";
-import { elementCommands, iecPinRule, scalarIecCommands, iecInstanceCommands, extendedIecCommands, xgkInputCommands, nativeInstructionParts, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
+import { elementCommands, iecPinRule, scalarIecCommands, iecInstanceCommands, extendedIecCommands, xgkInputCommands, instructionOperandText, xgkBlankCommands, xgkInsertionColumn } from "./ladder-commands.js";
 import { taskKey, editableTask, renderTaskWorkspace } from "./tasks.js";
 import init, {
   edit_xgwx_basic_parameters,
@@ -113,7 +113,7 @@ import init, {
   replace_xgwx_iec_ld_group,
   replace_xgwx_iec_ld_group_from_program,
   delete_xgwx_iec_ld_horizontal_wire,
-  select_xgwx_cpu,
+  select_xgwx_configuration_cpu,
   select_xgwx_module,
   set_xgwx_module_option,
   set_xgwx_base_slot_count,
@@ -161,14 +161,11 @@ import { groupModuleOptions } from "./module-option-groups.js";
 import { globalAddress, buildVariableEdit, variableAddressConflict } from "./variable-edit.js";
 import { iecGapOffsets } from "./iec-layout-positions.js";
 import {
-  COIL_ELEMENT_CHOICES,
-  CONTACT_ELEMENT_CHOICES,
   IEC_ADDRESSED_CONTACT_CHOICES,
   iecContactGlyph,
   iecContactVariant,
   xgkContactGlyph,
   xgkContactVariant,
-  elementKindHasOperand,
   structuralElementFromCell,
 } from "./ladder-elements.js";
 
@@ -209,6 +206,7 @@ let current = null;
 let moduleCatalog = [];
 let cpuCatalog = [];
 let activeView = "overview";
+let selectedConfigurationIndex = 0;
 let selectedUserPouId = null;
 const userPouDrafts = new Map();
 let selectedBase = null;
@@ -379,6 +377,10 @@ window.addEventListener("message", async ({ data }) => {
       if (from >= 0 && index >= 0) void moveProgram(from, index);
       return;
     }
+    if (target.view === "overview" && Number.isInteger(target.configurationIndex)) {
+      if (!current.summary.configurations?.some(plc => plc.configurationIndex === target.configurationIndex)) return;
+      selectedConfigurationIndex = target.configurationIndex;
+    }
     if (target.view === "hardware") {
       selectedBaseIndex = target.baseIndex ?? 0;
       selectedBase = target.base ?? current.summary.hardware?.bases?.[0]?.base ?? null;
@@ -460,7 +462,8 @@ async function loadWorkspace(file) {
     if(generation !== workspaceLoadGeneration) return;
     const previousPrograms=current?.file.uri===file.uri ? current.summary.programs : null;
     const activeId=previousPrograms?.[selectedProgramIndex]?.objectId;
-    if(current?.file.uri!==file.uri) {selectedTaskKey=null;creatingTask=false;}
+    if(current?.file.uri!==file.uri) {selectedTaskKey=null;creatingTask=false;selectedConfigurationIndex=0;}
+    if (!summary.configurations?.some(plc => plc.configurationIndex === selectedConfigurationIndex)) selectedConfigurationIndex=0;
     current = { file: { ...file, bytes: new Uint8Array(file.bytes) }, summary };
     inlineProperties.invalidate(file.uri);
     if(previousPrograms && (previousPrograms.length!==summary.programs.length || previousPrograms.some((p,i)=>p.objectId!==summary.programs[i]?.objectId)))reconcileProgramOrder(previousPrograms,activeId);
@@ -493,7 +496,7 @@ function renderWorkspace() {
   closeLadderOverlay();
   const { file, summary } = current;
   vscode.postMessage({ type: "explorerState", state: explorerNodes(file, summary, {
-    taskKey: selectedTaskKey, userPouId: selectedUserPouId, view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
+    configurationIndex: selectedConfigurationIndex, taskKey: selectedTaskKey, userPouId: selectedUserPouId, view: activeView, base: selectedBase, baseIndex: selectedBaseIndex, programIndex: selectedProgramIndex,
     networkIndex: selectedNetworkIndex, networkModuleKey: selectedNetworkModuleKey,
   }, cpuCatalog) });
   reconcileInlineProperties(summary);
@@ -2351,7 +2354,7 @@ function showXgkBlankInput(ladder, position) {
     if (!ladder.structuralEditing || ladderCellAtPosition(ladder, candidate)) return false;
     try {
       edit_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, {
-        ...candidate, expected: null, replacement: {
+        rawY: candidate.rawY, column: candidate.column, expected: null, replacement: {
           kind: candidate.column === 9 ? "Output" : "NormallyOpen", operand: "P0000",
         },
       });
@@ -5541,54 +5544,6 @@ function structuralElement(cell) {
   return structuralElementFromCell(cell);
 }
 
-function renderStructuralCell(section, cell, position) {
-  section.classList.add("structural-cell-editor");
-  const expected = structuralElement(cell);
-  const kind = document.createElement("select");
-  kind.id = "ladder-element-kind";
-  kind.className = "structural-element-kind";
-  const label = element("label", "", "Element");
-  label.htmlFor = kind.id;
-  const choices = position.column === 9 ? COIL_ELEMENT_CHOICES : CONTACT_ELEMENT_CHOICES;
-  for (const [value, text] of choices) {
-    const option = document.createElement("option");
-    option.value = value; option.textContent = text; kind.append(option);
-  }
-  if (expected) kind.value = expected.kind;
-  section.append(label, kind);
-  const operand = property(section, "Device address", expected?.operand || "M00000", false);
-  const apply = button(cell ? "Apply element" : "Insert element", "primary-button", async () => {
-    const hasOperand = elementKindHasOperand(kind.value);
-    await applyEdit(() => edit_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, {
-      rawY: position.rawY, column: position.column, expected,
-      replacement: {
-        kind: kind.value,
-        operand: hasOperand ? operand.value.trim().toUpperCase() : "",
-      },
-    }), cell ? "Edit ladder element" : "Insert ladder element");
-  });
-  apply.textContent = cell ? "Apply element" : "Insert element";
-  const validate = () => {
-    const value = operand.value.trim().toUpperCase();
-    const hasOperand = elementKindHasOperand(kind.value);
-    operand.closest(".property-field").hidden = !hasOperand;
-    apply.disabled = (hasOperand && !(value.length <= 32 && /^(?:[PMKFLTC][0-9]+|D[0-9]+\.[0-9A-F])$/.test(value)))
-      || (expected?.kind === kind.value && expected?.operand === (hasOperand ? value : ""));
-  };
-  kind.addEventListener("change", validate); operand.addEventListener("input", validate);
-  validate(); section.append(apply);
-  if (cell) {
-    const remove = button("Delete element", "primary-button", async () => {
-    await applyEdit(() => edit_xgwx_ladder_cell(current.file.bytes, selectedProgramIndex, {
-      rawY: position.rawY, column: position.column, expected, replacement: null,
-    }), "Delete ladder element");
-    });
-    remove.textContent = "Delete element";
-    section.append(remove);
-  }
-  section.append(element("p", "muted", "Deleting an element leaves a wiring gap. Check the program in XG5000 before use."));
-}
-
 async function insertLadderRow(rawY) {
   return applyEdit(() => insert_xgwx_ladder_row(current.file.bytes, selectedProgramIndex, rawY), "Insert ladder row");
 }
@@ -5694,15 +5649,16 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
   const text = (current.summary.textPrograms || []).find(item => item.programIndex === selectedProgramIndex);
   if (text) {
     inspector.append(element("p", "muted", `${text.language} source changes are drafts until Apply. Applied changes participate in Undo, Redo, Save and Save As. Declare program variables below.`));
-    if (text.editable) inspector.append(renderSfcVariables({...text,userPous:current.summary.userPous,scalarOnly:current.summary.cpu?.family === "XGK",variableTypes:current.summary.cpu?.family === "XGK" ? ["BOOL","BYTE","WORD","DWORD","LWORD","SINT","INT","DINT","LINT","USINT","UINT","UDINT","ULINT","REAL","LREAL"] : undefined}, patch => applyEdit(() => edit_xgwx_text_variable(current.file.bytes, text.objectId, {
+    const programCpu = current.summary.configurations?.find(plc => plc.configurationIndex === program.configurationIndex)?.cpu || current.summary.cpu;
+    if (text.editable) inspector.append(renderSfcVariables({...text,userPous:current.summary.userPous,scalarOnly:programCpu?.family === "XGK",variableTypes:programCpu?.family === "XGK" ? ["BOOL","BYTE","WORD","DWORD","LWORD","SINT","INT","DINT","LINT","USINT","UINT","UDINT","ULINT","REAL","LREAL"] : undefined}, patch => applyEdit(() => edit_xgwx_text_variable(current.file.bytes, text.objectId, {
       programIndex:text.programIndex, expectedVariables:text.variables, name:patch.name, dataType:patch.dataType, description:patch.description, remove:patch.remove, declaration:patch.declaration, update:patch.update || false,
     }), patch.remove ? "Remove declaration" : patch.update ? "Edit declaration" : "Add declaration")));
     return;
   }
 
   if(vendorIlViews.has(`${current.file.uri}:${program.objectId}`)) return;
-  const cellSection = element("section", "cell-editor");
   if (ladder?.projectType === 2 && programLanguage(ladder) === "Ladder Diagram") {
+    const cellSection = element("section", "cell-editor");
     cellSection.append(element("h3", "", cell || insertion || iecBlankCell ? "Ladder cell" : "Ladder row"));
     if (cell?.isIecComment) renderIecCommentCell(cellSection, cell);
     else if (cell?.iecElementKind) renderIecLadderCell(cellSection, ladder, cell);
@@ -5714,101 +5670,6 @@ function renderProgramInspector(inspector, program, ladder, cell, blankCell = nu
     renderIecActionsDialog(inspector, ladder);
     return;
   }
-  cellSection.append(element("h3", "", "Ladder cell"));
-  if (selection?.total > 1) {
-    cellSection.append(element(
-      "div",
-      "ladder-selection-summary",
-      `${selection.total} grid cells selected · ${selection.decodedCells.length} elements`,
-    ));
-  }
-  if (ladder?.structuralEditing && blankCell) {
-    cellSection.append(element("p", "muted", "Double-click the blank cell or press Enter to insert."));
-  } else if (ladder?.structuralEditing && structuralElement(cell)) {
-    renderStructuralCell(cellSection, cell, blankCell || {
-      rawY: cell.rawY, column: ldCellColumn(cell.rawX),
-    });
-  } else if (blankCell) {
-    cellSection.append(
-      element("div", "blank-cell-position", `Rung ${blankCell.rowIndex + 1} · Column ${blankCell.column + 1}`),
-      element("p", "muted", "Structural editing is unavailable for this program layout."),
-    );
-  } else if (!cell) {
-    cellSection.append(element("p", "muted", ladder ? "Select a ladder cell to edit its source text." : "No decoded ladder cells."));
-  } else if (cell.value === "END" || cell.sourceText === null || cell.sourceText === undefined) {
-    cellSection.append(element("p", "muted", "This instruction remains read only."));
-  } else {
-    let instructionSelect;
-    if (cell.instructionTextEditing) {
-      const field = element("label", "property-field");
-      field.append(element("span", "property-label", "Instruction"));
-      instructionSelect = document.createElement("select");
-      instructionSelect.setAttribute("aria-label", "Instruction");
-      const choices = (cell.kind === "Comparison" ? ladder.comparisonChoices : ladder.instructionChoices) || [];
-      if (!choices.some(choice => choice.mnemonic === cell.value)) {
-        const option = element("option", "", cell.value);
-        option.value = cell.value; instructionSelect.append(option);
-      }
-      for (const choice of choices) {
-        const option = element("option", "", `${choice.mnemonic} (${choice.operandCount} operands)`);
-        option.value = choice.mnemonic; instructionSelect.append(option);
-      }
-      instructionSelect.value = cell.value;
-      field.append(instructionSelect); cellSection.append(field);
-    }
-    const source = property(cellSection, "Source text", ladderOperandText(cell.sourceText), false, true);
-    const requiredUnits = utf16Length(cell.sourceText);
-    const counter = element("div", "length-counter");
-    const cachedBuild = validatedEditCache((bytes, _command, operands) =>
-      update_xgwx_ladder_cell(bytes, ...operands));
-    const buildCell = () => cachedBuild(current.file.bytes, "source", [
-      selectedProgramIndex, cell.offset, cell.sourceText, source.value === ladderOperandText(cell.sourceText) ? cell.sourceText : nativeHexOperands(source.value),
-    ]);
-    const applyCell = button("Apply ladder cell", "primary-button", async () => {
-      await applyEdit(
-        buildCell,
-        `Edit ladder cell at ${cell.rawX}:${cell.rawY}`,
-      );
-    });
-    applyCell.textContent = "Apply cell";
-    const validate = () => {
-      const units = utf16Length(nativeHexOperands(source.value));
-      if (cell.instructionTextEditing) {
-        let error = "";
-        try {
-          buildCell();
-        } catch (failure) {
-          error = String(failure);
-        }
-        counter.textContent = error || "Instruction and operands may change. Separate operands with commas; the block resizes when applied.";
-        counter.classList.toggle("invalid", Boolean(error));
-        applyCell.disabled = Boolean(error) || source.value === ladderOperandText(cell.sourceText);
-      } else {
-        const valid = units === requiredUnits && source.value !== ladderOperandText(cell.sourceText);
-        counter.textContent = `${units} / ${requiredUnits} UTF-16 units`;
-        counter.classList.toggle("invalid", units !== requiredUnits);
-        applyCell.disabled = !valid;
-      }
-    };
-    if (instructionSelect) {
-      instructionSelect.addEventListener("change", () => {
-        const choice = [...(ladder.instructionChoices || []), ...(ladder.comparisonChoices || [])].find(item => item.mnemonic === instructionSelect.value);
-        if (!choice) return;
-        const parts = nativeInstructionParts(source.value);
-        if (!parts) return;
-        const currentParts = parts.slice(1);
-        const operands = Array.from({ length: choice.operandCount }, (_, index) => currentParts[index] || "0");
-        if (currentParts.length && operands.length) operands[operands.length - 1] = currentParts[currentParts.length - 1];
-        source.value = [choice.mnemonic, ...operands].join(",");
-        validate();
-      });
-      source.addEventListener("input", () => { instructionSelect.value = source.value.split(",")[0].trim(); });
-    }
-    source.addEventListener("input", validate);
-    validate();
-    cellSection.append(counter, applyCell);
-  }
-  inspector.append(cellSection);
   const position = blankCell || (cell ? { rawY: cell.rawY, column: ldCellColumn(cell.rawX) } : null);
   if (ladder?.structuralEditing && position) renderBranchControls(inspector, ladder, position);
 }
@@ -6981,11 +6842,34 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
   canvas.append(editorHeader("Workspace Overview", file.fileName));
   const form = element("div", "overview-properties");
 
+  const configurations = summary.configurations || [];
+  if (configurations.length > 1) {
+    const plcField = element("label", "property-field");
+    plcField.append(element("span", "property-label", "PLC"));
+    const plcSelect = document.createElement("select");
+    plcSelect.setAttribute("aria-label", "PLC");
+    for (const plc of configurations) {
+      const option = document.createElement("option");
+      option.value = String(plc.configurationIndex);
+      option.textContent = `${plc.name || "PLC"} (${plc.configurationIndex + 1}) · ${plc.cpu?.model || "Unknown CPU"}`;
+      plcSelect.append(option);
+    }
+    plcSelect.value = String(selectedConfigurationIndex);
+    plcSelect.addEventListener("change", () => {
+      selectedConfigurationIndex = Number(plcSelect.value);
+      renderWorkspace();
+    });
+    plcField.append(plcSelect);
+    form.append(plcField);
+  }
+  const selectedPlc = configurations.find(plc => plc.configurationIndex === selectedConfigurationIndex);
+  const configurationIndex = selectedPlc?.configurationIndex ?? 0;
+  const fileUri = file.uri;
   const cpuField = element("label", "property-field");
   cpuField.append(element("span", "property-label", "CPU"));
   const cpuSelect = document.createElement("select");
   cpuSelect.setAttribute("aria-label", "CPU");
-  const currentCpu = summary.cpu || null;
+  const currentCpu = selectedPlc?.cpu || summary.cpu || null;
   if (!currentCpu?.model) {
     const option = document.createElement("option");
     option.value = "";
@@ -7007,7 +6891,7 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
       option.value = entry.model;
       option.textContent = entry.model;
       try {
-        select_xgwx_cpu(current.file.bytes, entry.model);
+        select_xgwx_configuration_cpu(current.file.bytes, configurationIndex, entry.model);
       } catch (error) {
         option.disabled = true;
         option.title = String(error);
@@ -7029,10 +6913,10 @@ function renderOverviewEditor(canvas, inspector, summary, file) {
     : "CPU conversion is not supported for this workspace. Existing hardware is preserved.");
   const applyCpu = button("Apply CPU selection", "primary-button", async () => {
     const entry = cpuCatalog.find((item) => item.model === cpuSelect.value);
-    if (!entry || cpuSelect.selectedOptions[0]?.disabled) return;
+    if (current?.file.uri !== fileUri || !entry || cpuSelect.selectedOptions[0]?.disabled) return;
     await applyEdit(
-      () => select_xgwx_cpu(current.file.bytes, entry.model),
-      `Select CPU ${entry.model}`,
+      () => select_xgwx_configuration_cpu(current.file.bytes, configurationIndex, entry.model),
+      `Select PLC ${configurationIndex + 1} CPU ${entry.model}`,
     );
   });
   applyCpu.textContent = "Apply CPU";

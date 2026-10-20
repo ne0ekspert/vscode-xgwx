@@ -8,7 +8,10 @@ under the Apache License, Version 2.0:
 - `media/libxgwx.js`
 - `media/libxgwx_bg.wasm`
 
-Source: <https://github.com/ne0ekspert/libxgwx/tree/6c70f886aea6ba08152f58722657ef3c46446d49>
+Source: <https://github.com/ne0ekspert/libxgwx/tree/bf76647f44026cd628445a722591f68321c5bf31>
+
+The bundle is rebuilt from the source commit above, including multi-PLC
+ownership summaries and selected-PLC CPU selection.
 
 License text: [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt)
 

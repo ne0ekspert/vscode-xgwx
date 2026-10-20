@@ -2579,6 +2579,27 @@ export function replace_xgwx_sfc_sequence(bytes, patch) {
 }
 
 /**
+ * Select an explicitly indexed PLC's CPU, retaining native migration guards.
+ * @param {Uint8Array} bytes
+ * @param {any} configuration_index
+ * @param {string} model
+ * @returns {Uint8Array}
+ */
+export function select_xgwx_configuration_cpu(bytes, configuration_index, model) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(model, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.select_xgwx_configuration_cpu(ptr0, len0, configuration_index, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Select the primary project configuration's CPU and return rewritten bytes.
  * @param {Uint8Array} bytes
  * @param {string} model
@@ -3219,6 +3240,12 @@ export function xgwx_module_option_values(bytes, base, slot) {
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
+        __wbg___wbindgen_number_get_c7f42aed0525c451: function(arg0, arg1) {
+            const obj = arg1;
+            const ret = typeof(obj) === 'number' ? obj : undefined;
+            getDataViewMemory0().setFloat64(arg0 + 8 * 1, isLikeNone(ret) ? 0 : ret, true);
+            getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
+        },
         __wbg___wbindgen_string_get_7ed5322991caaec5: function(arg0, arg1) {
             const obj = arg1;
             const ret = typeof(obj) === 'string' ? obj : undefined;

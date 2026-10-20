@@ -1,10 +1,33 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import {nearbyInsertionPosition,nearbyInsertionEdit,iecFunctionEnableIsCompatible} from '../media/ladder-insertion.js';
 import init, {edit_xgwx_ladder_cell, parse_xgwx, create_xgwx_project,
   insert_xgwx_iec_ld_single_element,insert_xgwx_iec_ld_function} from '../media/libxgwx.js';
 await init({module_or_path:fs.readFileSync(new URL('../media/libxgwx_bg.wasm',import.meta.url))});
+
+test('XGK blank-cell UI preflight accepts display row metadata and opens a writable prompt',()=>{
+ const source=create_xgwx_project('XGK-CPUSN','LD');
+ const before=source.slice();
+ const main=fs.readFileSync(new URL('../media/main.js',import.meta.url),'utf8');
+ const handler=main.slice(main.indexOf('function showXgkBlankInput('),main.indexOf('\nfunction showXgkElementInput('));
+ let prompt;
+ const context=vm.createContext({
+  instructionPromptOpen:false,current:{file:{bytes:source}},selectedProgramIndex:0,
+  nearbyInsertionPosition,edit_xgwx_ladder_cell,
+  ladderCellAtPosition:()=>null,ladderPositionKey:p=>`${p.rawY}:${p.column}`,
+  xgkBlankCommands:()=>[],xgkInsertionColumn:(_choice,p)=>p.column,
+  requestLadderInstruction:options=>{prompt=options;},
+  vscode:{postMessage:message=>assert.fail(JSON.stringify(message))},
+ });
+ vm.runInContext(handler,context);
+ context.showXgkBlankInput(parse_xgwx(source).ladder[0],{rawY:0,column:0,rowIndex:0});
+ assert.ok(prompt,'first-cell insertion should open the instruction prompt');
+ const edited=prompt.build({kind:'NormallyOpen'},['P0000'],source,0);
+ assert.equal(parse_xgwx(edited).ladder[0].cells[0].sourceText,'P0000');
+ assert.deepEqual(source,before);
+});
 
 test('keeps valid cursor and prefers orthogonal cells before diagonals',()=>{
  const origin={rawY:4,column:3};const visited=[];
