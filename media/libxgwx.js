@@ -1176,6 +1176,27 @@ export function delete_xgwx_task(bytes, task_index, expected) {
 }
 
 /**
+ * Delete the global record with the captured name, rejecting stale selections.
+ * @param {Uint8Array} bytes
+ * @param {number} index
+ * @param {string} expected_name
+ * @returns {Uint8Array}
+ */
+export function delete_xgwx_variable(bytes, index, expected_name) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passStringToWasm0(expected_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.delete_xgwx_variable(ptr0, len0, index, ptr1, len1);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v3;
+}
+
+/**
  * Give one captured IEC function block a separate local instance.
  * @param {Uint8Array} bytes
  * @param {number} program_index
@@ -2228,6 +2249,24 @@ export function insert_xgwx_module(bytes, base, slot, model) {
     var v3 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v3;
+}
+
+/**
+ * Insert a scalar global device alias and return verified rewritten bytes.
+ * @param {Uint8Array} bytes
+ * @param {any} variable
+ * @returns {Uint8Array}
+ */
+export function insert_xgwx_variable(bytes, variable) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.insert_xgwx_variable(ptr0, len0, variable);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
 }
 
 /**

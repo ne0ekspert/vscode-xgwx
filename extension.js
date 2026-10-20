@@ -8,6 +8,7 @@ const { createNewWorkspace } = require("./new-workspace.cjs");
 const { XgwxExplorer } = require("./explorer.cjs");
 
 const { promptPassword } = require("./password-prompts.cjs");
+const { variableClipboard } = require("./variable-clipboard.cjs");
 
 const VIEW_TYPE = "xgwx.workspaceViewer";
 
@@ -135,6 +136,9 @@ class XgwxEditorProvider {
       } else if (message?.type === "ladderInstructionValidationResult") {
         const resolve = validations.get(message.validationId);
         if (resolve) { validations.delete(message.validationId); resolve(message.error || undefined); }
+      } else if (message?.type === "variableClipboard") {
+        const result = await variableClipboard(vscode.env.clipboard, message);
+        if (this.editors.has(editor)) await panel.webview.postMessage({type: "variableClipboardResult", requestId: message.requestId, ...result});
       } else if (message?.type === "promptPassword") {
         const value = await promptPassword(vscode.window, message);
         if (this.editors.has(editor)) await panel.webview.postMessage({ type:"iecContactInputResult",requestId:message.requestId,value });

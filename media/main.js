@@ -1,3 +1,4 @@
+import { copyVariables, deleteVariables, pasteVariables } from "./variable-clipboard.js";
 import { renderBasicParameters } from "./basic-parameters.js";
 import {renderUserPous, userPouCallables} from "./user-pous.js";
 import { formatOperandValue, integerOperandWidth } from "./operand-values.js";
@@ -65,7 +66,6 @@ import init, {
   delete_xgwx_iec_ld_terminal_function,
   delete_xgwx_iec_ld_scalar_chain_function,
   replace_xgwx_iec_ld_scalar_chain_function,
-  delete_xgwx_iec_local_symbol,
   delete_xgwx_module,
   edit_xgwx_iec_ld_branch_segment,
   edit_xgwx_iec_ld_vertical_wire,
@@ -107,7 +107,6 @@ import init, {
   unlock_xgwx_password,
   set_xgwx_password,
   clear_xgwx_password_session,
-  rename_xgwx_iec_local_symbol,
   repair_xgwx_iec_ld_horizontal_wire,
   replace_xgwx_iec_ld_group,
   replace_xgwx_iec_ld_group_from_program,
@@ -125,8 +124,6 @@ import init, {
   update_xgwx_iec_ld_element_operand,
   update_xgwx_iec_ld_function_operand,
   update_xgwx_iec_local_symbol_address,
-  update_xgwx_iec_local_symbol_description,
-  update_xgwx_iec_local_symbol_type,
   update_xgwx_module,
   update_xgwx_network,
   update_xgwx_network_module,
@@ -139,7 +136,7 @@ import init, {
   create_xgwx_task, update_xgwx_task, delete_xgwx_task, assign_xgwx_task_program, create_xgwx_task_program,
   delete_xgwx_program,
   move_xgwx_program,
-  update_xgwx_variable,
+  insert_xgwx_variable,
   xgk_module_catalog,
   xgwx_module_option_values,
 } from "./libxgwx.js";
@@ -159,7 +156,7 @@ import {
   planLadderPaste,
 } from "./ladder-clipboard.js";
 import { groupModuleOptions } from "./module-option-groups.js";
-import { buildVariableEdit, variableAddressConflict } from "./variable-edit.js";
+import { globalAddress, buildVariableEdit, variableAddressConflict } from "./variable-edit.js";
 import { iecGapOffsets } from "./iec-layout-positions.js";
 import {
   COIL_ELEMENT_CHOICES,
@@ -289,6 +286,15 @@ let nextContactPromptId = 0;
 const pendingContactPrompts = new Map();
 
 window.addEventListener("message", async ({ data }) => {
+  if (data?.type === "variableClipboardResult") {
+    const pending = variableClipboardRequests.get(data.requestId);
+    if (pending) {
+      variableClipboardRequests.delete(data.requestId);
+      clearTimeout(pending.timeout);
+      if (data.error) pending.reject(new Error(data.error)); else pending.resolve(data.value);
+    }
+    return;
+  }
   if (data?.type === "setValueDisplay" && current?.file.uri === data.uri) {
     if (!["unsigned", "signed", "hex", "float", "source"].includes(data.mode)) return;
     valueDisplay = data.mode;
@@ -546,7 +552,7 @@ function renderWorkbench(file, summary) {
 
   renderEditor(editor, summary, inspector);
   workbench.append(editor);
-  if (!["hardware", "networks", "tasks"].includes(activeView)) workbench.append(inspector);
+  if (!["hardware", "networks", "tasks", "variables"].includes(activeView)) workbench.append(inspector);
   return workbench;
 }
 
@@ -671,7 +677,7 @@ function renderEditor(editor, summary, inspector) {
   if (activeView === "userPous") renderUserPouWorkspace(canvas, inspector, summary);
   if (activeView === "programs") renderProgramsEditor(canvas, inspector, summary.programs || []);
   if (activeView === "networks") renderNetworksEditor(canvas, inspector, summary);
-  if (activeView === "variables") renderVariablesEditor(canvas, inspector, summary.variables || [], summary.localVariables || [], summary.programs || []);
+  if (activeView === "variables") renderVariablesEditor(canvas, summary.variables || [], summary.localVariables || [], summary.programs || []);
   if (activeView === "parameters") renderParametersEditor(canvas, inspector, summary.parameters || []);
   if (activeView === "overview") renderOverviewEditor(canvas, inspector, summary, current.file);
 
@@ -6547,7 +6553,7 @@ function formatNetworkAttributeLabel(name) {
     .replaceAll(/_/g, " ");
 }
 
-function renderVariablesEditor(canvas, inspector, globalVariables, localTables, programs) {
+function renderVariablesEditor(canvas, globalVariables, localTables, programs) {
   const variables = [
     ...globalVariables.map((variable, globalVariableIndex) => ({ ...variable, globalVariableIndex, location: "Global" })),
     ...localTables.flatMap((symbols, localProgramIndex) => symbols.map((symbol, localVariableIndex) => ({
@@ -6558,6 +6564,7 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
       dataType: symbol.dataType || symbol.typeReference || "—",
     }))),
   ];
+  if (selectedVariableIndex >= variables.length) selectedVariableIndex = 0;
   const toolbar = element("div", "editor-toolbar");
   const searchWrap = element("label", "filter-control");
   searchWrap.append(icon("search"));
@@ -6568,7 +6575,141 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
   searchWrap.append(search);
   const scope = element("span", "toolbar-summary");
   toolbar.append(searchWrap, scope);
-  const host = element("div", "editor-table-host");
+  const host = element("div", "editor-table-host variable-table-host");
+  host.tabIndex = 0;
+  host.setAttribute("aria-label", "Variables table");
+  const status = element("p", "edit-help variable-table-status", "Double-click name, address, type or comment to edit. Right-click for row actions. Ctrl/Cmd+C, X, V; Delete. Shift-click or Ctrl/Cmd-click selects multiple rows.");
+  status.setAttribute("role", "status");
+  const selected = new Set(variables[selectedVariableIndex] ? [selectedVariableIndex] : []);
+  let anchor = selectedVariableIndex, busy = false, visibleIndices = [];
+  const source = current.file.bytes, fileUri = current.file.uri;
+  const ensureCurrent = () => {
+    if (current?.file.uri !== fileUri || current.file.bytes !== source) throw new Error("Variables changed. Select the rows again.");
+  };
+  const updateSelection = () => {
+    host.querySelectorAll("tr[data-variable-index]").forEach(row => {
+      const isSelected = selected.has(Number(row.dataset.variableIndex));
+      row.classList.toggle("selected", isSelected);
+      row.setAttribute("aria-selected", String(isSelected));
+      row.tabIndex = Number(row.dataset.variableIndex) === selectedVariableIndex ? 0 : -1;
+    });
+  };
+  const select = (index, event = {}) => {
+    if (event.shiftKey && visibleIndices.includes(anchor)) {
+      if (!event.ctrlKey && !event.metaKey) selected.clear();
+      const from = visibleIndices.indexOf(anchor), to = visibleIndices.indexOf(index);
+      visibleIndices.slice(Math.min(from, to), Math.max(from, to) + 1).forEach(i => selected.add(i));
+    } else {
+      if (event.ctrlKey || event.metaKey) { if (selected.has(index)) selected.delete(index); else selected.add(index); }
+      else { selected.clear(); selected.add(index); }
+      anchor = index;
+    }
+    selectedVariableIndex = index;
+    updateSelection();
+  };
+  const selection = () => [...selected].sort((a,b) => a-b).map(i => variables[i]);
+  const run = async (action, pastedText) => {
+    if (busy) return;
+    busy = true;
+    try {
+      ensureCurrent();
+      const rows = selection();
+      if (action === "copy" || action === "cut") {
+        const text = copyVariables(rows, programs);
+        // Prepare all removals before touching the clipboard or publishing a cut.
+        const candidate = action === "cut" ? deleteVariables(source, rows) : null;
+        await requestVariableClipboard("write", text);
+        ensureCurrent();
+        if (candidate) await applyEdit(() => candidate, `Cut ${rows.length} variable(s)`, () => {
+          selectedVariableIndex = Math.max(0, Math.min(...selected) - 1);
+        });
+        else status.textContent = `Copied ${rows.length} variable(s). Paste keeps global scope; local rows use the selected program. Duplicate names receive a _copy suffix.`;
+      } else if (action === "delete") {
+        const candidate = deleteVariables(source, rows);
+        await applyEdit(() => candidate, `Delete ${rows.length} variable(s)`, () => {
+          selectedVariableIndex = Math.max(0, Math.min(...selected) - 1);
+        });
+      } else if (action === "paste") {
+        const text = pastedText ?? await requestVariableClipboard("read");
+        ensureCurrent();
+        const destination = selected.has(selectedVariableIndex) ? variables[selectedVariableIndex]?.localProgramIndex : undefined;
+        const result = pasteVariables(source, text, destination);
+        await applyEdit(() => result.bytes, `Paste ${result.inserted.length} variable(s)`, () => {
+          const last = result.inserted.at(-1), summary = current.summary;
+          selectedVariableIndex = last.localProgramIndex == null ? summary.variables.findIndex(v => v.name === last.name)
+            : summary.variables.length + summary.localVariables.slice(0, last.localProgramIndex).reduce((sum, table) => sum + table.length, 0)
+              + summary.localVariables[last.localProgramIndex].findIndex(v => v.name === last.name);
+        });
+      }
+    } catch (error) {
+      status.textContent = String(error);
+      vscode.postMessage({type: "showError", message: String(error)});
+    } finally {
+      busy = false;
+      requestAnimationFrame(() => {
+        if (current?.file.uri === fileUri && activeView === "variables") {
+          (document.querySelector(`[data-variable-index="${selectedVariableIndex}"]`) || document.querySelector(".variable-table-host"))?.focus({preventScroll:true});
+        }
+      });
+    }
+  };
+  const showMenu = (x, y) => {
+    closeLadderOverlay();
+    const menu = element("div", "ladder-context-menu variable-context-menu");
+    menu.setAttribute("role", "menu"); menu.setAttribute("aria-label", "Variable actions");
+    const dismiss = installLadderOverlayDismissal(menu);
+    const close = () => { dismiss(); (host.querySelector(`[data-variable-index="${selectedVariableIndex}"]`) || host).focus({preventScroll:true}); };
+    const modifier = /Mac/i.test(navigator.platform) ? "⌘" : "Ctrl+";
+    for (const [action, label, key] of [["copy","Copy",`${modifier}C`],["cut","Cut",`${modifier}X`],["paste","Paste",`${modifier}V`],["delete","Delete","Delete"]]) {
+      const item = button(label, "ladder-context-item", () => { close(); void run(action); });
+      item.setAttribute("role", "menuitem"); item.setAttribute("aria-keyshortcuts", action === "delete" ? "Delete" : `Control+${action === "copy" ? "C" : action === "cut" ? "X" : "V"}`);
+      item.append(element("span", "", label), element("span", "variable-menu-shortcut", key));
+      item.disabled = action !== "paste" && !selected.size;
+      menu.append(item);
+    }
+    menu.addEventListener("keydown", event => {
+      const items = [...menu.querySelectorAll("button:not(:disabled)")], index = items.indexOf(document.activeElement);
+      if (["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
+        event.preventDefault();
+        items[event.key === "Home" ? 0 : event.key === "End" ? items.length-1 : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length]?.focus();
+      } else if (event.key === "Escape") { event.preventDefault(); close(); }
+    });
+    positionLadderOverlay(menu, x, y);
+    menu.querySelector("button:not(:disabled)")?.focus();
+  };
+  host.addEventListener("contextmenu", event => {
+    event.preventDefault();
+    const row = event.target.closest("tr[data-variable-index]");
+    if (row) {
+      const index = Number(row.dataset.variableIndex);
+      if (!selected.has(index)) select(index);
+      selectedVariableIndex = index;
+    } else { selected.clear(); updateSelection(); }
+    showMenu(event.clientX, event.clientY);
+  });
+  host.addEventListener("keydown", event => {
+    if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
+    const mod = event.ctrlKey || event.metaKey, key = event.key.toLowerCase();
+    const action = mod && !event.altKey && !event.shiftKey ? ({c:"copy",x:"cut",v:"paste"})[key] : ["Delete", "Backspace"].includes(event.key) && !mod && !event.altKey && !event.shiftKey ? "delete" : null;
+    if (action) { event.preventDefault(); event.stopPropagation(); if (!event.repeat) void run(action); return; }
+    if (mod && key === "a") { event.preventDefault(); selected.clear(); visibleIndices.forEach(i => selected.add(i)); updateSelection(); return; }
+    if (event.key === "ContextMenu" || event.shiftKey && event.key === "F10") {
+      event.preventDefault(); const rect = event.target.getBoundingClientRect(); showMenu(rect.left + 16, rect.bottom); return;
+    }
+    if (["ArrowDown","ArrowUp","Home","End"].includes(event.key)) {
+      event.preventDefault();
+      const at = visibleIndices.indexOf(selectedVariableIndex);
+      const next = visibleIndices[event.key === "Home" ? 0 : event.key === "End" ? visibleIndices.length-1 : Math.max(0, Math.min(visibleIndices.length-1, at + (event.key === "ArrowDown" ? 1 : -1)))];
+      if (next != null) { select(next, event); host.querySelector(`[data-variable-index="${next}"]`)?.focus(); }
+    } else if ((event.key === "Enter" || event.key === "F2") && selected.has(selectedVariableIndex)) {
+      event.preventDefault(); void editVariableField(variables[selectedVariableIndex], "name", selectedVariableIndex);
+    } else if (event.key === " ") { event.preventDefault(); if (variables[selectedVariableIndex]) select(selectedVariableIndex, event); }
+  });
+  for (const action of ["copy", "cut", "paste"]) host.addEventListener(action, event => {
+    if (event.target.closest("input, textarea, select, [contenteditable=true]")) return;
+    event.preventDefault();
+    void run(action, action === "paste" ? event.clipboardData?.getData("text/plain") : undefined);
+  });
   let findQuery = null, findMatchCase = false;
   const renderRows = () => {
     const query = findQuery ?? search.value.trim();
@@ -6580,29 +6721,27 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
       });
     const shown = findQuery ? matches : matches.slice(0, 750);
     scope.textContent = shown.length === matches.length ? `${matches.length} variables` : `${shown.length} of ${matches.length} matches`;
+    visibleIndices = shown.map(item => item.index);
+    // Hidden rows must never be accidentally cut or deleted after filtering.
+    for (const index of selected) if (!visibleIndices.includes(index)) selected.delete(index);
     const table = createTable(["Program", "Name", "Address", "Type", "Comment"]);
+    table.setAttribute("aria-label", "Variables");
+    table.setAttribute("aria-multiselectable", "true");
     shown.forEach(({ variable, index }) => {
       const row = table.tBodies[0].insertRow();
-      row.className = selectedVariableIndex === index ? "selected" : "";
-      row.tabIndex = 0;
+      row.className = selected.has(index) ? "selected" : "";
+      row.setAttribute("aria-selected", String(selected.has(index)));
+      row.tabIndex = selectedVariableIndex === index ? 0 : -1;
       appendCells(row, [variable.location, variable.name, variable.address, variable.dataType, variable.description]);
       row.dataset.variableIndex = String(index);
       row.dataset.findText = [variable.location, variable.name, variable.address, variable.dataType, variable.description].join(" ");
-      for (const [column, field] of [[1, "name"], [2, "address"], [4, "description"]]) {
+      for (const [column, field] of [[1, "name"], [2, "address"], [3, "dataType"], [4, "description"]]) {
         const cell = row.cells[column];
         cell.dataset.variableField = field;
         cell.title = `Double-click to edit ${field === "description" ? "comment" : field}`;
         cell.addEventListener("dblclick", () => editVariableField(variable, field, index));
       }
-      const select = () => {
-        selectedVariableIndex = index;
-        table.querySelectorAll("tbody tr").forEach((item) => item.classList.toggle("selected", item === row));
-        renderVariableInspector(inspector, variable, index);
-      };
-      row.addEventListener("click", select);
-      row.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") select();
-      });
+      row.addEventListener("click", event => { select(index, event); row.focus({preventScroll:true}); });
     });
     host.replaceChildren(tableContainer(table, shown.length));
   };
@@ -6675,10 +6814,62 @@ function renderVariablesEditor(canvas, inspector, globalVariables, localTables, 
   validate();
   fields.append(program, name, type, description, addButton);
   add.append(fields, validation);
-  canvas.append(toolbar, ...(iecPrograms.length ? [add] : []), host);
+  if (current.summary.cpu?.family === "XGK") {
+    const section = element("section", "iec-add-local-symbol");
+    section.append(element("h3", "", "Add global variable"));
+    const grid = element("div", "iec-add-local-symbol-fields");
+    const globalName = document.createElement("input");
+    globalName.placeholder = "Name"; globalName.setAttribute("aria-label", "New global variable name");
+    const globalType = document.createElement("select");
+    globalType.setAttribute("aria-label", "New global variable type");
+    for (const value of ["BIT", "BYTE", "WORD", "DWORD", "LWORD"]) {
+      const option = document.createElement("option"); option.value = value; option.textContent = value; globalType.append(option);
+    }
+    const globalAddressInput = document.createElement("input");
+    globalAddressInput.placeholder = "Address, e.g. M00000"; globalAddressInput.setAttribute("aria-label", "New global variable address");
+    const globalDescription = document.createElement("input");
+    globalDescription.placeholder = "Description (optional)"; globalDescription.setAttribute("aria-label", "New global variable description");
+    const status = element("div", "validation-summary", "Enter a unique name and a direct P, M, K, L or D device address.");
+    const create = button("Add global variable", "primary-button", async () => {
+      const newName = globalName.value;
+      const address = globalAddress({dataType: globalType.value}, globalAddressInput.value);
+      const edited = await applyEdit(() => insert_xgwx_variable(current.file.bytes, {
+        name: newName, dataType: globalType.value, ...address, description: globalDescription.value,
+      }), `Add global variable ${newName}`);
+      if (edited) { selectedVariableIndex = current.summary.variables.findIndex(v => v.name === newName); renderWorkspace(); }
+    });
+    create.textContent = "Add variable";
+    const validateGlobal = () => {
+      let error = "";
+      if (!/^[\p{L}_][\p{L}\p{N}_]*$/u.test(globalName.value) || utf16Length(globalName.value) > 255) error = "Enter an identifier of up to 255 UTF-16 units.";
+      else if (globalVariables.some(v => v.name?.toLocaleLowerCase() === globalName.value.toLocaleLowerCase())) error = "Variable name must be unique.";
+      else if (utf16Length(globalDescription.value) > 255 || /\p{Cc}/u.test(globalDescription.value) || globalDescription.value === "SV5.0") error = "Description must fit 255 UTF-16 units without controls or a record marker.";
+      else try {
+        const a = globalAddress({dataType: globalType.value}, globalAddressInput.value);
+        if (!["P","M","K","L","D"].includes(a.addressArea) || a.addressArea === "D" && ["BIT","BYTE"].includes(globalType.value)) throw new Error("Use P, M, K or L for BIT/BYTE; WORD and larger also support D.");
+        const width = globalType.value === "DWORD" ? 2 : globalType.value === "LWORD" ? 4 : 1;
+        if (a.addressNumber + width > (globalType.value === "BIT" ? 524288 : 32768)) throw new Error("Address exceeds the supported device range.");
+      } catch (e) { error = e.message; }
+      create.disabled = Boolean(error);
+      status.textContent = error || "Ready to add a global device alias. Undo is available in VS Code.";
+    };
+    for (const control of [globalName, globalType, globalAddressInput, globalDescription]) control.addEventListener("input", validateGlobal);
+    validateGlobal();
+    grid.append(globalName, globalType, globalAddressInput, globalDescription, create); section.append(grid, status); canvas.append(section);
+  }
+  canvas.append(toolbar, ...(iecPrograms.length ? [add] : []), host, status);
   renderRows();
-  if (selectedVariableIndex >= variables.length) selectedVariableIndex = 0;
-  renderVariableInspector(inspector, variables[selectedVariableIndex] || null, selectedVariableIndex);
+}
+
+let nextVariableClipboardId = 0;
+const variableClipboardRequests = new Map();
+function requestVariableClipboard(action, text) {
+  return new Promise((resolve, reject) => {
+    const requestId = ++nextVariableClipboardId;
+    const timeout = setTimeout(() => { variableClipboardRequests.delete(requestId); reject(new Error("Clipboard request timed out.")); }, 10000);
+    variableClipboardRequests.set(requestId, {resolve, reject, timeout});
+    vscode.postMessage({type: "variableClipboard", requestId, action, ...(action === "write" ? {text} : {})});
+  });
 }
 
 let variablePromptOpen = false;
@@ -6687,7 +6878,7 @@ async function editVariableField(variable, field, index) {
   if (variablePromptOpen) return;
   variablePromptOpen = true;
   const source = current.file.bytes, fileUri = current.file.uri, summary = current.summary;
-  const label = field === "description" ? "comment" : field;
+  const label = field === "description" ? "comment" : field === "dataType" ? "type" : field;
   const ensureCurrent = () => {
     if (current?.file.uri !== fileUri || current.file.bytes !== source) throw new Error("Variables changed. Reopen the field editor.");
   };
@@ -6706,7 +6897,10 @@ async function editVariableField(variable, field, index) {
       }
       return buildVariableEdit(source, variable, field, value, summary, true);
     };
-    const value = await request("promptVariableField", {
+    const value = field === "dataType" ? await request("promptModuleSelection", {
+      title: `Edit variable type · ${variable.name}`,
+      items: (variable.localProgramIndex == null ? ["BIT","BYTE","WORD","DWORD","LWORD"].filter(type => utf16Length(type) === utf16Length(variable.dataType || "")) : IEC_PRIMITIVE_TYPE_NAMES).map(label => ({label})),
+    }) : await request("promptVariableField", {
       title: `Edit variable ${label} · ${variable.name}`,
       value: variable[field] || "",
       prompt: field === "address" ? "Enter a device address. An occupied address offers a swap."
@@ -6722,7 +6916,9 @@ async function editVariableField(variable, field, index) {
       });
       if (!swap) return;
     }
-    await applyEdit(() => validate(value), `${conflict ? "Swap addresses" : `Edit variable ${label}`} · ${variable.name}`);
+    const candidate = validate(value);
+    if (candidate === source) return;
+    await applyEdit(() => candidate, `${conflict ? "Swap addresses" : `Edit variable ${label}`} · ${variable.name}`);
   } catch (error) {
     vscode.postMessage({ type: "showError", message: String(error) });
   } finally {
@@ -6731,261 +6927,6 @@ async function editVariableField(variable, field, index) {
       if (current?.file.uri === fileUri) document.querySelector(`[data-variable-index="${index}"]`)?.focus({ preventScroll: true });
     });
   }
-}
-
-function renderVariableInspector(inspector, variable, index) {
-  inspector.replaceChildren(inspectorHeading("VARIABLE"));
-  if (!variable) {
-    inspector.append(emptyState("Select a variable to edit it."));
-    return;
-  }
-
-  if (variable.localProgramIndex != null) {
-    const form = element("div", "property-grid variable-editor");
-    property(form, "Program", variable.location, true);
-    const name = property(form, "Name", variable.name, false);
-    const siblings = current.summary.localVariables?.[variable.localProgramIndex] || [];
-    const nameValidation = element("div", "validation-summary");
-    const rename = button("Rename local symbol", "primary-button", async () => {
-      await applyEdit(() => rename_xgwx_iec_local_symbol(
-        current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
-        variable.name, name.value,
-      ), `Rename IEC local symbol ${variable.name}`);
-    });
-    rename.textContent = "Rename variable";
-    const validateName = () => {
-      const valid = name.value !== variable.name && name.value.length > 0
-        && name.value.length <= 255 && /^[\p{L}_][\p{L}\p{N}_]*$/u.test(name.value)
-        && !siblings.some((symbol, index) => index !== variable.localVariableIndex && symbol.name.toLocaleLowerCase() === name.value.toLocaleLowerCase());
-      nameValidation.textContent = name.value === variable.name ? "Current symbol name." : valid
-        ? "Program references will be updated with the symbol."
-        : "Use a unique identifier of at most 255 characters.";
-      nameValidation.classList.toggle("invalid", !valid && name.value !== variable.name);
-      rename.disabled = !valid;
-    };
-    name.addEventListener("input", validateName);
-    validateName();
-    form.append(nameValidation, rename);
-    const numericMapping = ({
-      BYTE: ["%MB", 8], SINT: ["%MB", 8], USINT: ["%MB", 8],
-      WORD: ["%MW", 16], INT: ["%MW", 16], UINT: ["%MW", 16], DATE: ["%MW", 16],
-      DWORD: ["%MD", 32], DINT: ["%MD", 32], UDINT: ["%MD", 32], REAL: ["%MD", 32],
-      TIME: ["%MD", 32], TIME_OF_DAY: ["%MD", 32],
-      LWORD: ["%ML", 64], LINT: ["%ML", 64], ULINT: ["%ML", 64], LREAL: ["%ML", 64], DATE_AND_TIME: ["%ML", 64],
-    })[variable.dataType];
-    const mappingWidth = numericMapping?.[1] || 1;
-    const encodedBit = (value) => {
-      if (numericMapping) {
-        const match = /^%M([BWDL])([0-9]+)$/.exec(value);
-        if (!match || `%M${match[1]}` !== numericMapping[0]) return null;
-        const bit = Number(match[2]) * mappingWidth;
-        return Number.isInteger(bit) && bit <= 0xffffffff ? bit : null;
-      }
-      const simple = /^%[MQ]X([0-9]+)$/.exec(value);
-      if (simple) {
-        const bit = Number(simple[1]);
-        return Number.isInteger(bit) && bit <= 0xffffffff ? bit : null;
-      }
-      const dotted = /^%[IQ]X0\.([0-9]+)\.([0-9]+)$/.exec(value);
-      if (!dotted) return null;
-      const slot = Number(dotted[1]);
-      const bit = Number(dotted[2]);
-      const encoded = slot * 64 + bit;
-      return Number.isInteger(slot) && Number.isInteger(bit) && bit < 64 && encoded <= 0xffffffff ? encoded : null;
-    };
-    const mapped = (variable.dataType === "BOOL" || numericMapping) && encodedBit(variable.address || "") !== null;
-    const automaticMapping = !variable.isInstance && !variable.address && variable.storageClass === "A"
-      && ["BOOL", "INT", "UDINT", "TIME"].includes(variable.dataType)
-      && Number.isInteger(variable.allocationNumber) && variable.allocationNumber >= 0
-      && variable.allocationNumber < 0xffffffff && variable.allocationWidth === mappingWidth;
-    const assignable = (variable.dataType === "BOOL" || numericMapping) && !variable.isInstance
-      && (automaticMapping || (!variable.address && variable.storageClass === ""
-        && variable.allocationNumber == null && variable.allocationWidth == null));
-    const address = property(form, "Address", variable.address, !(mapped || assignable));
-    address.setAttribute("aria-label", "IEC local address");
-    if (variable.typeReference) property(form, "Type reference", variable.typeReference, true);
-    if (variable.dataType && !variable.isInstance && !variable.address) {
-      const typeField = element("label", "property-field");
-      typeField.append(element("span", "property-label", "Data type"));
-      const type = document.createElement("select");
-      type.setAttribute("aria-label", "IEC local data type");
-      for (const label of IEC_PRIMITIVE_TYPE_NAMES) {
-        const option = document.createElement("option");
-        option.value = label;
-        option.textContent = label;
-        type.append(option);
-      }
-      type.value = variable.dataType;
-      typeField.append(type);
-      form.append(typeField);
-      const typeApply = button("Apply local type", "primary-button", async () => {
-        await applyEdit(() => update_xgwx_iec_local_symbol_type(
-          current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
-          variable.name, variable.dataType, type.value,
-        ), `Edit IEC local type ${variable.name}`);
-      });
-      const typeValidation = element("div", "validation-summary", "Changing type clears this variable's allocation. Program references may need compatible edits.");
-      typeApply.textContent = "Apply type";
-      typeApply.disabled = true;
-      type.addEventListener("change", () => { typeApply.disabled = type.value === variable.dataType; });
-      form.append(typeValidation, typeApply);
-    } else if (variable.dataType) {
-      property(form, "Data type", variable.dataType, true);
-    }
-    property(form, "Storage class", variable.storageClass, true);
-    property(form, "Allocation number", variable.allocationNumber, true);
-    property(form, "Allocation width", variable.allocationWidth, true);
-    const description = property(form, "Description", variable.description, false, true);
-    description.setAttribute("aria-label", "IEC local description");
-    const descriptionValidation = element("div", "validation-summary");
-    const descriptionApply = button("Apply local description", "primary-button", async () => {
-      await applyEdit(() => update_xgwx_iec_local_symbol_description(
-        current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
-        variable.name, variable.description || "", description.value,
-      ), `Edit IEC local description ${variable.name}`);
-    });
-    descriptionApply.textContent = "Apply comment";
-    const validateDescription = () => {
-      const changed = description.value !== (variable.description || "");
-      const valid = utf16Length(description.value) <= 255 && !/\p{Cc}/u.test(description.value);
-      descriptionValidation.textContent = valid
-        ? "Description may contain up to 255 UTF-16 units."
-        : "Use at most 255 UTF-16 units and no control characters.";
-      descriptionValidation.classList.toggle("invalid", !valid);
-      descriptionApply.disabled = !changed || !valid;
-    };
-    description.addEventListener("input", validateDescription);
-    validateDescription();
-    form.append(descriptionValidation, descriptionApply);
-    if (mapped || assignable) {
-      const validation = element("div", "validation-summary");
-      const apply = button("Apply local address", "primary-button", async () => {
-        await applyEdit(() => update_xgwx_iec_local_symbol_address(
-          current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
-          variable.name, variable.address || "", address.value,
-        ), `Edit IEC local address ${variable.name}`);
-      });
-      apply.textContent = "Apply address";
-      const validate = () => {
-        const bit = encodedBit(address.value);
-        const area = mapped ? variable.address.slice(0, 3) : address.value.slice(0, 3);
-        const valid = address.value !== (variable.address || "")
-          && utf16Length(address.value) <= 255
-          && (numericMapping ? area === numericMapping[0] : (automaticMapping ? area === "%MX" : ["%MX", "%IX", "%QX"].includes(area)))
-          && address.value.startsWith(area)
-          && bit !== null && bit !== encodedBit(variable.address)
-          && !siblings.some((symbol, index) => index !== variable.localVariableIndex
-            && symbol.address && symbol.storageClass === area[1]
-            && (symbol.allocationNumber == null || symbol.allocationWidth == null
-              || (bit < symbol.allocationNumber + symbol.allocationWidth
-                && symbol.allocationNumber < bit + mappingWidth)));
-        const unchanged = address.value === (variable.address || "");
-        validation.textContent = unchanged ? (mapped ? "Current mapped address." : `Enter a ${numericMapping ? numericMapping[0] : "BOOL bit"} address to map this variable.`) : valid
-          ? "Address area and allocation range are valid."
-          : mapped ? "Use a different address in the same area without overlapping mapped variables."
-            : numericMapping ? `Use an unused ${numericMapping[0]} address.` : automaticMapping ? "Use an unused %MX bit address." : "Use an unused %MX, %IX, or %QX bit address.";
-        validation.classList.toggle("invalid", !valid && !unchanged);
-        apply.disabled = !valid;
-      };
-      address.addEventListener("input", validate);
-      validate();
-      form.append(validation, apply);
-      if (mapped) {
-        const clear = button("Clear mapped address", "", async () => {
-          await applyEdit(() => update_xgwx_iec_local_symbol_address(
-            current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
-            variable.name, variable.address, "",
-          ), `Clear IEC local address ${variable.name}`);
-        });
-        clear.textContent = "Clear address";
-        form.append(clear);
-      }
-    }
-    const referenced = (current.summary.ladder || [])
-      .find((body) => body.programIndex === variable.localProgramIndex)
-      ?.sourceStrings?.some((item) => item.value === variable.name) || false;
-    const deleteValidation = element("div", "validation-summary", referenced
-      ? "This variable is referenced by its program and cannot be deleted."
-      : "Delete this unreferenced local variable. Undo is available in VS Code.");
-    const deleteButton = button("Delete local variable", "", async () => {
-      await applyEdit(() => delete_xgwx_iec_local_symbol(
-        current.file.bytes, variable.localProgramIndex, variable.localVariableIndex,
-        variable.name,
-      ), `Delete IEC local variable ${variable.name}`);
-    });
-    deleteButton.textContent = "Delete variable";
-    deleteButton.disabled = referenced;
-    form.append(deleteValidation, deleteButton);
-    form.append(element("p", "muted", "Clear a mapped address before changing its type. Function instance types cannot be changed here yet."));
-    inspector.append(form);
-    return;
-  }
-
-  const form = element("div", "property-grid variable-editor");
-  const name = property(form, "Name", variable.name, false);
-  property(form, "Formatted address", variable.address, true);
-  const addressArea = property(form, "Address area", variable.addressArea, false);
-  const addressNumber = property(form, "Address number", variable.addressNumber, false);
-  addressNumber.type = "number";
-  addressNumber.min = "0";
-  addressNumber.max = "4294967295";
-  addressNumber.step = "1";
-  const dataType = property(form, "Data type", variable.dataType, false);
-  const description = property(form, "Description", variable.description, false, true);
-  property(form, "Source", variable.sourceRef, true);
-  property(form, "Range", variable.range, true);
-
-  const validation = element("div", "validation-summary");
-  const apply = button("Apply variable changes", "primary-button", async () => {
-    await applyEdit(
-      () => update_xgwx_variable(current.file.bytes, variable.globalVariableIndex, {
-        name: name.value,
-        addressArea: addressArea.value,
-        addressNumber: Number(addressNumber.value),
-        dataType: dataType.value,
-        description: description.value,
-      }),
-      `Edit variable ${display(variable.name, index + 1)}`,
-    );
-  });
-  apply.textContent = "Apply variable";
-
-  const controls = [name, addressArea, addressNumber, dataType, description];
-  const validate = () => {
-    const lengthFields = [
-      ["Area", addressArea.value, variable.addressArea],
-      ["Type", dataType.value, variable.dataType],
-    ];
-    const invalidText = [name.value, description.value].some(value => utf16Length(value) > 255 || /\p{Cc}/u.test(value));
-    const invalidField = lengthFields.find(([, value, original]) => utf16Length(value) !== utf16Length(original || ""));
-    const number = Number(addressNumber.value);
-    const invalidNumber = !Number.isInteger(number) || number < 0 || number > 0xffffffff;
-    const duplicateName = !name.value || (current.summary.variables || []).some((symbol, symbolIndex) =>
-      symbolIndex !== variable.globalVariableIndex && symbol.name?.toLocaleLowerCase() === name.value.toLocaleLowerCase());
-    const changed = name.value !== (variable.name || "")
-      || addressArea.value !== (variable.addressArea || "")
-      || number !== variable.addressNumber
-      || dataType.value !== (variable.dataType || "")
-      || description.value !== (variable.description || "");
-
-    if (duplicateName) {
-      validation.textContent = "Variable name must be nonempty and unique.";
-    } else if (invalidText) {
-      validation.textContent = "Name and comment allow up to 255 UTF-16 units and no control characters.";
-    } else if (invalidField) {
-      validation.textContent = `${invalidField[0]} must remain ${utf16Length(invalidField[2] || "")} UTF-16 units.`;
-    } else if (invalidNumber) {
-      validation.textContent = "Address number must be an integer from 0 to 4294967295.";
-    } else {
-      validation.textContent = "Name and comment allow up to 255 UTF-16 units. Area and type keep their encoded length.";
-    }
-    validation.classList.toggle("invalid", Boolean(duplicateName || invalidText || invalidField || invalidNumber));
-    apply.disabled = !changed || Boolean(duplicateName || invalidText || invalidField || invalidNumber);
-  };
-  controls.forEach((control) => control.addEventListener("input", validate));
-  validate();
-  form.append(validation, apply);
-  inspector.append(form);
 }
 
 function renderParametersEditor(canvas, inspector, parameters) {

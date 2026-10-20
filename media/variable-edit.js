@@ -1,5 +1,5 @@
 import { update_xgwx_variable, update_xgwx_iec_local_symbol_address,
-  update_xgwx_iec_local_symbol_description, rename_xgwx_iec_local_symbol } from './libxgwx.js';
+  update_xgwx_iec_local_symbol_type, update_xgwx_iec_local_symbol_description, rename_xgwx_iec_local_symbol } from './libxgwx.js';
 
 export function globalAddress(variable, value) {
   const text = value.trim().toUpperCase();
@@ -70,6 +70,7 @@ export function buildVariableEdit(bytes, variable, field, value, summary, swap =
       if (!value || siblings?.some((v, i) => i !== ownIndex && v.name?.toLocaleLowerCase() === value.toLocaleLowerCase())) throw new Error('Variable name must be nonempty and unique.');
     }
     if (variable.localProgramIndex == null) return update_xgwx_variable(bytes, variable.globalVariableIndex, { [field]: value });
+    if (field === 'dataType') return update_xgwx_iec_local_symbol_type(bytes, variable.localProgramIndex, variable.localVariableIndex, variable.name, variable.dataType, value);
     return field === 'name'
       ? rename_xgwx_iec_local_symbol(bytes, variable.localProgramIndex, variable.localVariableIndex, variable.name, value)
       : update_xgwx_iec_local_symbol_description(bytes, variable.localProgramIndex, variable.localVariableIndex, variable.name, variable.description || '', value);

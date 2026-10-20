@@ -1942,3 +1942,16 @@ form.iec-rung-creation {
 .editor-shell[data-view="tasks"] .editor-canvas { overflow: auto; }
 @media (max-width: 740px) { .task-workspace { grid-template-columns: minmax(0,1fr); gap: 18px; } .task-list { grid-template-columns: repeat(auto-fit,minmax(170px,1fr)); } }
 .editor-shell[data-view="tasks"] .workbench { grid-template-columns: minmax(0,1fr); }
+
+/* Variables are edited directly in the table at every panel width. */
+.editor-shell[data-view="variables"] .workbench {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.editor-shell[data-view="variables"] .editor-pane { grid-column: 1; grid-row: 1; }
+.variable-table-host:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.variable-table-host .data-table tbody tr[aria-selected="true"],
+.variable-table-host .data-table tbody tr[aria-selected="true"]:hover { background: var(--vscode-list-activeSelectionBackground, #16436a); color: var(--vscode-list-activeSelectionForeground, #fff); }
+.variable-context-menu .ladder-context-item { display: flex; justify-content: space-between; gap: 32px; }
+.variable-menu-shortcut { opacity: .7; }
+.variable-table-status { padding: 0 14px; }
