@@ -1889,3 +1889,19 @@ and non-latched-memory clearing, and XGI restart mode. Apply creates one
 undoable document edit. Reset/D.CLR dependencies follow native XG5000.
 Unsupported layouts and unknown enum values remain read-only in the stored
 field inventory. Other parameter tabs and IEC watchdog slots 1–3 are preserved.
+
+Native XGB HSC, PID and positioning parameters: expand the corresponding row in
+Parameters, then choose a channel, loop, axis settings or positioning table step.
+HSC counter/pulse modes use named choices; timing and revolution values use bounded
+integer fields. PID and positioning controls retain raw native integer encodings.
+Drafts survive record switching and apply together as one undoable document edit.
+Unsupported layouts and tentative HSC fields remain read-only. The editor checks
+stored values and integer bounds; CPU-specific option codes, operating limits and
+related settings still require the CPU manual. The WASM writer preserves unknown
+fields, reserved data, other records and container metadata.
+
+The Parameters view also expands legacy XGK **FENET PARAMETER** settings
+(dotted IPv4 addresses and native integer settings). I/O bases and modules
+are edited in Hardware and are omitted from Parameters. Module FEnet receive/client timeout
+units can be changed in Networks between seconds and 10 ms. Existing writer
+checks, undo and save behavior apply to these controls.

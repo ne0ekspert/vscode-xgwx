@@ -1,5 +1,6 @@
 import { copyVariables, deleteVariables, pasteVariables } from "./variable-clipboard.js";
 import { renderBasicParameters } from "./basic-parameters.js";
+import { renderNativeParameters } from "./native-parameters.js";
 import {renderUserPous, userPouCallables} from "./user-pous.js";
 import { formatOperandValue, integerOperandWidth } from "./operand-values.js";
 import { formatHexOperands, nativeHexOperands } from "./hex-operands.js";
@@ -8,7 +9,7 @@ import { renderOpcUaTags } from "./opcua-tags.js";
 import { renderOpcUaOptions } from "./opcua-options.js";
 import { createFindController, createProgramFindRanges } from "./find.js";
 import { baseRecordIndex, installedBaseModules } from "./hardware-slots.js";
-import { explorerNodes } from "./explorer-model.js";
+import { explorerNodes, visibleParameterSections } from "./explorer-model.js";
 import { renderStTextEditor } from "./st-editor.js";
 import { actionGroup } from "./sfc-actions.js";
 import { renderSfcDiagram, renderSfcProperties, renderSfcVariables, sfcRowsAfterEdit, sfcRowIndex, sfcTextField } from "./sfc.js";
@@ -22,6 +23,7 @@ import { elementCommands, iecPinRule, scalarIecCommands, iecInstanceCommands, ex
 import { taskKey, editableTask, renderTaskWorkspace } from "./tasks.js";
 import init, {
   edit_xgwx_basic_parameters,
+  edit_xgwx_native_parameters,
   create_xgwx_user_pou,
   edit_xgwx_user_pou,
   edit_xgwx_vendor_il,
@@ -531,7 +533,7 @@ function renderWorkspace() {
 function hardwarePropertiesKey(baseIndex, slot) { return `hardware:${baseIndex}:${slot}`; }
 function networkPropertiesKey(index, moduleKey = null) { return `network:${index}${moduleKey ? `:module:${moduleKey}` : ""}`; }
 function reconcileInlineProperties(summary) {
-  const keys = new Set((summary.parameters || []).map((parameter, index) => `parameter:${parameter.parameterIndex ?? index}`));
+  const keys = new Set(visibleParameterSections(summary.parameters).map(parameter => `parameter:${parameter.parameterIndex}`));
   const hardware = summary.hardware || {};
   (hardware.bases || []).forEach((base, index) => {
     const modules = installedBaseModules(base, hardware);
@@ -6302,7 +6304,7 @@ function appendNetworkConfigurationFields(form, module, summary) {
     const addNumber = (label, field, minimum, maximum, unit) => {
       const value = fenet[field];
       const editable = exact && value != null && (unit == null || unit === 0 || unit === 1);
-      const suffix = unit == null ? "" : unit === 1 ? " (×10 ms)" : unit === 0 ? " (s)" : ` (unit ${unit})`;
+      const suffix = unit == null || unit === 0 || unit === 1 ? "" : ` (unit ${unit})`;
       const control = property(form, `${label}${suffix}`, value, !editable);
       if (editable) {
         control.inputMode = "numeric";
@@ -6331,8 +6333,20 @@ function appendNetworkConfigurationFields(form, module, summary) {
       form.append(group);
       fields.push({ control, field: "driverType", value: String(fenet.driverType), readValue: () => control.value, allowedValues: [2, 5, 7], label: "Driver type" });
     } else property(form, "Driver type", fenet.driverType, true);
-    addNumber("Receive wait", "rcvWaitTime", 2, 255, fenet.rcvWaitTimeUnit ?? 0);
-    addNumber("Client wait", "clientWaitTime", 2, 255, fenet.clientWaitTimeUnit ?? 0);
+    for (const [label, field] of [["Receive wait unit", "rcvWaitTimeUnit"], ["Client wait unit", "clientWaitTimeUnit"]]) {
+      const value = fenet[field];
+      if (exact && [0, 1].includes(value)) {
+        const row = element("label", "property-field"); row.append(element("span", "property-label", label));
+        const control = document.createElement("select"); control.setAttribute("aria-label", label);
+        for (const [index, text] of ["Seconds", "10 milliseconds"].entries()) {
+          const option = element("option", "", text); option.value = String(index); control.append(option);
+        }
+        control.value = String(value); row.append(control); form.append(row);
+        fields.push({control, field, value: String(value), readValue: () => control.value, allowedValues: [0, 1], label});
+      } else if (value != null) property(form, label, value, true);
+    }
+    addNumber("Receive wait count", "rcvWaitTime", 2, 255, fenet.rcvWaitTimeUnit ?? 0);
+    addNumber("Client wait count", "clientWaitTime", 2, 255, fenet.clientWaitTimeUnit ?? 0);
     addNumber("Glofa sockets", "glofaSocketCount", 1, 16);
     for (const interfaceNumber of (module.id === 23045 ? [1] : [1, 2])) {
       form.append(element("div", "network-config-heading", `Interface ${interfaceNumber}`));
@@ -6381,7 +6395,7 @@ function appendNetworkConfigurationFields(form, module, summary) {
           for (const { field, readValue, minimum, maximum, allowedValues, label } of fields) {
             const text = readValue();
             if (allowedValues) {
-              if (!allowedValues.includes(Number(text))) throw new Error("Choose a supported driver type.");
+              if (!allowedValues.includes(Number(text))) throw new Error(`Choose a supported ${label.toLowerCase()}.`);
             } else if (minimum != null) {
               if (!/^\d+$/.test(text) || Number(text) < minimum || Number(text) > maximum) {
                 throw new Error(`${label} must be an integer from ${minimum} to ${maximum}.`);
@@ -6930,25 +6944,29 @@ async function editVariableField(variable, field, index) {
 }
 
 function renderParametersEditor(canvas, inspector, parameters) {
+  parameters = visibleParameterSections(parameters);
   canvas.append(editorHeader("Parameters", `${parameters.length} parameter sections`));
   const table = createTable(["Type", "PLC", "Sections", "State"]);
   const fileUri = current.file.uri;
   parameters.forEach((parameter, index) => {
     const row = table.tBodies[0].insertRow();
     const basic = parameter.parameterType === "BASIC PARAMETER";
-    const writable = parameter.basicOperationFields?.length > 0;
+    const native = ["FENET PARAMETER", "HSC PARAMETER", "PID CAL PARAMETER", "PID TUNE PARAMETER", "POSITION PARAMETER"].includes(parameter.parameterType);
+    const writable = parameter.basicOperationFields?.length > 0 || parameter.nativeFields?.length > 0;
     const parameterIndex = parameter.parameterIndex ?? index;
     appendCells(row, [parameter.parameterType || parameter.typeName, parameter.configurationIndex == null ? "—" : parameter.configurationIndex + 1,
-      parameter.sections?.length || 0, writable ? "Operation editable" : "Read only"]);
-    if (basic) {
+      parameter.sections?.length || 0, writable ? (basic ? "Operation editable" : "Editable") : "Read only"]);
+    if (basic || native) {
       row.tabIndex = 0;
-      inlineProperties.attach({uri: fileUri, key: `parameter:${parameterIndex}`, row, label: `Basic parameters · PLC ${(parameter.configurationIndex ?? 0) + 1}`,
+      inlineProperties.attach({uri: fileUri, key: `parameter:${parameterIndex}`, row, label: `${parameter.parameterType} · ${parameter.configurationIndex == null ? "Unowned" : `PLC ${parameter.configurationIndex + 1}`}`,
         render: host => {
           host.classList.add("basic-parameters");
-          renderBasicParameters({host, parameter, element, property, button,
+          const render = basic ? renderBasicParameters : renderNativeParameters;
+          render({host, parameter, element, property, button, selectionKey: `${fileUri}:parameter:${parameterIndex}`,
             commit: changes => {
-              if (current.file.uri !== fileUri) return false;
-              return applyEdit(() => edit_xgwx_basic_parameters(current.file.bytes, parameterIndex, changes), "Edit basic parameters");
+              if (current?.file.uri !== fileUri) return false;
+              const edit = basic ? edit_xgwx_basic_parameters : edit_xgwx_native_parameters;
+              return applyEdit(() => edit(current.file.bytes, parameterIndex, changes), basic ? "Edit basic parameters" : "Edit native parameters");
             },
           });
         },
@@ -6956,7 +6974,7 @@ function renderParametersEditor(canvas, inspector, parameters) {
     }
   });
   canvas.append(tableContainer(table, parameters.length));
-  renderCollectionInspector(inspector, "PARAMETERS", [["Sections", parameters.length], ["Editable", "Basic operation settings"]]);
+  renderCollectionInspector(inspector, "PARAMETERS", [["Sections", parameters.length], ["Editable", parameters.filter(p => p.basicOperationFields?.length || p.nativeFields?.length).length]]);
 }
 
 function renderOverviewEditor(canvas, inspector, summary, file) {

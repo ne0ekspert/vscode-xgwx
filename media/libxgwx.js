@@ -1476,6 +1476,26 @@ export function edit_xgwx_ld_label(bytes, program_index, edit) {
 }
 
 /**
+ * Atomically edit existing captured HSC, PID or positioning fields.
+ * Changes use NativeParameterChange's snake_case native-storage wire format.
+ * @param {Uint8Array} bytes
+ * @param {number} index
+ * @param {any} changes
+ * @returns {Uint8Array}
+ */
+export function edit_xgwx_native_parameters(bytes, index, changes) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.edit_xgwx_native_parameters(ptr0, len0, index, changes);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
+    return v2;
+}
+
+/**
  * Apply EOPCT server options atomically with stale-value protection.
  * @param {Uint8Array} bytes
  * @param {number} base
@@ -2267,6 +2287,22 @@ export function insert_xgwx_variable(bytes, variable) {
     var v2 = getArrayU8FromWasm0(ret[0], ret[1]).slice();
     wasm.__wbindgen_free(ret[0], ret[1] * 1, 1);
     return v2;
+}
+
+/**
+ * Inspect exact values and bounds for guarded native parameter edits.
+ * @param {Uint8Array} bytes
+ * @param {number} index
+ * @returns {any}
+ */
+export function inspect_xgwx_native_parameter_fields(bytes, index) {
+    const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ret = wasm.inspect_xgwx_native_parameter_fields(ptr0, len0, index);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return takeFromExternrefTable0(ret[0]);
 }
 
 /**

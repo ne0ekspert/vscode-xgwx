@@ -1955,3 +1955,5 @@ form.iec-rung-creation {
 .variable-context-menu .ladder-context-item { display: flex; justify-content: space-between; gap: 32px; }
 .variable-menu-shortcut { opacity: .7; }
 .variable-table-status { padding: 0 14px; }
+
+.native-parameter-fields > div:not([hidden]) { display: grid; gap: 8px; }
